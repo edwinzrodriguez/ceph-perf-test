@@ -1045,6 +1045,31 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         spec_cfg = self.config.get("specstorage", {})
         proto = spec_cfg["prototype"]
         out = spec_cfg["output_path"]
+        run_cmd = spec_cfg.get("run_command", "/sfs2020/run_workload.py")
+        perf_script = spec_cfg.get("perf_record_script", "/sfs2020/perf_record.py")
+
+        u, h, p = self.executor.get_ssh_details(self.admin)
+
+        # Copy local files to the remote machine
+        for local_file, remote_path in [
+            ("sfs_rc", proto),
+            ("run_workload.py", run_cmd),
+            ("perf_record.py", perf_script),
+        ]:
+            if os.path.exists(local_file):
+                print(f"Copying local {local_file} to {remote_path} on {self.admin}...")
+                subprocess.run(
+                    [
+                        "scp",
+                        "-o",
+                        "StrictHostKeyChecking=no",
+                        "-P",
+                        p,
+                        local_file,
+                        f"{u}@{h}:{remote_path}",
+                    ]
+                )
+
         mpfs = spec_cfg.get("mounts_per_fs", 1)
         mps = []
         for fs in self.fs_names:
