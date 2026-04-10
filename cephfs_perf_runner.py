@@ -12,6 +12,7 @@ from cephfs_perf_lib import (
     MountManager,
     WorkloadRunner,
     SpecStorageWorkloadRunner,
+    FioWorkloadRunner,
     CommonUtils,
 )
 
@@ -34,7 +35,11 @@ def main():
     cephfs_manager = CephFSManager(executor, config)
     ganesha_manager = GaneshaManager(executor, config)
     mount_manager = MountManager(executor, config)
-    workload_runner = SpecStorageWorkloadRunner(executor, config, cephfs_manager.fs_names)
+
+    if config.fio:
+        workload_runner = FioWorkloadRunner(executor, config, cephfs_manager.fs_names)
+    else:
+        workload_runner = SpecStorageWorkloadRunner(executor, config, cephfs_manager.fs_names)
 
     # Execute test matrix
     mount_manager.unmount_clients()
@@ -77,7 +82,8 @@ def main():
         else:
             mount_manager.kernel_mount()
 
-        workload_runner.prepare_specstorage()
+        workload_runner.prepare_storage()
+
         workload_runner.run_workload(
             current_settings,
             shared_timestamp,

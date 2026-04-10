@@ -181,6 +181,10 @@ class PerformanceTestConfig:
     def ganesha_enabled(self):
         return self._config.get("ganesha", {}).get("enabled", False)
 
+    @property
+    def fio(self):
+        return self._config.get("fio")
+
 
 class SSHExecutor:
     def __init__(self, all_hosts_meta):
@@ -923,6 +927,10 @@ class WorkloadRunner(abc.ABC):
     def get_results_dir(self, settings, shared_ts=None):
         pass
 
+    @abc.abstractmethod
+    def prepare_storage(self):
+        pass
+
 
 class SpecStorageWorkloadRunner(WorkloadRunner):
     def run_workload(
@@ -1071,7 +1079,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp, f"{u}@{h}:{results_dir}/"])
         os.remove(local_temp)
 
-    def prepare_specstorage(self):
+    def prepare_storage(self):
         spec_cfg = self.config.get("specstorage", {})
         proto = spec_cfg["prototype"]
         out = spec_cfg["output_path"]
@@ -1138,3 +1146,70 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             f"{k}{CommonUtils.format_si_units(v)}" for k, v in settings.items()
         )
         return os.path.join(base, f"{ts}_{fs_p}_{mds_p}")
+
+
+class FioWorkloadRunner(WorkloadRunner):
+    def run_workload(
+        self,
+        settings,
+        shared_ts=None,
+        cephfs_manager=None,
+        ganesha_manager=None,
+    ):
+        fio_cfg = self.config.fio
+        commands = fio_cfg.get("commands", [])
+        ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y%m%d-%H%M%S-%f"
+        )
+        results_dir = self.get_results_dir(settings, ts)
+
+        # Create results directory on admin host
+        self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
+
+        mpfs = self.config.get("fio", {}).get("mounts_per_fs", 1)
+        mount_points = []
+        for fs in self.fs_names:
+            for i in range(mpfs):
+                mount_points.append(f"/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else ""))
+
+        output = []
+        for cmd_template in commands:
+            for c in self.config.clients:
+                # Ensure the results directory is created on each client
+                self.executor.run_remote(c, f"mkdir -p {results_dir}")
+
+                for mp in mount_points:
+                    # Variables for template substitution
+                    variables = {
+                        "mount_point": mp,
+                        "client": c,
+                        "results_dir": results_dir,
+                        "fs_name": self.config.fs_name,
+                    }
+                    cmd = cmd_template
+                    for k, v in variables.items():
+                        cmd = cmd.replace(f"{{{k}}}", str(v))
+
+                    # Dynamically append output parameters
+                    cmd += f" --group_reporting --output-format=json --output={results_dir}/fio_{c}_{self.config.fs_name}.json"
+
+                    print(f"[{c}] Running Fio command: {cmd}")
+                    res = self.executor.run_remote(c, cmd, check=True)
+                    output.append(f"[{c}] {cmd}\n{res}")
+
+        return "\n".join(output)
+
+    def get_results_dir(self, settings, shared_ts=None):
+        fio_cfg = self.config.fio
+        base = fio_cfg.get("results_base_dir", "/tmp/fio_results")
+        ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y%m%d-%H%M%S-%f"
+        )
+        fs_p = f"{self.config.fs_name}-x{len(self.fs_names)}-c{len(self.config.clients)}-m{fio_cfg.get('mounts_per_fs', 1)}"
+        mds_p = "-".join(
+            f"{k}{CommonUtils.format_si_units(v)}" for k, v in settings.items()
+        )
+        return os.path.join(base, f"{ts}_{fs_p}_{mds_p}")
+
+    def prepare_storage(self):
+        pass
