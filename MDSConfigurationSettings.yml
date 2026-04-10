@@ -20,7 +20,7 @@ specstorage:
   perf_record_duration: 5
   lockstat:
     enabled: true
-    path: "/usr/local/bin/lockstat.py"
+    path: "/usr/local/bin/ceph-lockstat"
     threshold: 0
 
 ganesha:
