@@ -72,7 +72,7 @@ def main():
         )
 
         num_filesystems = settings.get("num_filesystems", 1)
-        # Note: run_workload.py doesn't have easy access to inventory/config for client counts
+        # Note: run_sfs2020_workload.py doesn't have easy access to inventory/config for client counts
         # It's better if it's passed in 'run_name' or we use placeholders
         fs_part = f"{fs_name}-x{num_filesystems}"
 

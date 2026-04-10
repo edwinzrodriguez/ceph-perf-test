@@ -1083,7 +1083,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         spec_cfg = self.config.get("specstorage", {})
         proto = spec_cfg["prototype"]
         out = spec_cfg["output_path"]
-        run_cmd = spec_cfg.get("run_command", "/sfs2020/run_workload.py")
+        run_cmd = spec_cfg.get("run_command", "/sfs2020/run_sfs2020_workload.py")
         perf_script = spec_cfg.get("perf_record_script", "/sfs2020/perf_record.py")
 
         u, h, p = self.executor.get_ssh_details(self.admin)
