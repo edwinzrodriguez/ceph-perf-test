@@ -594,8 +594,12 @@ class GaneshaManager:
         self.config = config
         self.ganeshas = config.ganeshas
         self.admin = config.admin_host
+        self._provisioned = False
 
     def provision_ganesha(self, use_custom=True, results_dir=None):
+        if self._provisioned:
+            print("Ganesha already provisioned. Skipping.")
+            return
         sid = self.config.ganesha_service_id
         # Ceph CLI might restrict manual creation of pools starting with '.',
         # but the NFS orchestrator often expects it. We'll try to create it,
@@ -701,7 +705,10 @@ class GaneshaManager:
             os.remove(local_temp)
             print(f"[{g_host}] Config diff saved to {self.admin}:{remote_path}")
 
+        self._provisioned = True
+
     def cleanup_ganesha(self):
+        self._provisioned = False
         sid = self.config.ganesha_service_id
         exps = CephFSManager(self.executor, self.config).safe_json_load(
             self.executor.run_remote(
@@ -1166,6 +1173,9 @@ class FioWorkloadRunner(WorkloadRunner):
         # Create results directory on admin host
         self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
 
+        if self.config.ganesha_enabled and ganesha_manager:
+            ganesha_manager.provision_ganesha(results_dir=results_dir)
+
         mpfs = self.config.get("fio", {}).get("mounts_per_fs", 1)
         mount_points = []
         for fs in self.fs_names:
@@ -1173,7 +1183,12 @@ class FioWorkloadRunner(WorkloadRunner):
                 mount_points.append(f"/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else ""))
 
         output = []
-        for cmd_template in commands:
+        for idx, cmd_template in enumerate(commands):
+            loadpoint = idx + 1
+            if self.config.ganesha_enabled and ganesha_manager:
+                for g_host in ganesha_manager.ganeshas:
+                    ganesha_manager.reset_ganesha_perf(g_host)
+
             for c in self.config.clients:
                 # Ensure the results directory is created on each client
                 self.executor.run_remote(c, f"mkdir -p {results_dir}")
@@ -1191,11 +1206,68 @@ class FioWorkloadRunner(WorkloadRunner):
                         cmd = cmd.replace(f"{{{k}}}", str(v))
 
                     # Dynamically append output parameters
-                    cmd += f" --group_reporting --output-format=json --output={results_dir}/fio_{c}_{self.config.fs_name}.json"
+                    filename = f"fio_{c}_{self.config.fs_name}_lp{loadpoint}.json"
+                    remote_path = f"{results_dir}/{filename}"
+                    cmd += f" --group_reporting --output-format=json --output={remote_path}"
 
                     print(f"[{c}] Running Fio command: {cmd}")
                     res = self.executor.run_remote(c, cmd, check=True)
                     output.append(f"[{c}] {cmd}\n{res}")
+
+                    # Copy the results back from the client to the admin host
+                    print(f"[{c}] Copying results to {self.admin}:{remote_path}...")
+                    local_temp = f"/tmp/{filename}"
+                    cu, ch, cp = self.executor.get_ssh_details(c)
+                    subprocess.run(
+                        [
+                            "scp",
+                            "-o",
+                            "StrictHostKeyChecking=no",
+                            "-P",
+                            cp,
+                            f"{cu}@{ch}:{remote_path}",
+                            local_temp,
+                        ]
+                    )
+                    au, ah, ap = self.executor.get_ssh_details(self.admin)
+                    subprocess.run(
+                        [
+                            "scp",
+                            "-o",
+                            "StrictHostKeyChecking=no",
+                            "-P",
+                            ap,
+                            local_temp,
+                            f"{au}@{ah}:{remote_path}",
+                        ]
+                    )
+                    if os.path.exists(local_temp):
+                        os.remove(local_temp)
+
+            if self.config.ganesha_enabled and ganesha_manager:
+                for g_host in ganesha_manager.ganeshas:
+                    perf_dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
+                    if perf_dump:
+                        filename = f"ganesha_perf_dump_{g_host}_lp{loadpoint}.json"
+                        local_temp = f"/tmp/{filename}"
+                        with open(local_temp, "w") as f:
+                            json.dump(perf_dump, f)
+
+                        u, h, p = self.executor.get_ssh_details(self.admin)
+                        remote_path = f"{results_dir}/{filename}"
+                        subprocess.run(
+                            [
+                                "scp",
+                                "-o",
+                                "StrictHostKeyChecking=no",
+                                "-P",
+                                p,
+                                local_temp,
+                                f"{u}@{h}:{remote_path}",
+                            ]
+                        )
+                        os.remove(local_temp)
+                        print(f"[{g_host}] Perf dump saved to {self.admin}:{remote_path}")
 
         return "\n".join(output)
 
