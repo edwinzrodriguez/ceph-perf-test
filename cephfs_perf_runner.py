@@ -63,9 +63,8 @@ def main():
         current_settings = dict(zip(keys, values))
         print(f"\n--- Starting Test Iteration: {current_settings} ---")
 
-        # In a real scenario, we'd need to pass shared_timestamp to get_results_dir
-        # For brevity, let's assume we have results_dir logic or it's part of Managers
-        results_dir = None  # Placeholder
+        # Use the workload runner to determine the results directory
+        results_dir = workload_runner.get_results_dir(current_settings, shared_timestamp)
 
         cephfs_manager.rebuild_filesystem(
             current_settings, ganesha_manager, results_dir
@@ -73,7 +72,7 @@ def main():
         cephfs_manager.apply_mds_settings(current_settings)
 
         if config.ganesha_enabled:
-            ganesha_manager.provision_ganesha()
+            ganesha_manager.provision_ganesha(use_custom=True, results_dir=results_dir)
             mount_manager.nfs_mount()
         else:
             mount_manager.kernel_mount()

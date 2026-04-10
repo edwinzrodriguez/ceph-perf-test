@@ -671,6 +671,32 @@ class GaneshaManager:
                     time.sleep(10)
         self.executor.run_remote(self.admin, f"sudo ceph orch restart nfs.{sid}")
 
+        # After ganesha starts, run 'config diff' via the admin socket and store results in the output directory
+        print("Collecting Ganesha 'config diff' from all ganesha nodes...")
+        if results_dir:
+            self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
+        for g_host in self.ganeshas:
+            cmd = "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"
+            asok_path = self.executor.run_remote(g_host, cmd).strip()
+
+            if not asok_path or "No such file" in asok_path:
+                print(f"[{g_host}] Warning: Ganesha admin socket not found for 'config diff'.")
+                continue
+
+            print(f"[{g_host}] Running 'config diff' via {asok_path}...")
+            diff_output = self.executor.run_remote(g_host, f"sudo ceph --admin-daemon {asok_path} config diff")
+
+            filename = f"ganesha_config_diff_{g_host}.json"
+            local_temp = f"/tmp/{filename}"
+            with open(local_temp, "w") as f:
+                f.write(diff_output)
+
+            u, h, p = self.executor.get_ssh_details(self.admin)
+            remote_path = f"{results_dir}/{filename}" if results_dir else f"/sfs2020/{filename}"
+            subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp, f"{u}@{h}:{remote_path}"])
+            os.remove(local_temp)
+            print(f"[{g_host}] Config diff saved to {self.admin}:{remote_path}")
+
     def cleanup_ganesha(self):
         sid = self.config.ganesha_service_id
         exps = CephFSManager(self.executor, self.config).safe_json_load(
@@ -893,6 +919,10 @@ class WorkloadRunner(abc.ABC):
     ):
         pass
 
+    @abc.abstractmethod
+    def get_results_dir(self, settings, shared_ts=None):
+        pass
+
 
 class SpecStorageWorkloadRunner(WorkloadRunner):
     def run_workload(
@@ -1084,7 +1114,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         )
         with open("/tmp/spec_cfg", "w") as f:
             f.write(content)
-        u, h, p = self.executor.get_ssh_details(self.admin)
+
         subprocess.run(
             [
                 "scp",
