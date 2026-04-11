@@ -4,25 +4,6 @@
     debuginfo_repo_name: "{{ 'baseos-debuginfo' if ansible_distribution == 'CentOS' else 'baseos-debug-rpms' if ansible_distribution == 'RedHat' else 'baseos-debuginfo' }}"
     crb_debuginfo_repo_name: "{{ 'crb-debuginfo' if ansible_distribution == 'CentOS' else 'codeready-builder-for-rhel-' ~ ansible_distribution_major_version ~ '-x86_64-debug-rpms' if ansible_distribution == 'RedHat' else 'crb-debuginfo' }}"
   tasks:
-    - name: Fix baseos-debuginfo repository mirrors (prevent 404s)
-      ansible.builtin.shell:
-        cmd: |
-          # The baseos-debuginfo repo is often broken on CentOS Stream 9 mirrors.
-          # We fix it by:
-          # 1. Pointing baseurl to the official vault/stream mirror
-          # 2. Ensuring metalink is commented out if it's 404ing, or vice versa.
-          # We do this with sed before any dnf calls to avoid metadata sync failures.
-          
-          REPO_FILE="/etc/yum.repos.d/centos.repo"
-          if [ -f "$REPO_FILE" ]; then
-            # Fix baseurl to official mirror
-            sed -i '/^\[baseos-debuginfo\]/,/^\[/ s|^#\?baseurl=.*|baseurl=https://mirror.stream.centos.org/9-stream/BaseOS/x86_64/debug/tree/|' "$REPO_FILE"
-            # Comment out metalink as it is currently returning 404
-            sed -i '/^\[baseos-debuginfo\]/,/^\[/ s|^metalink=|#metalink=|' "$REPO_FILE"
-          fi
-      when: ansible_distribution == 'CentOS' and false
-      ignore_errors: yes
-
     - name: Ensure config-manager is available
       ansible.builtin.dnf:
         name: 'dnf-command(config-manager)'
@@ -232,20 +213,6 @@
         src: SPECstorage2020-2529.tar
         dest: /cephfs_perf/sfs2020/SPECstorage2020-2529.tar
         mode: '0644'
-
-    - name: Copy sfs_rc to /cephfs_perf/sfs2020
-      ansible.builtin.copy:
-        src: sfs_rc
-        dest: /cephfs_perf/sfs2020/sfs_rc
-        mode: '0644'
-
-    - name: Copy sfs2020 python scripts to /cephfs_perf/sfs2020
-      ansible.builtin.copy:
-        src: "{{ item }}"
-        dest: /cephfs_perf/sfs2020/
-        mode: '0755'
-      with_fileglob:
-        - "*.py"
 
     - name: Install git
       ansible.builtin.dnf:
