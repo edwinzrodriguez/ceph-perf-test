@@ -16,7 +16,6 @@ FROM ${BASE_IMG}
 RUN rpm --import 'https://download.ceph.com/keys/release.asc' &&  \
     rpm -Uvh --force https://download.ceph.com/rpm-20.2.0/el9/noarch/ceph-release-1-1.el9.noarch.rpm && \
     dnf install --enablerepo='*debug*' -y \
-    ceph-debuginfo \
     kernel-debuginfo \
     gdb \
     zstd \
