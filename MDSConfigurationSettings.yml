@@ -29,7 +29,7 @@ fio:
   mounts_per_fs: 1
   results_base_dir: "/fio_results"
   commands:
-    - "fio --name=ibm_01 --directory={mount_point} --size=5G --bs=256k --iodepth=1 --rw=randrw --ioengine=libaio --time_based=1 --runtime=60 -direct=1 --buffered=0 --gtod_reduce=1 --randrepeat=1 --create_serialize=0 --ramp_time=1s --numjobs=80"
+    - "fio --name=ibm_01 --directory={mount_point} --size=5G --bs=256k --iodepth=1 --rw=randrw --ioengine=libaio --time_based=1 --runtime=60 -direct=1 --buffered=0 --gtod_reduce=1 --randrepeat=1 --create_serialize=0 --ramp_time=1s --numjobs=8"
 
 ganesha:
   enabled: true
