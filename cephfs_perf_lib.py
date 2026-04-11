@@ -804,6 +804,19 @@ class GaneshaManager:
             ganesha_spec.update(
                 {
                     "extra_container_args": [
+                        "--privileged",
+                        "--cap-add",
+                        "SYS_MODULE",
+                        "-e",
+                        "ENABLE_LOCKSTAT=true",
+                        "-v",
+                        "/sys/kernel/debug:/sys/kernel/debug:rw",
+                        "-v",
+                        "/usr/src/kernels:/usr/src/kernels:ro",
+                        "-v",
+                        "/usr/lib/modules:/usr/lib/modules:ro",
+                        "-v",
+                        "/usr/lib/debug:/usr/lib/debug:ro",
                         "-v",
                         "/etc/ceph:/etc/ceph:z",
                         "-v",
