@@ -26,8 +26,14 @@ mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec
 
 # Fio configuration (Uncomment to use FioWorkloadRunner instead of SpecStorageWorkloadRunner)
 fio:
+  results_base_dir: "/cephfs_perf/fio"
+  run_command: "/cephfs_perf/fio/run_fio_workload.py"
+  perf_record_script: "/cephfs_perf/fio/perf_record.py"
+  perf_record_executable: "ganesha.nfsd"
+  perf_record: true
+  perf_record_duration: 30
+  flamegraph_path: "/cephfs_perf/FlameGraph"
   mounts_per_fs: 1
-  results_base_dir: "/fio_results"
   commands:
     - "fio --name=ibm_01 --directory={mount_point} --size=5G --bs=256k --iodepth=1 --rw=randrw --ioengine=libaio --time_based=1 --runtime=60 -direct=1 --buffered=0 --gtod_reduce=1 --randrepeat=1 --create_serialize=0 --ramp_time=1s --numjobs=8"
 
