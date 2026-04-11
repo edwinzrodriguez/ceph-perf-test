@@ -148,7 +148,7 @@ class PerformanceTestConfig:
 
     @property
     def ganesha_yaml_path(self):
-        return self._config.get("ganesha_yaml_path", "/sfs2020/ganesha.yaml")
+        return self._config.get("ganesha_yaml_path", "/cephfs_perf/ganesha.yaml")
 
     @property
     def ganesha_service_id(self):
@@ -505,7 +505,7 @@ class CephFSManager:
         has_sfs = any(
             "EXISTS"
             in self.executor.run_remote(
-                h, "test -d /sfs2020 && echo EXISTS || echo MISSING"
+                h, "test -d /cephfs_perf/sfs2020 && echo EXISTS || echo MISSING"
             )
             for h in selected_hosts
         )
@@ -532,7 +532,7 @@ class CephFSManager:
         if settings and "cpus" in settings:
             spec["extra_container_args"].extend(["--cpus", str(settings["cpus"])])
         if has_sfs:
-            spec["extra_container_args"].extend(["-v", "/sfs2020:/sfs2020"])
+            spec["extra_container_args"].extend(["-v", "/cephfs_perf:/cephfs_perf"])
         with open("mds.yaml", "w") as f:
             yaml.dump(spec, f)
         if self.config.mds_yaml_path != "mds.yaml":
@@ -660,7 +660,7 @@ class GaneshaManager:
                     "-P",
                     p,
                     f"/tmp/export_{fs}.json",
-                    f"{u}@{h}:/sfs2020/export_{fs}.json",
+                    f"{u}@{h}:/cephfs_perf/sfs2020/export_{fs}.json",
                 ]
             )
             # Retry applying export as it may fail if the .nfs pool or NFS cluster is not ready
@@ -668,7 +668,7 @@ class GaneshaManager:
                 try:
                     self.executor.run_remote(
                         self.admin,
-                        f"sudo ceph nfs export apply {sid} -i /sfs2020/export_{fs}.json",
+                        f"sudo ceph nfs export apply {sid} -i /cephfs_perf/sfs2020/export_{fs}.json",
                         check=True,
                     )
                     break
@@ -700,7 +700,7 @@ class GaneshaManager:
                 f.write(diff_output)
 
             u, h, p = self.executor.get_ssh_details(self.admin)
-            remote_path = f"{results_dir}/{filename}" if results_dir else f"/sfs2020/{filename}"
+            remote_path = f"{results_dir}/{filename}" if results_dir else f"/cephfs_perf/sfs2020/{filename}"
             subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp, f"{u}@{h}:{remote_path}"])
             os.remove(local_temp)
             print(f"[{g_host}] Config diff saved to {self.admin}:{remote_path}")
@@ -1033,7 +1033,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         return "".join(output)
 
     def execute_perf_record(self, loadpoint, results_dir=None):
-        perf_script = self.config.get("specstorage", {}).get("perf_record_script", "/sfs2020/perf_record.py")
+        perf_script = self.config.get("specstorage", {}).get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
         perf_exe = self.config.get("specstorage", {}).get("perf_record_executable", "ceph-mds")
         perf_dur = self.config.get("specstorage", {}).get("perf_record_duration", 5)
         fg_path = self.config.get("specstorage", {}).get("perf_record_flamegraph_path", "")
@@ -1090,8 +1090,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         spec_cfg = self.config.get("specstorage", {})
         proto = spec_cfg["prototype"]
         out = spec_cfg["output_path"]
-        run_cmd = spec_cfg.get("run_command", "/sfs2020/run_sfs2020_workload.py")
-        perf_script = spec_cfg.get("perf_record_script", "/sfs2020/perf_record.py")
+        run_cmd = spec_cfg.get("run_command", "/cephfs_perf/sfs2020/run_sfs2020_workload.py")
+        perf_script = spec_cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
 
         u, h, p = self.executor.get_ssh_details(self.admin)
 
@@ -1144,7 +1144,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
 
     def get_results_dir(self, settings, shared_ts=None):
         spec_cfg = self.config.get("specstorage", {})
-        base = spec_cfg.get("results_base_dir", "/sfs2020/results")
+        base = spec_cfg.get("results_base_dir", "/cephfs_perf/sfs2020/results")
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )

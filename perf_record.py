@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 #
-# /sfs2020/perf_record.py --loadpoint 1 --server test --executable ceph-mds --duration 5 --flamegraph-path /sfs2020/FlameGraph
+# /cephfs_perf/sfs2020/perf_record.py --loadpoint 1 --server test --executable ceph-mds --duration 5 --flamegraph-path /cephfs_perf/FlameGraph
 #
-# perf record -o /sfs2020/test_lp01_mds.perf_test_fs_perf.data -p 2 -F 99 -g --call-graph dwarf,128 -- sleep 5
-# perf report -i /sfs2020/test_lp01_mds.perf_test_fs_perf.data > /sfs2020/test_lp01_mds.perf_test_fs_perf_report.txt
+# perf record -o /cephfs_perf/sfs2020/test_lp01_mds.perf_test_fs_perf.data -p 2 -F 99 -g --call-graph dwarf,128 -- sleep 5
+# perf report -i /cephfs_perf/sfs2020/test_lp01_mds.perf_test_fs_perf.data > /cephfs_perf/sfs2020/test_lp01_mds.perf_test_fs_perf_report.txt
 #
 import subprocess
 import argparse
@@ -139,7 +139,7 @@ def _container_exec(runtime, container_id, cmd_argv):
 
 
 def _resolve_flamegraph_dir(configured_dir):
-    default_dir = "/sfs2020/FlameGraph"
+    default_dir = "/cephfs_perf/FlameGraph"
     if os.path.isdir(default_dir):
         return default_dir
     if configured_dir and os.path.isdir(configured_dir):
@@ -258,10 +258,10 @@ def run_reports(
                 _generate_flamegraph(script_file, flamegraph_dir)
             return
 
-        # Check if /sfs2020/perf_record.py exists in the container
-        print(f"Checking for /sfs2020/perf_record.py in container {container_id}...")
+        # Check if /cephfs_perf/sfs2020/perf_record.py exists in the container
+        print(f"Checking for /cephfs_perf/sfs2020/perf_record.py in container {container_id}...")
         check_proc = _container_exec(
-            runtime, container_id, ["test", "-f", "/sfs2020/perf_record.py"]
+            runtime, container_id, ["test", "-f", "/cephfs_perf/sfs2020/perf_record.py"]
         )
 
         if check_proc.returncode == 0:
@@ -269,10 +269,10 @@ def run_reports(
                 f"Executing perf_record.py inside container {container_id} for reporting..."
             )
 
-            # Use relative paths for files inside the container's /sfs2020 (if that's where we want them)
-            # Actually, we can just use the same filenames in /tmp or /sfs2020
-            # Let's use /sfs2020 if it exists, otherwise /tmp
-            container_workdir = "/sfs2020"
+            # Use relative paths for files inside the container's /cephfs_perf/sfs2020 (if that's where we want them)
+            # Actually, we can just use the same filenames in /tmp or /cephfs_perf/sfs2020
+            # Let's use /cephfs_perf/sfs2020 if it exists, otherwise /tmp
+            container_workdir = "/cephfs_perf/sfs2020"
 
             base_perf = os.path.basename(perf_data_file)
             base_report = os.path.basename(report_file)
@@ -317,7 +317,7 @@ def run_reports(
                     runtime, container_id, perf_data_file, perf_in
                 )
                 if cp_in.returncode != 0:
-                    # Try /tmp if /sfs2020 fails
+                    # Try /tmp if /cephfs_perf/sfs2020 fails
                     container_workdir = "/tmp"
                     perf_in = f"{container_workdir}/{base_perf}"
                     report_in = f"{container_workdir}/{base_report}"
@@ -334,7 +334,7 @@ def run_reports(
             # Execute itself in container to generate reports
             cmd = [
                 "python3",
-                "/sfs2020/perf_record.py",
+                "/cephfs_perf/sfs2020/perf_record.py",
                 "--loadpoint",
                 "99",  # dummy as we don't really use it for reporting only
                 "--server",
@@ -348,7 +348,7 @@ def run_reports(
                 script_in,
             ]
             if flamegraph_dir:
-                cmd += ["--flamegraph-path", "/sfs2020/FlameGraph"]
+                cmd += ["--flamegraph-path", "/cephfs_perf/FlameGraph"]
 
             exec_proc = _container_exec(runtime, container_id, cmd)
             if exec_proc.returncode != 0:
@@ -383,7 +383,7 @@ def run_reports(
                 )
                 return
 
-        # Fallback to existing logic if /sfs2020/perf_record.py missing or exec failed
+        # Fallback to existing logic if /cephfs_perf/sfs2020/perf_record.py missing or exec failed
         base_perf = os.path.basename(perf_data_file)
         base_report = os.path.basename(report_file)
         base_script = os.path.basename(script_file)
@@ -503,7 +503,7 @@ def main():
     parser.add_argument(
         "--flamegraph-path",
         default="",
-        help="Path to FlameGraph project (used if /sfs2020/FlameGraph is missing)",
+        help="Path to FlameGraph project (used if /cephfs_perf/FlameGraph is missing)",
     )
     parser.add_argument(
         "--only-report",

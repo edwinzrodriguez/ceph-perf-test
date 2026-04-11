@@ -397,7 +397,7 @@ class CephFSPerfTest:
         self.generate_ganesha_yaml(
             svc_id, self.ganeshas, use_custom_config=use_custom_config
         )
-        ganesha_yaml = self.config.get("ganesha_yaml_path", "/sfs2020/ganesha.yaml")
+        ganesha_yaml = self.config.get("ganesha_yaml_path", "/cephfs_perf/ganesha.yaml")
         self.run_remote(self.admin, f"sudo ceph orch apply -i {ganesha_yaml}")
 
         for idx, fs in enumerate(self.fs_names):
@@ -423,10 +423,10 @@ class CephFSPerfTest:
                 ],
             }
 
-            # Write export_json to a file in /sfs2020 named with the export name
+            # Write export_json to a file in /cephfs_perf/sfs2020 named with the export name
             export_filename = f"export_{fs}.json"
             local_export_file = f"/tmp/{export_filename}"
-            remote_export_path = f"/sfs2020/{export_filename}"
+            remote_export_path = f"/cephfs_perf/sfs2020/{export_filename}"
 
             with open(local_export_file, "w") as f:
                 json.dump(export_json, f, indent=4)
@@ -492,16 +492,16 @@ class CephFSPerfTest:
                 g_host, f"sudo ceph --admin-daemon {asok_path} config diff"
             )
 
-            # Save to output directory (typically /sfs2020 on the admin node, or specific results_dir if provided)
+            # Save to output directory (typically /cephfs_perf/sfs2020 on the admin node, or specific results_dir if provided)
             filename = f"ganesha_config_diff_{g_host}.json"
             local_temp = f"/tmp/{filename}"
             with open(local_temp, "w") as f:
                 f.write(diff_output)
 
             user, host, port = self.get_ssh_details(self.admin)
-            # Use results_dir if provided, otherwise fallback to /sfs2020
+            # Use results_dir if provided, otherwise fallback to /cephfs_perf/sfs2020
             remote_path = (
-                f"{results_dir}/{filename}" if results_dir else f"/sfs2020/{filename}"
+                f"{results_dir}/{filename}" if results_dir else f"/cephfs_perf/sfs2020/{filename}"
             )
             subprocess.run(
                 [
@@ -620,9 +620,9 @@ class CephFSPerfTest:
             host_name = self.mdss[(start_index + i) % num_mdss]
             selected_hosts.append(host_name)
 
-            # Check if /sfs2020 exists on the host to add bind mount
+            # Check if /cephfs_perf/sfs2020 exists on the host to add bind mount
             check = self.run_remote(
-                host_name, "test -d /sfs2020 && echo EXISTS || echo MISSING"
+                host_name, "test -d /cephfs_perf/sfs2020 && echo EXISTS || echo MISSING"
             ).strip()
             if check == "EXISTS":
                 has_sfs2020 = True
@@ -654,7 +654,7 @@ class CephFSPerfTest:
             )
 
         if has_sfs2020:
-            mds_spec["extra_container_args"].extend(["-v", "/sfs2020:/sfs2020"])
+            mds_spec["extra_container_args"].extend(["-v", "/cephfs_perf:/cephfs_perf"])
 
         local_mds_yaml = "mds.yaml"  # Assuming we write it locally first
         with open(local_mds_yaml, "w") as f:
@@ -722,7 +722,7 @@ class CephFSPerfTest:
             yaml.dump(ganesha_spec, f)
 
         ganesha_yaml_path = self.config.get(
-            "ganesha_yaml_path", "/sfs2020/ganesha.yaml"
+            "ganesha_yaml_path", "/cephfs_perf/ganesha.yaml"
         )
         user, host, port = self.get_ssh_details(self.admin)
         subprocess.run(
@@ -1128,7 +1128,7 @@ class CephFSPerfTest:
 
     def execute_perf_record(self, loadpoint, results_dir=None):
         perf_script = self.config["specstorage"].get(
-            "perf_record_script", "/sfs2020/perf_record.py"
+            "perf_record_script", "/cephfs_perf/sfs2020/perf_record.py"
         )
         perf_executable = self.config["specstorage"].get(
             "perf_record_executable", "ceph-mds"

@@ -55,8 +55,8 @@ PASSWORD=
 # In heterogeneous modes EXEC_PATH must be set to a Unix path.
 #  **** This field cannot be empty ****
 ##############################################################################
-EXEC_PATH=/sfs2020/SPECstorage2020//binaries/linux/x86_64/netmist
-NETMIST_LOGS=/sfs2020/SPECstorage2020//test1
+EXEC_PATH=/cephfs_perf/sfs2020/SPECstorage2020//binaries/linux/x86_64/netmist
+NETMIST_LOGS=/cephfs_perf/sfs2020/SPECstorage2020//test1
 
 ##############################################################################
 # Legacy mode + heterogeneous client types:
@@ -141,8 +141,12 @@ NETMIST_LOGS=/sfs2020/SPECstorage2020//test1
 ##############################################################################
 
 #BENCHMARK=GENOMICS
-BENCHMARK=SWBUILD
-LOAD=1 2 4 8 12 18 24 30 36 42 48 54 60 66 72
+#BENCHMARK=SWBUILD
+#LOAD=1 2 4 8 12 18 24 30 36 42 48 54 60 66 72
+
+BENCHMARK=VDA
+LOAD=1 1
+
 #INCR_LOAD=1
 #NUM_RUNS=1
 

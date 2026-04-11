@@ -215,28 +215,34 @@
         state: present
       when: pandas_dnf is failed
 
-    - name: Create /sfs2020 directory
+    - name: Create /cephfs_perf directory
       ansible.builtin.file:
-        path: /sfs2020
+        path: /cephfs_perf
         state: directory
         mode: '0755'
 
-    - name: Copy SPECstorage2020-2529.tar to /sfs2020
+    - name: Create /cephfs_perf/sfs2020 directory
+      ansible.builtin.file:
+        path: /cephfs_perf/sfs2020
+        state: directory
+        mode: '0755'
+
+    - name: Copy SPECstorage2020-2529.tar to /cephfs_perf/sfs2020
       ansible.builtin.copy:
         src: SPECstorage2020-2529.tar
-        dest: /sfs2020/SPECstorage2020-2529.tar
+        dest: /cephfs_perf/sfs2020/SPECstorage2020-2529.tar
         mode: '0644'
 
-    - name: Copy sfs_rc to /sfs2020
+    - name: Copy sfs_rc to /cephfs_perf/sfs2020
       ansible.builtin.copy:
         src: sfs_rc
-        dest: /sfs2020/sfs_rc
+        dest: /cephfs_perf/sfs2020/sfs_rc
         mode: '0644'
 
-    - name: Copy sfs2020 python scripts to /sfs2020
+    - name: Copy sfs2020 python scripts to /cephfs_perf/sfs2020
       ansible.builtin.copy:
         src: "{{ item }}"
-        dest: /sfs2020/
+        dest: /cephfs_perf/sfs2020/
         mode: '0755'
       with_fileglob:
         - "*.py"
@@ -249,19 +255,19 @@
     - name: Clone FlameGraph repository
       ansible.builtin.git:
         repo: https://github.com/brendangregg/FlameGraph.git
-        dest: /sfs2020/FlameGraph
+        dest: /cephfs_perf/FlameGraph
         clone: yes
         update: yes
 
     - name: Untar SPECstorage2020
       ansible.builtin.unarchive:
-        src: "/sfs2020/SPECstorage2020-2529.tar"
-        dest: /sfs2020/
+        src: "/cephfs_perf/sfs2020/SPECstorage2020-2529.tar"
+        dest: /cephfs_perf/sfs2020/
         remote_src: true
 
     - name: Run SM2020 install
       ansible.builtin.shell:
-        cmd: cd /sfs2020/SPECstorage2020 && python3 SM2020 --install-dir=/SPEC2020
+        cmd: cd /cephfs_perf/sfs2020/SPECstorage2020 && python3 SM2020 --install-dir=/SPEC2020
       ignore_errors: yes
 
     - name: Install pyupgrade
