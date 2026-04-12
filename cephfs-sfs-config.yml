@@ -64,7 +64,7 @@
           - "{{ crb_debuginfo_repo_name }}"
         state: present
         update_cache: yes
-      when: ansible_distribution_major_version | int >= 10
+      when: ansible_distribution_major_version | int >= 9
 
     - name: Run stap-prep
       ansible.builtin.shell:
@@ -72,7 +72,7 @@
       environment:
         STAP_REPO_OPTIONS: "--enablerepo={{ debuginfo_repo_name }},{{ crb_debuginfo_repo_name }}"
       ignore_errors: yes
-      when: ansible_distribution_major_version | int >= 10
+      when: ansible_distribution_major_version | int >= 9
 
     - name: Install perf tools
       ansible.builtin.dnf:
