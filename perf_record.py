@@ -513,6 +513,7 @@ def main():
     parser.add_argument("--perf-data", help="Path to perf.data for --only-report")
     parser.add_argument("--report-file", help="Path to report.txt for --only-report")
     parser.add_argument("--script-file", help="Path to script.txt for --only-report")
+    parser.add_argument("--stap-script", help="Path to SystemTap script (.stp)")
 
     args = parser.parse_args()
 
@@ -591,6 +592,7 @@ def main():
         report_file = f"{s_name}_lp{lp_tag}_{service_id}_perf_report.txt"
         script_file = f"{s_name}_lp{lp_tag}_{service_id}_perf_script.txt"
         perf_data_file = f"{s_name}_lp{lp_tag}_{service_id}_perf.data"
+        stap_out_file = f"{s_name}_lp{lp_tag}_{service_id}_stap_trace.txt"
 
         print(
             f"Starting perf record on {args.server} for PID {pid} ({service_id}) for Load Point {loadpoint}..."
@@ -687,7 +689,78 @@ def main():
             (p, pid, service_id, perf_data_file, report_file, script_file)
         )
 
-    # Wait for all perf record processes to finish
+        if args.stap_script:
+            # SystemTap capture
+            # sudo stap rdtsc-para-callgraph-verbose.stp 'process(<pid>).function("*")' for duration
+            print(f"Starting SystemTap capture on {args.server} for PID {pid} using {args.stap_script}...")
+
+            stap_target_pid = pid
+            stap_cmd = [
+                "sudo",
+                "timeout",
+                "-s",
+                "SIGINT",
+                duration,
+                "stap",
+                args.stap_script,
+                f"process({stap_target_pid}).function(\"*\")",
+            ]
+
+            if runtime and container_id:
+                # Use NSpid for SystemTap if we can find it
+                try:
+                    with open(f"/proc/{pid}/status", "r") as f:
+                        for line in f:
+                            if line.startswith("NSpid:"):
+                                nspids = line.split()[1:]
+                                if len(nspids) > 1:
+                                    stap_target_pid = nspids[-1]
+                                    break
+                except Exception as e:
+                    print(f"Could not read NSpid for SystemTap PID {pid} from host: {e}")
+
+                print(
+                    f"Detected containerized PID {pid}. Wrapping SystemTap in {runtime} exec {container_id}..."
+                )
+                
+                # Copy SystemTap script to container to ensure it is available
+                # Point to a temporary path in the container
+                container_stap_script = f"/tmp/{os.path.basename(args.stap_script)}"
+                print(f"Copying {args.stap_script} to {container_id}:{container_stap_script}...")
+                cp_cmd = ["sudo", runtime, "cp", args.stap_script, f"{container_id}:{container_stap_script}"]
+                try:
+                    subprocess.run(cp_cmd, check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f"Warning: Failed to copy stap script to container: {e}")
+                    # Fallback to host path and hope it's mounted
+                    container_stap_script = args.stap_script
+                
+                stap_cmd = [
+                    "sudo",
+                    runtime,
+                    "exec",
+                    container_id,
+                    "timeout",
+                    "-s",
+                    "SIGINT",
+                    duration,
+                    "stap",
+                    container_stap_script,
+                    f"process({stap_target_pid}).function(\"*\")",
+                ]
+
+            print(f"Executing SystemTap command: {' '.join(stap_cmd)}")
+            with open(stap_out_file, "w") as outf:
+                # We'll run it and wait for it in the same way?
+                # Actually, SystemTap can be slow to start, so running it in parallel with perf record is good.
+                sp = subprocess.Popen(
+                    stap_cmd, stdout=outf, stderr=subprocess.PIPE, text=False
+                )
+                record_processes.append(
+                    (sp, pid, service_id, None, stap_out_file, None) # Use None for perf_data and script_file to distinguish
+                )
+
+    # Wait for all processes to finish (perf and stap)
     report_data = []
     for (
         p,
@@ -698,17 +771,20 @@ def main():
         script_file,
     ) in record_processes:
         stdout, stderr = p.communicate()
-        if p.returncode != 0:
+        if p.returncode != 0 and p.returncode != 124: # timeout exits with 124
+            name = "perf record" if perf_data_file else "SystemTap"
             print(
-                f"Error during perf record for PID {pid} on {args.server}: {stderr.decode('utf-8', errors='replace')}"
+                f"Error during {name} for PID {pid} on {args.server}: {stderr.decode('utf-8', errors='replace')}"
             )
         else:
+            name = "perf record" if perf_data_file else "SystemTap"
             print(
-                f"perf record for PID {pid} finished successfully. {stderr.decode('utf-8', errors='replace')}"
+                f"{name} for PID {pid} finished successfully. {stderr.decode('utf-8', errors='replace')}"
             )
-            report_data.append(
-                (perf_data_file, report_file, script_file, pid, service_id)
-            )
+            if perf_data_file:
+                report_data.append(
+                    (perf_data_file, report_file, script_file, pid, service_id)
+                )
 
     # Run perf reports serially
     for perf_data_file, report_file, script_file, pid, service_id in report_data:

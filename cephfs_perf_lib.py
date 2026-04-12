@@ -185,6 +185,10 @@ class PerformanceTestConfig:
     def fio(self):
         return self._config.get("fio")
 
+    @property
+    def specstorage(self):
+        return self._config.get("specstorage")
+
 
 class SSHExecutor:
     def __init__(self, all_hosts_meta):
@@ -1050,12 +1054,14 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         perf_exe = self.config.get("specstorage", {}).get("perf_record_executable", "ceph-mds")
         perf_dur = self.config.get("specstorage", {}).get("perf_record_duration", 5)
         fg_path = self.config.get("specstorage", {}).get("perf_record_flamegraph_path", "")
+        stap_script = self.config.get("specstorage", {}).get("stap_script", "")
         processes = []
         for server_name in self.config.mdss:
             print(f"[{server_name}] Starting parallel perf record for Load Point {loadpoint}")
             fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
+            stap_arg = f" --stap-script {stap_script}" if stap_script else ""
             u, h, p = self.executor.get_ssh_details(server_name)
-            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}", f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}"]
+            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}", f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
             proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, stdin=subprocess.DEVNULL)
             processes.append((server_name, proc))
 
@@ -1077,10 +1083,10 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         for t in threads:
             t.join()
         if results_dir:
-            print(f"Copying perf reports to {results_dir} on {self.admin}...")
+            print(f"Copying perf reports and stap traces to {results_dir} on {self.admin}...")
             au, ah, ap = self.executor.get_ssh_details(self.admin)
             for s_name in self.config.mdss:
-                check_cmd = f"ls /tmp/perf_report_{s_name}_lp{int(loadpoint):02d}.*"
+                check_cmd = f"ls /tmp/perf_report_{s_name}_lp{int(loadpoint):02d}.* /tmp/*_lp{int(loadpoint):02d}_*_stap_trace.txt 2>/dev/null"
                 try:
                     files = self.executor.run_remote(s_name, check_cmd).strip().split()
                     for f_path in files:
@@ -1089,7 +1095,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                         self.executor.run_remote(s_name, copy_cmd)
                         self.executor.run_remote(s_name, f"sudo -n rm -f {f_path}")
                 except:
-                    print(f"[{s_name}] No report files found for Load Point {loadpoint}, skipping copy.")
+                    print(f"[{s_name}] No trace/report files found for Load Point {loadpoint}, skipping copy.")
 
     def save_json_to_results(self, filename, data, results_dir):
         local_temp = f"/tmp/{filename}"
@@ -1109,11 +1115,16 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         u, h, p = self.executor.get_ssh_details(self.admin)
 
         # Copy local files to the remote machine
-        for local_file, remote_path in [
+        files_to_copy = [
             ("sfs_rc", proto),
             ("run_workload.py", run_cmd),
             ("perf_record.py", perf_script),
-        ]:
+        ]
+        stap_script = spec_cfg.get("stap_script")
+        if stap_script and os.path.exists(os.path.basename(stap_script)):
+            files_to_copy.append((os.path.basename(stap_script), stap_script))
+
+        for local_file, remote_path in files_to_copy:
             if os.path.exists(local_file):
                 print(f"Copying local {local_file} to {remote_path} on {self.admin}...")
                 subprocess.run(
@@ -1292,6 +1303,7 @@ class FioWorkloadRunner(WorkloadRunner):
         fio_cfg = self.config.get("fio", {})
         run_cmd = fio_cfg.get("run_command", "/cephfs_perf/sfs2020/run_fio_workload.py")
         perf_script = fio_cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
+        stap_script = fio_cfg.get("stap_script")
 
         # Collect all targets to copy scripts to: admin, clients, ganeshas, mons, mdss
         targets = set([self.admin] + self.config.clients + self.config.ganeshas + self.config.mons + self.config.mdss)
@@ -1303,10 +1315,14 @@ class FioWorkloadRunner(WorkloadRunner):
             self.executor.run_remote(target, f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}")
             
             # Copy local files to each target
-            for local_file, remote_path in [
+            files_to_copy = [
                 ("run_fio_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
-            ]:
+            ]
+            if stap_script and os.path.exists(os.path.basename(stap_script)):
+                files_to_copy.append((os.path.basename(stap_script), stap_script))
+
+            for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
                     print(f"Copying local {local_file} to {remote_path} on {target}...")
                     subprocess.run(
@@ -1327,13 +1343,15 @@ class FioWorkloadRunner(WorkloadRunner):
         perf_exe = fio_cfg.get("perf_record_executable", "ganesha.nfsd")
         perf_dur = fio_cfg.get("perf_record_duration", 5)
         fg_path = fio_cfg.get("perf_record_flamegraph_path", "/cephfs_perf/FlameGraph")
+        stap_script = fio_cfg.get("stap_script", "")
         processes = []
         ganeshas = self.config.ganeshas
         for server_name in ganeshas:
             print(f"[{server_name}] Starting parallel perf record for Load Point {loadpoint}")
             fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
+            stap_arg = f" --stap-script {stap_script}" if stap_script else ""
             u, h, p = self.executor.get_ssh_details(server_name)
-            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}", f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}"]
+            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}", f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
             proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, stdin=subprocess.DEVNULL)
             processes.append((server_name, proc))
 
@@ -1355,10 +1373,10 @@ class FioWorkloadRunner(WorkloadRunner):
         for t in threads:
             t.join()
         if results_dir:
-            print(f"Copying perf reports to {results_dir} on {self.admin}...")
+            print(f"Copying perf reports and stap traces to {results_dir} on {self.admin}...")
             au, ah, ap = self.executor.get_ssh_details(self.admin)
             for s_name in ganeshas:
-                check_cmd = f"ls /tmp/perf_report_{s_name}_lp{int(loadpoint):02d}.*"
+                check_cmd = f"ls /tmp/perf_report_{s_name}_lp{int(loadpoint):02d}.* /tmp/*_lp{int(loadpoint):02d}_*_stap_trace.txt 2>/dev/null"
                 try:
                     files = self.executor.run_remote(s_name, check_cmd).strip().split()
                     for f_path in files:
@@ -1367,4 +1385,4 @@ class FioWorkloadRunner(WorkloadRunner):
                         self.executor.run_remote(s_name, copy_cmd)
                         self.executor.run_remote(s_name, f"sudo -n rm -f {f_path}")
                 except:
-                    print(f"[{s_name}] No report files found for Load Point {loadpoint}, skipping copy.")
+                    print(f"[{s_name}] No trace/report files found for Load Point {loadpoint}, skipping copy.")
