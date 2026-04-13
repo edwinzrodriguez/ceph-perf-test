@@ -182,6 +182,7 @@ class FioWorkloadRunner(WorkloadRunner):
             u, h, p = self.executor.get_ssh_details(server_name)
             ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
                        f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
+            print(f"[{server_name}] Executing perf record for Load Point {loadpoint}: {ssh_cmd}")
             proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
                                     stdin=subprocess.DEVNULL)
             processes.append((server_name, proc))

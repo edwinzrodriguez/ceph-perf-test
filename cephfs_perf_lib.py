@@ -186,6 +186,18 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("type", "cephadm")
 
     @property
+    def ganesha_binary_path(self):
+        return self._config.get("ganesha", {}).get(
+            "binary_path", "/usr/local/ceph/bin/ganesha.nfsd"
+        )
+
+    @property
+    def ganesha_pid_path(self):
+        return self._config.get("ganesha", {}).get(
+            "pid_path", "/var/run/ganesha.pid"
+        )
+
+    @property
     def fio(self):
         return self._config.get("fio")
 

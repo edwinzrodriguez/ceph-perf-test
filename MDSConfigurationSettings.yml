@@ -40,8 +40,11 @@ fio:
 
 ganesha:
   enabled: true
-  type: "cephadm"
   service_id: "ganesha"
+  type: "systemd"
+  binary_path: "/usr/local/bin/ganesha.nfsd"
+  pid_path: "/var/run/ganesha.pid"
+  config_path: "/etc/ganesha/ganesha.conf"
 
 logging:
   enabled: false
