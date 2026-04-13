@@ -13,6 +13,7 @@ from cephfs_perf_lib import (
 from lib.workload.workload_runner import WorkloadRunner
 from lib.workload.spec_storage_runner import SpecStorageWorkloadRunner
 from lib.workload.fio_runner import FioWorkloadRunner
+from lib.workload.cephfs_tool_runner import CephFSToolWorkloadRunner
 from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
 from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
 from lib.mount.mount_kernel_manager import MountKernelManager
@@ -48,6 +49,8 @@ def main():
 
     if config.fio:
         workload_runner = FioWorkloadRunner(executor, config, cephfs_manager.fs_names)
+    elif config.cephfs_tool:
+        workload_runner = CephFSToolWorkloadRunner(executor, config, cephfs_manager.fs_names)
     else:
         workload_runner = SpecStorageWorkloadRunner(executor, config, cephfs_manager.fs_names)
 

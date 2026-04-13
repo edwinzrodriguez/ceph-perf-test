@@ -25,18 +25,29 @@ mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec
 #    threshold: 0
 
 # Fio configuration (Uncomment to use FioWorkloadRunner instead of SpecStorageWorkloadRunner)
-fio:
-  results_base_dir: "/cephfs_perf/fio"
-  run_command: "/cephfs_perf/fio/run_fio_workload.py"
-  perf_record_script: "/cephfs_perf/fio/perf_record.py"
-  perf_record_executable: "ganesha.nfsd"
+#fio:
+#  results_base_dir: "/cephfs_perf/fio"
+#  run_command: "/cephfs_perf/fio/run_fio_workload.py"
+#  perf_record_script: "/cephfs_perf/fio/perf_record.py"
+#  perf_record_executable: "ganesha.nfsd"
+#  perf_record: true
+#  perf_record_duration: 5
+#  flamegraph_path: "/cephfs_perf/FlameGraph"
+#  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
+#  mounts_per_fs: 1
+#  commands:
+#    - "fio --name=ibm_01 --directory={mount_point} --size=5G --bs=256k --iodepth=1 --rw=randrw --ioengine=libaio --time_based=1 --runtime=60 -direct=1 --buffered=0 --gtod_reduce=1 --randrepeat=1 --create_serialize=0 --ramp_time=1s --numjobs=8"
+
+# CephFS-Tool configuration
+cephfs_tool:
+  results_base_dir: "/cephfs_perf/cephfs_tool"
+  run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
+  perf_record_script: "/cephfs_perf/sfs2020/perf_record.py"
+  perf_record_executable: "ceph-mds"
   perf_record: true
   perf_record_duration: 5
-  flamegraph_path: "/cephfs_perf/FlameGraph"
-  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
-  mounts_per_fs: 1
   commands:
-    - "fio --name=ibm_01 --directory={mount_point} --size=5G --bs=256k --iodepth=1 --rw=randrw --ioengine=libaio --time_based=1 --runtime=60 -direct=1 --buffered=0 --gtod_reduce=1 --randrepeat=1 --create_serialize=0 --ramp_time=1s --numjobs=8"
+    - 'env CEPH_ARGS="--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log" /usr/local/bin/cephfs-tool bench -c /etc/ceph/ceph.conf -k /etc/ceph/ceph.client.admin.keyring -i admin --filesystem {fs_name} --root-path / --files 1024 --size=$(( 128 * 2 ** 20 )) --threads=32 --iterations 3'
 
 ganesha:
   enabled: true

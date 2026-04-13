@@ -206,6 +206,10 @@ class PerformanceTestConfig:
         return self._config.get("fio")
 
     @property
+    def cephfs_tool(self):
+        return self._config.get("cephfs_tool")
+
+    @property
     def specstorage(self):
         return self._config.get("specstorage")
 
