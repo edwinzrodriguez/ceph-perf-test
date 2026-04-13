@@ -635,69 +635,6 @@ class GaneshaManager(abc.ABC):
         return self.safe_json_load(dump_raw, default=None)
 
 
-class MountManager:
-    def __init__(self, executor, config):
-        self.executor = executor
-        self.config = config
-        self.clients = config.clients
-        fs_mgr = CephFSManager(executor, config)
-        self.fs_names = fs_mgr.fs_names
-
-    def unmount_clients(self):
-        for c in self.clients:
-            mnts = (
-                self.executor.run_remote(
-                    c, "awk '$2 ~ \"^/mnt/cephfs_\" {print $2}' /proc/mounts | sort -r"
-                )
-                .strip()
-                .split()
-            )
-            for m in mnts:
-                self.executor.run_remote(
-                    c, f"sudo umount -f {m} || sudo umount -l {m} || true"
-                )
-            self.executor.run_remote(c, "sudo rm -rf /mnt/cephfs_*")
-
-    def kernel_mount(self):
-        admin_host = self.config.admin_host
-        maddrs = self.executor.run_remote(
-            admin_host,
-            "sudo ceph mon dump | grep -oE 'v1:[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+:[0-9]+' | head -n 1 | sed 's/v1://'",
-        ).strip()
-        key = self.executor.run_remote(
-            admin_host, "sudo ceph auth get-key client.0"
-        ).strip()
-        mpfs = self.config.get("specstorage", {}).get("mounts_per_fs", 1)
-        for fs in self.fs_names:
-            for c in self.clients:
-                for i in range(mpfs):
-                    p = f"/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else "")
-                    self.executor.run_remote(
-                        c,
-                        f"sudo mkdir -p {p} && sudo mount -t ceph {maddrs}:/ {p} -o name=0,secret={key},fs={fs}",
-                    )
-                    u, _, _ = self.executor.get_ssh_details(c)
-                    self.executor.run_remote(c, f"sudo chown {u}:{u} {p}")
-
-    def nfs_mount(self):
-        gs = self.config.ganeshas
-        mpfs = self.config.get("specstorage", {}).get("mounts_per_fs", 1)
-        for fs in self.fs_names:
-            for idx, c in enumerate(self.clients):
-                gh = gs[idx % len(gs)]
-                gt = (
-                    self.config.all_hosts_meta.get(gh, {}).get("private_ip")
-                    or self.executor.get_ssh_details(gh)[1]
-                )
-                for i in range(mpfs):
-                    p = f"/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else "")
-                    self.executor.run_remote(
-                        c,
-                        f"sudo mkdir -p {p} && sudo mount -t nfs -o nfsvers=4.1,proto=tcp {gt}:/{fs}-export {p}",
-                        check=True,
-                    )
-                    u, _, _ = self.executor.get_ssh_details(c)
-                    self.executor.run_remote(c, f"sudo chown {u}:{u} {p}")
 
 
 class WorkloadRunner(abc.ABC):

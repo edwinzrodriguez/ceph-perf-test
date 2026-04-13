@@ -8,13 +8,14 @@ from cephfs_perf_lib import (
     PerformanceTestConfig,
     SSHExecutor,
     CephFSManager,
-    MountManager,
     WorkloadRunner,
     CommonUtils,
 )
 from spec_storage_runner import SpecStorageWorkloadRunner
 from fio_runner import FioWorkloadRunner
 from ganesha_cephadm_manager import GaneshaCephadmManager
+from mount_kernel_manager import MountKernelManager
+from mount_nfs_manager import MountNfsManager
 
 
 def main():
@@ -34,7 +35,10 @@ def main():
     executor = SSHExecutor(config.all_hosts_meta)
     cephfs_manager = CephFSManager(executor, config)
     ganesha_manager = GaneshaCephadmManager(executor, config)
-    mount_manager = MountManager(executor, config)
+    if config.ganesha_enabled:
+        mount_manager = MountNfsManager(executor, config)
+    else:
+        mount_manager = MountKernelManager(executor, config)
 
     if config.fio:
         workload_runner = FioWorkloadRunner(executor, config, cephfs_manager.fs_names)
@@ -78,9 +82,9 @@ def main():
 
         if config.ganesha_enabled:
             ganesha_manager.provision_ganesha(use_custom=True, results_dir=results_dir)
-            mount_manager.nfs_mount()
+            mount_manager.mount()
         else:
-            mount_manager.kernel_mount()
+            mount_manager.mount()
 
         workload_runner.prepare_storage()
 
