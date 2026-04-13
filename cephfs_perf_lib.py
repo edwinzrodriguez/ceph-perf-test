@@ -198,6 +198,10 @@ class PerformanceTestConfig:
         )
 
     @property
+    def ganesha_worker_threads(self):
+        return self._config.get("ganesha", {}).get("worker_threads")
+
+    @property
     def fio(self):
         return self._config.get("fio")
 

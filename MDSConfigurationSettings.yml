@@ -45,6 +45,7 @@ ganesha:
   binary_path: "/usr/local/bin/ganesha.nfsd"
   pid_path: "/var/run/ganesha.pid"
   config_path: "/etc/ganesha/ganesha.conf"
+  worker_threads: 8
 
 logging:
   enabled: false

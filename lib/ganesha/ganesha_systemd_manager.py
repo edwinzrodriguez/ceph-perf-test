@@ -118,6 +118,9 @@ class GaneshaSystemdManager(GaneshaManager):
 
     def setup_ganesha_config(self):
         # STANDALONE Ganesha configuration without Cephadm URL includes
+        worker_threads = self.config.ganesha_worker_threads
+        nb_worker_line = f"    Nb_Worker = {worker_threads};\n" if worker_threads else ""
+
         config_content = (
             "NFS_Core_Param {\n"
             "    Protocols = 4;\n"
@@ -125,6 +128,7 @@ class GaneshaSystemdManager(GaneshaManager):
             "    Enable_RQUOTA = false;\n"
             "    NFS_Port = 2049;\n"
             "    allow_set_io_flusher_fail = true;\n"
+            f"{nb_worker_line}"
             "}\n"
             "NFSv4 {\n"
             '    RecoveryBackend = "";\n'
