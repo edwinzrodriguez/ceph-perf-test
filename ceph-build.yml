@@ -15,8 +15,14 @@
   tasks:
     - name: Remove existing ceph packages
       ansible.builtin.dnf:
-        name: "*ceph*"
+        name:
+          - "*ceph*"
         state: absent
+      ignore_errors: yes
+
+    - name: Remove packages from ibm-storage-ceph-9 repo
+      ansible.builtin.command:
+        cmd: dnf repository-packages ibm-storage-ceph-9 remove -y
       ignore_errors: yes
 
     - name: Install Development Tools group
@@ -31,6 +37,12 @@
         mode: '0755'
       become: false
 
+    - name: Check if Ceph repository exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ceph_dest_name }}"
+      register: ceph_repo_stat
+      become: false
+
     - name: Clone Ceph repository (tentacle branch)
       ansible.builtin.git:
         repo: "{{ ceph_repo_url }}"
@@ -39,6 +51,7 @@
         single_branch: yes
         recursive: yes
       become: false
+      when: not ceph_repo_stat.stat.exists
 
     - name: Run install-deps.sh
       ansible.builtin.command:
@@ -47,10 +60,12 @@
       environment:
         # Some versions of install-deps.sh might need non-interactive flags or sudo
         SUDO: "sudo"
+      ignore_errors: yes
 
     - name: Install additional development dependencies
       ansible.builtin.dnf:
         name:
+          - cmake
           - boost-random
           - nss-devel
           - keyutils-libs-devel
@@ -111,24 +126,48 @@
           - gperf
           - librabbitmq-devel
           - librdkafka-devel
+          - protobuf-c
+          - protobuf-devel
+          - fuse-devel
+          - libaio-devel
+          - grpc-devel
         state: present
+
+    - name: Check if Ceph build directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ceph_dest_name }}/build"
+      register: ceph_build_stat
+      become: false
 
     - name: Run do_cmake.sh
       ansible.builtin.command:
         cmd: "./do_cmake.sh -DCMAKE_INSTALL_PREFIX={{ ceph_install_prefix }} -DCMAKE_BUILD_TYPE=RelWithDebInfo"
         chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}"
       become: false
+      when: not ceph_build_stat.stat.exists
 
     - name: Build with ninja
       ansible.builtin.command:
         cmd: ninja
         chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}/build"
       become: false
+      when: not ceph_build_stat.stat.exists
 
     - name: Install with ninja
       ansible.builtin.command:
         cmd: ninja install
         chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}/build"
+      when: not ceph_build_stat.stat.exists
+
+    - name: Create ld.so.conf.d entry for Ceph
+      ansible.builtin.copy:
+        dest: /etc/ld.so.conf.d/ceph.conf
+        content: "{{ ceph_install_prefix }}/lib64\n"
+        mode: '0644'
+
+    - name: Run ldconfig
+      ansible.builtin.command:
+        cmd: ldconfig
 
     - name: Install Ganesha development dependencies
       ansible.builtin.dnf:
@@ -136,6 +175,18 @@
           - libacl-devel
           - libnsl2-devel
         state: present
+
+    - name: Check if Ganesha source directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+      register: ganesha_source_stat
+      become: false
+
+    - name: Check if Ganesha build directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      register: ganesha_build_stat
+      become: false
 
     - name: Clone NFS-Ganesha repository (V9.7 branch)
       ansible.builtin.git:
@@ -145,12 +196,14 @@
         single_branch: yes
         recursive: yes
       become: false
+      when: not ganesha_source_stat.stat.exists
 
     - name: Update Ganesha submodules
       ansible.builtin.command:
         cmd: git submodule update --init --recursive
         chdir: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
       become: false
+      when: not ganesha_source_stat.stat.exists
 
     - name: Create Ganesha build directory
       ansible.builtin.file:
@@ -158,23 +211,36 @@
         state: directory
         mode: '0755'
       become: false
+      when: not ganesha_build_stat.stat.exists
 
     - name: Run cmake for NFS-Ganesha
       ansible.builtin.command:
-        cmd: "cmake -GNinja -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/ceph/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/ceph/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
+        cmd: "cmake -GNinja -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
         chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
       become: false
+      when: not ganesha_build_stat.stat.exists
 
     - name: Build Ganesha with ninja
       ansible.builtin.command:
         cmd: ninja
         chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
       become: false
+      when: not ganesha_build_stat.stat.exists
 
     - name: Install Ganesha with ninja
       ansible.builtin.command:
         cmd: ninja install
         chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      when: not ganesha_build_stat.stat.exists
+
+    - name: Run ldconfig
+      ansible.builtin.command:
+        cmd: ldconfig
+
+    - name: Check if nfs-ganesha systemd service file exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/nfs-ganesha.service
+      register: ganesha_service_stat
 
     - name: Create nfs-ganesha systemd service file
       ansible.builtin.copy:
@@ -193,13 +259,14 @@
           [Install]
           WantedBy=multi-user.target
         mode: '0644'
+      when: not ganesha_service_stat.stat.exists
 
     - name: Reload systemd daemon
       ansible.builtin.systemd:
         daemon_reload: yes
 
-    - name: Enable nfs-ganesha service
+    - name: Disable nfs-ganesha service
       ansible.builtin.systemd:
         name: nfs-ganesha
-        enabled: yes
+        enabled: no
         state: started
