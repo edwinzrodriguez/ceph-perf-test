@@ -11,10 +11,10 @@ from cephfs_perf_lib import (
     GaneshaManager,
     MountManager,
     WorkloadRunner,
-    SpecStorageWorkloadRunner,
-    FioWorkloadRunner,
     CommonUtils,
 )
+from spec_storage_runner import SpecStorageWorkloadRunner
+from fio_runner import FioWorkloadRunner
 
 
 def main():
