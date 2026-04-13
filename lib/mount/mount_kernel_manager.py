@@ -1,4 +1,5 @@
-from mount_manager import MountManager
+from lib.mount.mount_manager import MountManager
+
 
 class MountKernelManager(MountManager):
     def mount(self):

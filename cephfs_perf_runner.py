@@ -8,14 +8,14 @@ from cephfs_perf_lib import (
     PerformanceTestConfig,
     SSHExecutor,
     CephFSManager,
-    WorkloadRunner,
     CommonUtils,
 )
-from spec_storage_runner import SpecStorageWorkloadRunner
-from fio_runner import FioWorkloadRunner
-from ganesha_cephadm_manager import GaneshaCephadmManager
-from mount_kernel_manager import MountKernelManager
-from mount_nfs_manager import MountNfsManager
+from lib.workload.workload_runner import WorkloadRunner
+from lib.workload.spec_storage_runner import SpecStorageWorkloadRunner
+from lib.workload.fio_runner import FioWorkloadRunner
+from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
+from lib.mount.mount_kernel_manager import MountKernelManager
+from lib.mount.mount_nfs_manager import MountNfsManager
 
 
 def main():
@@ -62,7 +62,7 @@ def main():
         if len(parsed_r) == 3:
             ranges.append(range(*parsed_r))
         elif len(parsed_r) in [1, 2] and all(
-            isinstance(x, int) and x < 1000 for x in parsed_r
+                isinstance(x, int) and x < 1000 for x in parsed_r
         ):
             ranges.append(range(*parsed_r))
         else:

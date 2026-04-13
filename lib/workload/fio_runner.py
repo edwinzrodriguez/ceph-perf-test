@@ -3,15 +3,17 @@ import json
 import os
 import subprocess
 import threading
-from cephfs_perf_lib import WorkloadRunner, CommonUtils
+from lib.workload.workload_runner import WorkloadRunner
+from cephfs_perf_lib import CommonUtils
+
 
 class FioWorkloadRunner(WorkloadRunner):
     def run_workload(
-        self,
-        settings,
-        shared_ts=None,
-        cephfs_manager=None,
-        ganesha_manager=None,
+            self,
+            settings,
+            shared_ts=None,
+            cephfs_manager=None,
+            ganesha_manager=None,
     ):
         fio_cfg = self.config.fio
         commands = fio_cfg.get("commands", [])
@@ -104,7 +106,8 @@ class FioWorkloadRunner(WorkloadRunner):
                                 json.dump(perf_dump, f)
                             u, h, p = self.executor.get_ssh_details(self.admin)
                             remote_path = f"{results_dir}/{filename}"
-                            subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp, f"{u}@{h}:{remote_path}"])
+                            subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp,
+                                            f"{u}@{h}:{remote_path}"])
                             os.remove(local_temp)
 
         process.wait()
@@ -139,7 +142,7 @@ class FioWorkloadRunner(WorkloadRunner):
             # Ensure the directory exists on each target
             remote_dir = os.path.dirname(run_cmd)
             self.executor.run_remote(target, f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}")
-            
+
             # Copy local files to each target
             files_to_copy = [
                 ("run_fio_workload.py", run_cmd),
@@ -177,8 +180,10 @@ class FioWorkloadRunner(WorkloadRunner):
             fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
             stap_arg = f" --stap-script {stap_script}" if stap_script else ""
             u, h, p = self.executor.get_ssh_details(server_name)
-            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}", f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
-            proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, stdin=subprocess.DEVNULL)
+            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
+                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
+            proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
+                                    stdin=subprocess.DEVNULL)
             processes.append((server_name, proc))
 
         def collect_output(s_name, p):

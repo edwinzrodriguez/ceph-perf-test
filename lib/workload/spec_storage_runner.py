@@ -4,15 +4,17 @@ import os
 import subprocess
 import threading
 import yaml
-from cephfs_perf_lib import WorkloadRunner, CommonUtils
+from lib.workload.workload_runner import WorkloadRunner
+from cephfs_perf_lib import CommonUtils
+
 
 class SpecStorageWorkloadRunner(WorkloadRunner):
     def run_workload(
-        self,
-        settings,
-        shared_ts=None,
-        cephfs_manager=None,
-        ganesha_manager=None,
+            self,
+            settings,
+            shared_ts=None,
+            cephfs_manager=None,
+            ganesha_manager=None,
     ):
         cmd = self.config["specstorage"]["run_command"]
         cfg = self.config["specstorage"]["output_path"]
@@ -100,7 +102,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         return "".join(output)
 
     def execute_perf_record(self, loadpoint, results_dir=None):
-        perf_script = self.config.get("specstorage", {}).get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
+        perf_script = self.config.get("specstorage", {}).get("perf_record_script",
+                                                             "/cephfs_perf/sfs2020/perf_record.py")
         perf_exe = self.config.get("specstorage", {}).get("perf_record_executable", "ceph-mds")
         perf_dur = self.config.get("specstorage", {}).get("perf_record_duration", 5)
         fg_path = self.config.get("specstorage", {}).get("perf_record_flamegraph_path", "")
@@ -111,8 +114,10 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
             stap_arg = f" --stap-script {stap_script}" if stap_script else ""
             u, h, p = self.executor.get_ssh_details(server_name)
-            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}", f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
-            proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False, stdin=subprocess.DEVNULL)
+            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
+                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
+            proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
+                                    stdin=subprocess.DEVNULL)
             processes.append((server_name, proc))
 
         def collect_output(s_name, p):
@@ -198,8 +203,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                         f"{c}:/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else "")
                     )
         content = (
-            self.executor.run_remote(self.admin, f"cat {proto}")
-            + f"\nCLIENT_MOUNTPOINTS={' '.join(mps)}\n"
+                self.executor.run_remote(self.admin, f"cat {proto}")
+                + f"\nCLIENT_MOUNTPOINTS={' '.join(mps)}\n"
         )
         with open("/tmp/spec_cfg", "w") as f:
             f.write(content)

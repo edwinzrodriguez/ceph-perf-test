@@ -1,4 +1,5 @@
-from cephfs_perf_lib import GaneshaManager
+from lib.ganesha.ganesha_manager import GaneshaManager
+
 
 class GaneshaSystemdManager(GaneshaManager):
     def provision_ganesha(self, use_custom=True, results_dir=None):
