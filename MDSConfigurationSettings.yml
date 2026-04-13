@@ -40,6 +40,7 @@ fio:
 
 ganesha:
   enabled: true
+  type: "cephadm"
   service_id: "ganesha"
 
 logging:

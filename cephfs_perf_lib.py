@@ -182,6 +182,10 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("enabled", False)
 
     @property
+    def ganesha_type(self):
+        return self._config.get("ganesha", {}).get("type", "cephadm")
+
+    @property
     def fio(self):
         return self._config.get("fio")
 

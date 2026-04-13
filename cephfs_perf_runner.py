@@ -14,6 +14,7 @@ from lib.workload.workload_runner import WorkloadRunner
 from lib.workload.spec_storage_runner import SpecStorageWorkloadRunner
 from lib.workload.fio_runner import FioWorkloadRunner
 from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
+from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
 from lib.mount.mount_kernel_manager import MountKernelManager
 from lib.mount.mount_nfs_manager import MountNfsManager
 
@@ -34,7 +35,12 @@ def main():
 
     executor = SSHExecutor(config.all_hosts_meta)
     cephfs_manager = CephFSManager(executor, config)
-    ganesha_manager = GaneshaCephadmManager(executor, config)
+
+    if config.ganesha_type == "systemd":
+        ganesha_manager = GaneshaSystemdManager(executor, config)
+    else:
+        ganesha_manager = GaneshaCephadmManager(executor, config)
+
     if config.ganesha_enabled:
         mount_manager = MountNfsManager(executor, config)
     else:
