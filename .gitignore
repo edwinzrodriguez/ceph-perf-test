@@ -2,3 +2,4 @@
 **/.venv/
 ganesha.yaml
 mds.yaml
+**/ceph-rpms/
