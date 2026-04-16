@@ -46,6 +46,7 @@ cephfs_tool:
   perf_record_executable: "cephfs-tool"
   perf_record: true
   perf_record_duration: 5
+  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
   executable_path: "/usr/local/bin/cephfs-tool"
   ceph_args: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
   config_path: "/etc/ceph/ceph.conf"
