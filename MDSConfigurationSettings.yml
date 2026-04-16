@@ -60,6 +60,7 @@ cephfs_tool:
       iterations: 3
       client-oc: 1
       client-oc-size: "1GiB"
+      block-size: "4MB"
       extra_args: ""
 
 ganesha:

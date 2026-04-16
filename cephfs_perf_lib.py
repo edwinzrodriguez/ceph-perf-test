@@ -346,6 +346,8 @@ class CommonUtils:
                 parts.append(f"oc{lp_cfg['client-oc']}")
             if "client-oc-size" in lp_cfg:
                 parts.append(f"ocs{CommonUtils.format_si_units(lp_cfg['client-oc-size'])}")
+            if "block-size" in lp_cfg:
+                parts.append(f"bs{CommonUtils.format_si_units(lp_cfg['block-size'])}")
 
             if parts:
                 return f"{mds_p}_{'_'.join(parts)}"
