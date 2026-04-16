@@ -64,12 +64,7 @@ def main():
     run_name = settings.get("run_name")
     if not run_name:
         # Construct a string from mds_settings
-        mds_part = CommonUtils.get_workload_base_name(settings)
-
-        num_filesystems = settings.get("num_filesystems", 1)
-        # Note: run_sfs2020_workload.py doesn't have easy access to inventory/config for client counts
-        # It's better if it's passed in 'run_name' or we use placeholders
-        fs_part = f"{fs_name}-x{num_filesystems}"
+        options = CommonUtils.get_workload_base_name('sfs2020', 'result', 'admin', 0, settings)
 
         # Timestamp
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -77,7 +72,7 @@ def main():
         unix_ts = int(now.timestamp())
         full_timestamp = f"{timestamp}-{unix_ts}"
 
-        run_name = f"{full_timestamp}_{fs_part}_{mds_part}"
+        run_name = f"{full_timestamp}_{options}"
 
     output_path = args.config
 

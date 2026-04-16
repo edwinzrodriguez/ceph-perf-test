@@ -90,7 +90,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                 if "Run " in line and " percent complete" in line:
                     print(f"Triggering perf record for Load Point {current_lp}...")
                     r_dir = payload.get("results_dir")
-                    t = threading.Thread(target=self.execute_perf_record, args=(current_lp, r_dir))
+                    t = threading.Thread(target=self.execute_perf_record, args=(current_lp, r_dir, settings))
                     t.start()
                     perf_threads.append(t)
                     perf_triggered = True
@@ -101,7 +101,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             print(f"Error on {self.admin}: process exited with {process.returncode}")
         return "".join(output)
 
-    def execute_perf_record(self, loadpoint, results_dir=None):
+    def execute_perf_record(self, loadpoint, results_dir=None, settings=None):
         perf_script = self.config.get("specstorage", {}).get("perf_record_script",
                                                              "/cephfs_perf/sfs2020/perf_record.py")
         perf_exe = self.config.get("specstorage", {}).get("perf_record_executable", "ceph-mds")
@@ -109,13 +109,23 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         fg_path = self.config.get("specstorage", {}).get("perf_record_flamegraph_path", "")
         stap_script = self.config.get("specstorage", {}).get("stap_script", "")
         processes = []
+
+        options_str = ""
+        if settings:
+            full_base = CommonUtils.get_workload_base_name('sfs2020', 'perf_record', 'server', loadpoint, settings)
+            lp_tag = f"lp{int(loadpoint):02d}_"
+            idx = full_base.find(lp_tag)
+            if idx != -1:
+                options_str = full_base[idx + len(lp_tag):]
+
         for server_name in self.config.mdss:
             print(f"[{server_name}] Starting parallel perf record for Load Point {loadpoint}")
             fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
             stap_arg = f" --stap-script {stap_script}" if stap_script else ""
+            opt_arg = f" --options {options_str}" if options_str else ""
             u, h, p = self.executor.get_ssh_details(server_name)
             ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
-                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
+                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur} --workload sfs2020{opt_arg}{fg_arg}{stap_arg}"]
             proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
                                     stdin=subprocess.DEVNULL)
             processes.append((server_name, proc))
@@ -141,7 +151,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             print(f"Copying perf reports and stap traces to {results_dir} on {self.admin}...")
             au, ah, ap = self.executor.get_ssh_details(self.admin)
             for s_name in self.config.mdss:
-                check_cmd = f"ls /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf_report.txt /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf_script.txt /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf.data /tmp/{s_name}_lp{int(loadpoint):02d}_*.svg /tmp/{s_name}_lp{int(loadpoint):02d}_*_stap_trace.txt 2>/dev/null"
+                check_cmd = f"ls /tmp/sfs2020_perf_record_{s_name}_lp{int(loadpoint):02d}_* 2>/dev/null"
                 try:
                     files = self.executor.run_remote(s_name, check_cmd).strip().split()
                     for f_path in files:

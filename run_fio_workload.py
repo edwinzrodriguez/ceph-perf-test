@@ -102,8 +102,7 @@ def main():
                 for k, v in variables.items():
                     cmd = cmd.replace(f"{{{k}}}", str(v))
 
-                base_name = CommonUtils.get_workload_base_name(settings)
-                filename = f"fio_{base_name}_{c}_{fs_name}_lp{loadpoint}.json"
+                filename = f"{CommonUtils.get_workload_base_name('fio', 'result', c, loadpoint, settings)}.json"
                 remote_path = f"{results_dir}/{filename}"
                 cmd += f" --group_reporting --output-format=json --output={remote_path}"
 

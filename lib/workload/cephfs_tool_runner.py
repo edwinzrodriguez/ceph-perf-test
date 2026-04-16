@@ -82,25 +82,26 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             if run_phase_started and not perf_triggered:
                 if perf_record_enabled:
                     print(f"Triggering perf recording for Load Point {current_lp}...")
+                    lp_cfg = loadpoints[current_lp - 1]
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=(current_lp, results_dir),
+                        args=(current_lp, results_dir, payload, lp_cfg),
                     )
                     t.start()
                     perf_threads.append(t)
                 perf_triggered = True
             if "Finished CephFS-Tool Load Point:" in line:
                 lp_cfg = loadpoints[current_lp - 1]
-                base_name = CommonUtils.get_workload_base_name(payload, lp_cfg)
                 for client in self.config.clients:
                     # Collect the cephfs-tool performance dump file
-                    perf_dump_json = f"/tmp/cephfs_tool_perf_dump_{client}_lp{current_lp:02d}_{base_name}.json"
+                    perf_dump_name = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'perf_dump', client, current_lp, payload, lp_cfg)}.json"
+                    perf_dump_json = f"/tmp/{perf_dump_name}"
                     try:
                         # Check if file exists first
                         check = self.executor.run_remote(client, f"test -f {perf_dump_json} && echo EXISTS || echo MISSING").strip()
                         if "EXISTS" in check:
                             au, ah, ap = self.executor.get_ssh_details(self.admin)
-                            remote_path = f"{results_dir}/cephfs_tool_perf_dump_{client}_lp{current_lp:02d}_{base_name}.json"
+                            remote_path = f"{results_dir}/{perf_dump_name}"
                             self.executor.run_remote(client, f"sudo -n chmod 0644 {perf_dump_json}")
                             copy_cmd = f"scp -o StrictHostKeyChecking=no -P {ap} {perf_dump_json} {au}@{ah}:{remote_path}"
                             self.executor.run_remote(client, copy_cmd)
@@ -109,13 +110,14 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                         print(f"[{client}] Warning: failed to collect {perf_dump_json}: {e}")
 
                     # Also collect the cephfs-tool JSON output file
-                    tool_json = f"/tmp/cephfs_tool_lp{current_lp:02d}_{base_name}_{client}.json"
+                    tool_result_name = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, current_lp, payload, lp_cfg)}.json"
+                    tool_json = f"/tmp/{tool_result_name}"
                     try:
                         # Check if file exists first
                         check = self.executor.run_remote(client, f"test -f {tool_json} && echo EXISTS || echo MISSING").strip()
                         if "EXISTS" in check:
                             au, ah, ap = self.executor.get_ssh_details(self.admin)
-                            remote_path = f"{results_dir}/cephfs_tool_lp{current_lp:02d}_{base_name}_{client}.json"
+                            remote_path = f"{results_dir}/{tool_result_name}"
                             self.executor.run_remote(client, f"sudo -n chmod 0644 {tool_json}")
                             copy_cmd = f"scp -o StrictHostKeyChecking=no -P {ap} {tool_json} {au}@{ah}:{remote_path}"
                             self.executor.run_remote(client, copy_cmd)
@@ -180,7 +182,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                         ]
                     )
 
-    def execute_perf_record(self, loadpoint, results_dir=None):
+    def execute_perf_record(self, loadpoint, results_dir=None, settings=None, lp_cfg=None):
         cfg = self.config.get("cephfs_tool", {})
         perf_script = cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
         perf_exe = cfg.get("perf_record_executable", "ceph-mds")
@@ -192,13 +194,27 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         client_perf_exe = cfg.get("perf_record_executable", "cephfs-tool")
         client_record_nodes = self.config.clients
 
+        # Construct options string for filename
+        options_str = ""
+        if settings and lp_cfg:
+            # We want just the options part, not the whole workload_result_...
+            # get_workload_base_name returns workload_type_client_lp_options
+            # We can extract options by splitting and taking everything after lpXX
+            full_base = CommonUtils.get_workload_base_name('cephfs_tool', 'perf_record', 'client', loadpoint, settings, lp_cfg)
+            # Find the index of lpXX_ and take what's after it
+            lp_tag = f"lp{int(loadpoint):02d}_"
+            idx = full_base.find(lp_tag)
+            if idx != -1:
+                options_str = full_base[idx + len(lp_tag):]
+
         for server_name in client_record_nodes:
             print(f"[{server_name}] Starting parallel perf record for Load Point {loadpoint}")
             fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
             stap_arg = f" --stap-script {stap_script}" if stap_script else ""
+            opt_arg = f" --options {options_str}" if options_str else ""
             u, h, p = self.executor.get_ssh_details(server_name)
             ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
-                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {client_perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
+                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {client_perf_exe} --duration {perf_dur} --workload cephfs_tool{opt_arg}{fg_arg}{stap_arg}"]
             print(f"[{server_name}] Executing perf record for Load Point {loadpoint}: {subprocess.list2cmdline(ssh_cmd)}")
             proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
                                     stdin=subprocess.DEVNULL)
@@ -226,7 +242,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             print(f"Copying perf reports and stap traces to {results_dir} on {self.admin}...")
             au, ah, ap = self.executor.get_ssh_details(self.admin)
             for s_name in list(client_record_nodes):
-                check_cmd = f"ls /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf_report.txt /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf_script.txt /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf.data /tmp/{s_name}_lp{int(loadpoint):02d}_*.svg /tmp/{s_name}_lp{int(loadpoint):02d}_*_stap_trace.txt 2>/dev/null"
+                check_cmd = f"ls /tmp/cephfs_tool_perf_record_{s_name}_lp{int(loadpoint):02d}_* 2>/dev/null"
                 try:
                     files = self.executor.run_remote(s_name, check_cmd).strip().split()
                     for f_path in files:

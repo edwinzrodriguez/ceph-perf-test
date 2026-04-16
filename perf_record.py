@@ -517,6 +517,8 @@ def main():
     parser.add_argument(
         "--output-dir", default="/tmp", help="Output directory for generated files"
     )
+    parser.add_argument("--workload", help="Workload name (cephfs_tool, fio, sfs2020)")
+    parser.add_argument("--options", help="Workload options string")
 
     args = parser.parse_args()
 
@@ -598,11 +600,17 @@ def main():
         except Exception as e:
             print(f"Could not read cmdline for PID {pid}: {e}")
 
-        lp_tag = f"{int(loadpoint):02d}"
-        report_file = os.path.join(output_dir, f"{s_name}_lp{lp_tag}_{service_id}_perf_report.txt")
-        script_file = os.path.join(output_dir, f"{s_name}_lp{lp_tag}_{service_id}_perf_script.txt")
-        perf_data_file = os.path.join(output_dir, f"{s_name}_lp{lp_tag}_{service_id}_perf.data")
-        stap_out_file = os.path.join(output_dir, f"{s_name}_lp{lp_tag}_{service_id}_stap_trace.txt")
+        lp_tag = f"lp{int(loadpoint):02d}"
+        
+        if args.workload and args.options:
+            base_filename = f"{args.workload}_perf_record_{s_name}_{lp_tag}_{args.options}"
+        else:
+            base_filename = f"{s_name}_{lp_tag}_{service_id}"
+            
+        report_file = os.path.join(output_dir, f"{base_filename}_perf_report.txt")
+        script_file = os.path.join(output_dir, f"{base_filename}_perf_script.txt")
+        perf_data_file = os.path.join(output_dir, f"{base_filename}_perf.data")
+        stap_out_file = os.path.join(output_dir, f"{base_filename}_stap_trace.txt")
 
         print(
             f"Starting perf record on {args.server} for PID {pid} ({service_id}) for Load Point {loadpoint}..."

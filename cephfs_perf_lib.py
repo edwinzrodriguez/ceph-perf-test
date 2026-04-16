@@ -346,7 +346,7 @@ class CommonUtils:
         return expanded_list
 
     @staticmethod
-    def get_workload_base_name(settings, lp_cfg=None):
+    def get_workload_base_name(workload, output_type, client, lp, settings, lp_cfg=None):
         exclude = {
             "results_dir", "fs_name", "executable_path", "ceph_args",
             "config_path", "keyring", "client_id", "root_path",
@@ -360,8 +360,10 @@ class CommonUtils:
             if k not in exclude
         )
 
+        lp_str = f"lp{int(lp):02d}" if lp is not None else "lp00"
+        
+        parts = []
         if lp_cfg:
-            parts = []
             if "size" in lp_cfg:
                 parts.append(f"s{lp_cfg['size']}")
             if "threads" in lp_cfg:
@@ -373,10 +375,11 @@ class CommonUtils:
             if "block-size" in lp_cfg:
                 parts.append(f"bs{CommonUtils.format_si_units(lp_cfg['block-size'])}")
 
-            if parts:
-                return f"{mds_p}_{'_'.join(parts)}"
+        options = mds_p
+        if parts:
+            options += f"_{'_'.join(parts)}"
 
-        return mds_p
+        return f"{workload}_{output_type}_{client}_{lp_str}_{options}"
 
 
 class CephFSManager:

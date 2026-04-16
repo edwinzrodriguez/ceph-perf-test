@@ -59,10 +59,10 @@ cephfs_tool:
       size: "128MiB"
       iterations: 3
       extra_args: ""
-      threads: [1, 4, 16]
+      threads: [16]
       client-oc: [1, 0]
-      client-oc-size: ["256MiB", "1GiB", "64GiB"]
-      block-size: ["256KiB", "1MiB","4MiB"]
+      client-oc-size: ["64GiB"]
+      block-size: ["1MiB","4MiB"]
 
 ganesha:
   enabled: false

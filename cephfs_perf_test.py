@@ -10,6 +10,7 @@ import datetime
 import configparser
 import re
 import time
+from cephfs_perf_lib import CommonUtils
 
 
 class CephFSPerfTest:
@@ -1113,7 +1114,7 @@ class CephFSPerfTest:
                         results_dir = payload.get("results_dir")
                         t = threading.Thread(
                             target=self.execute_perf_record,
-                            args=(current_loadpoint, results_dir),
+                            args=(current_loadpoint, results_dir, settings),
                         )
                         t.start()
                         perf_threads.append(t)
@@ -1126,7 +1127,7 @@ class CephFSPerfTest:
             print(f"Error on {host_name}: process exited with {process.returncode}")
         return "".join(output)
 
-    def execute_perf_record(self, loadpoint, results_dir=None):
+    def execute_perf_record(self, loadpoint, results_dir=None, settings=None):
         perf_script = self.config["specstorage"].get(
             "perf_record_script", "/cephfs_perf/sfs2020/perf_record.py"
         )
@@ -1138,11 +1139,21 @@ class CephFSPerfTest:
             "perf_record_flamegraph_path", ""
         )
         processes = []
+
+        options_str = ""
+        if settings:
+            full_base = CommonUtils.get_workload_base_name('sfs2020', 'perf_record', 'server', loadpoint, settings)
+            lp_tag = f"lp{int(loadpoint):02d}_"
+            idx = full_base.find(lp_tag)
+            if idx != -1:
+                options_str = full_base[idx + len(lp_tag):]
+
         for server_name in self.mdss:
             print(
                 f"[{server_name}] Starting parallel perf record for Load Point {loadpoint}"
             )
             fg_arg = f" --flamegraph-path {flamegraph_path}" if flamegraph_path else ""
+            opt_arg = f" --options {options_str}" if options_str else ""
             user, host, port = self.get_ssh_details(server_name)
             ssh_cmd = [
                 "ssh",
@@ -1151,7 +1162,7 @@ class CephFSPerfTest:
                 "-p",
                 port,
                 f"{user}@{host}",
-                f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_executable} --duration {perf_duration}{fg_arg}",
+                f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_executable} --duration {perf_duration} --workload sfs2020{opt_arg}{fg_arg}",
             ]
             p = subprocess.Popen(
                 ssh_cmd,
@@ -1190,11 +1201,7 @@ class CephFSPerfTest:
                 lp_tag = f"{int(loadpoint):02d}"
                 # Find all report and script files for this loadpoint using wildcard in /tmp
                 find_cmd = (
-                    f"ls /tmp/{server_name}_lp{lp_tag}_*_perf_report.txt "
-                    f"/tmp/{server_name}_lp{lp_tag}_*_perf_script.txt "
-                    f"/tmp/{server_name}_lp{lp_tag}_*_perf.data "
-                    f"/tmp/{server_name}_lp{lp_tag}_*.svg "
-                    f"/tmp/{server_name}_lp{lp_tag}_*_stap_trace.txt 2>/dev/null"
+                    f"ls /tmp/sfs2020_perf_record_{server_name}_lp{int(loadpoint):02d}_* 2>/dev/null"
                 )
                 reports_output = self.run_remote(server_name, find_cmd).strip()
 

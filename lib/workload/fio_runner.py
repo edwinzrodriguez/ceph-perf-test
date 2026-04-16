@@ -89,7 +89,7 @@ class FioWorkloadRunner(WorkloadRunner):
                     print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=(current_lp, results_dir),
+                        args=(current_lp, results_dir, settings),
                     )
                     t.start()
                     perf_threads.append(t)
@@ -166,7 +166,7 @@ class FioWorkloadRunner(WorkloadRunner):
                         ]
                     )
 
-    def execute_perf_record(self, loadpoint, results_dir=None):
+    def execute_perf_record(self, loadpoint, results_dir=None, settings=None):
         fio_cfg = self.config.get("fio", {})
         perf_script = fio_cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
         perf_exe = fio_cfg.get("perf_record_executable", "ganesha.nfsd")
@@ -175,13 +175,23 @@ class FioWorkloadRunner(WorkloadRunner):
         stap_script = fio_cfg.get("stap_script", "")
         processes = []
         ganeshas = self.config.ganeshas
+
+        options_str = ""
+        if settings:
+            full_base = CommonUtils.get_workload_base_name('fio', 'perf_record', 'server', loadpoint, settings)
+            lp_tag = f"lp{int(loadpoint):02d}_"
+            idx = full_base.find(lp_tag)
+            if idx != -1:
+                options_str = full_base[idx + len(lp_tag):]
+
         for server_name in ganeshas:
             print(f"[{server_name}] Starting parallel perf record for Load Point {loadpoint}")
             fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
             stap_arg = f" --stap-script {stap_script}" if stap_script else ""
+            opt_arg = f" --options {options_str}" if options_str else ""
             u, h, p = self.executor.get_ssh_details(server_name)
             ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
-                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur}{fg_arg}{stap_arg}"]
+                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur} --workload fio{opt_arg}{fg_arg}{stap_arg}"]
             print(f"[{server_name}] Executing perf record for Load Point {loadpoint}: {ssh_cmd}")
             proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
                                     stdin=subprocess.DEVNULL)
@@ -208,7 +218,7 @@ class FioWorkloadRunner(WorkloadRunner):
             print(f"Copying perf reports and stap traces to {results_dir} on {self.admin}...")
             au, ah, ap = self.executor.get_ssh_details(self.admin)
             for s_name in ganeshas:
-                check_cmd = f"ls /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf_report.txt /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf_script.txt /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf.data /tmp/{s_name}_lp{int(loadpoint):02d}_*.svg /tmp/{s_name}_lp{int(loadpoint):02d}_*_stap_trace.txt 2>/dev/null"
+                check_cmd = f"ls /tmp/fio_perf_record_{s_name}_lp{int(loadpoint):02d}_* 2>/dev/null"
                 try:
                     files = self.executor.run_remote(s_name, check_cmd).strip().split()
                     for f_path in files:

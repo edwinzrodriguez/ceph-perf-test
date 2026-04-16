@@ -56,9 +56,8 @@ def main():
             if duration:
                 cmd_parts.extend(["--duration", str(duration)])
             
-            base_name = CommonUtils.get_workload_base_name(settings, lp_cfg)
-            json_output = f"/tmp/cephfs_tool_lp{lp:02d}_{base_name}_{client}.json"
-            perf_dump_output = f"/tmp/cephfs_tool_perf_dump_{client}_lp{lp:02d}_{base_name}.json"
+            json_output = f"/tmp/{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, lp, settings, lp_cfg)}.json"
+            perf_dump_output = f"/tmp/{CommonUtils.get_workload_base_name('cephfs_tool', 'perf_dump', client, lp, settings, lp_cfg)}.json"
             cmd_parts.extend(["--json", json_output])
             cmd_parts.extend(["--perf-dump", perf_dump_output])
             
