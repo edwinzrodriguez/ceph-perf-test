@@ -321,6 +321,33 @@ class CommonUtils:
                     return f"{val}{unit}"
         return str(value)
 
+    @staticmethod
+    def get_workload_base_name(settings, lp_cfg=None):
+        exclude = {
+            "results_dir", "fs_name", "executable_path", "ceph_args",
+            "config_path", "keyring", "client_id", "root_path",
+            "duration", "workload_dir", "run_name", "num_filesystems",
+            "mounts_per_fs", "perf_record", "perf_record_script",
+            "perf_record_executable", "perf_record_duration", "lockstat"
+        }
+        mds_p = "-".join(
+            f"{k}{CommonUtils.format_si_units(v)}"
+            for k, v in sorted(settings.items())
+            if k not in exclude
+        )
+
+        if lp_cfg:
+            parts = []
+            if "size" in lp_cfg:
+                parts.append(f"s{lp_cfg['size']}")
+            if "threads" in lp_cfg:
+                parts.append(f"t{lp_cfg['threads']}")
+
+            if parts:
+                return f"{mds_p}_{'_'.join(parts)}"
+
+        return mds_p
+
 
 class CephFSManager:
     def __init__(self, executor, config):

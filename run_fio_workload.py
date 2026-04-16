@@ -4,6 +4,7 @@ import argparse
 import subprocess
 import datetime
 import os
+from cephfs_perf_lib import CommonUtils
 
 
 def snake_to_pascal(snake_str):
@@ -101,7 +102,8 @@ def main():
                 for k, v in variables.items():
                     cmd = cmd.replace(f"{{{k}}}", str(v))
 
-                filename = f"fio_{c}_{fs_name}_lp{loadpoint}.json"
+                base_name = CommonUtils.get_workload_base_name(settings)
+                filename = f"fio_{base_name}_{c}_{fs_name}_lp{loadpoint}.json"
                 remote_path = f"{results_dir}/{filename}"
                 cmd += f" --group_reporting --output-format=json --output={remote_path}"
 

@@ -4,6 +4,7 @@ import argparse
 import subprocess
 import datetime
 import os
+from cephfs_perf_lib import CommonUtils
 
 
 def snake_to_pascal(snake_str):
@@ -63,13 +64,7 @@ def main():
     run_name = settings.get("run_name")
     if not run_name:
         # Construct a string from mds_settings
-        mds_part = "_".join(
-            [
-                f"{snake_to_pascal(k)}-{format_si_units(v)}"
-                for k, v in sorted(settings.items())
-                if k not in ["fs_name", "workload_dir", "num_filesystems"]
-            ]
-        )
+        mds_part = CommonUtils.get_workload_base_name(settings)
 
         num_filesystems = settings.get("num_filesystems", 1)
         # Note: run_sfs2020_workload.py doesn't have easy access to inventory/config for client counts
