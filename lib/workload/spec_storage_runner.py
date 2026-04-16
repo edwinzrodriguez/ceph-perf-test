@@ -180,10 +180,12 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         u, h, p = self.executor.get_ssh_details(self.admin)
 
         # Copy local files to the remote machine
+        remote_dir = os.path.dirname(run_cmd)
         files_to_copy = [
             ("sfs_rc", proto),
             ("run_workload.py", run_cmd),
             ("perf_record.py", perf_script),
+            ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
         ]
         stap_script = spec_cfg.get("stap_script")
         if stap_script and os.path.exists(os.path.basename(stap_script)):

@@ -374,6 +374,18 @@ class CommonUtils:
                 parts.append(f"ocs{CommonUtils.format_si_units(lp_cfg['client-oc-size'])}")
             if "block-size" in lp_cfg:
                 parts.append(f"bs{CommonUtils.format_si_units(lp_cfg['block-size'])}")
+            if "iodepth" in lp_cfg:
+                parts.append(f"iod{lp_cfg['iodepth']}")
+            if "readwrite" in lp_cfg:
+                parts.append(f"rw{lp_cfg['readwrite']}")
+            if "ioengine" in lp_cfg:
+                parts.append(f"ioe{lp_cfg['ioengine']}")
+            if "direct" in lp_cfg:
+                parts.append(f"d{lp_cfg['direct']}")
+            if "buffered" in lp_cfg:
+                parts.append(f"buf{lp_cfg['buffered']}")
+            if "create_serialize" in lp_cfg:
+                parts.append(f"cs{lp_cfg['create_serialize']}")
 
         options = mds_p
         if parts:

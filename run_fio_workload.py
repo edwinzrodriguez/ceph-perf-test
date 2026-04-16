@@ -45,22 +45,22 @@ def main():
         "--settings", required=True, help="JSON string containing test settings"
     )
     parser.add_argument(
-        "--commands", required=True, help="JSON string containing Fio command templates"
-    )
-    parser.add_argument(
         "--mount-points", required=True, help="JSON string containing mount points"
     )
     parser.add_argument(
         "--clients", required=True, help="JSON string containing client list"
+    )
+    parser.add_argument(
+        "--loadpoints", help="JSON string containing loadpoints configuration"
     )
 
     args = parser.parse_args()
 
     try:
         settings = json.loads(args.settings)
-        commands = json.loads(args.commands)
         mount_points = json.loads(args.mount_points)
         clients = json.loads(args.clients)
+        loadpoints = json.loads(args.loadpoints) if args.loadpoints else []
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON: {e}")
         return
@@ -75,7 +75,14 @@ def main():
     print(f"Ensuring results directory exists: {results_dir}")
     os.makedirs(results_dir, exist_ok=True)
 
-    for idx, cmd_template in enumerate(commands):
+    # Use loadpoints
+    if not loadpoints:
+        print("Error: loadpoints is required")
+        return
+
+    workload_configs = loadpoints
+
+    for idx, config in enumerate(workload_configs):
         loadpoint = idx + 1
         print(f"Starting Fio Load Point: {loadpoint}")
 
@@ -88,7 +95,6 @@ def main():
 
         for c in clients:
             # Ensure results directory exists on each client
-            # We assume this script runs on the admin host and can SSH to clients
             subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", c, f"mkdir -p {results_dir}"])
 
             for mp in mount_points:
@@ -98,11 +104,52 @@ def main():
                     "results_dir": results_dir,
                     "fs_name": fs_name,
                 }
-                cmd = cmd_template
-                for k, v in variables.items():
-                    cmd = cmd.replace(f"{{{k}}}", str(v))
 
-                filename = f"{CommonUtils.get_workload_base_name('fio', 'result', c, loadpoint, settings)}.json"
+                # Construct fio command from loadpoint configuration
+                lp_cfg = config
+                # fio command basic options
+                fio_parts = ["fio"]
+                fio_parts.append(f"--name=lp{loadpoint:02d}_{c}")
+                fio_parts.append(f"--directory={mp}")
+
+                # Map parameters
+                if "size" in lp_cfg:
+                    fio_parts.append(f"--size={lp_cfg['size']}")
+                if "block-size" in lp_cfg:
+                    fio_parts.append(f"--bs={lp_cfg['block-size']}")
+                if "iodepth" in lp_cfg:
+                    fio_parts.append(f"--iodepth={lp_cfg['iodepth']}")
+                if "readwrite" in lp_cfg:
+                    fio_parts.append(f"--rw={lp_cfg['readwrite']}")
+                if "ioengine" in lp_cfg:
+                    fio_parts.append(f"--ioengine={lp_cfg['ioengine']}")
+                if "direct" in lp_cfg:
+                    fio_parts.append(f"--direct={lp_cfg['direct']}")
+                if "buffered" in lp_cfg:
+                    fio_parts.append(f"--buffered={lp_cfg['buffered']}")
+                if "create_serialize" in lp_cfg:
+                    fio_parts.append(f"--create_serialize={lp_cfg['create_serialize']}")
+                if "threads" in lp_cfg:
+                    fio_parts.append(f"--numjobs={lp_cfg['threads']}")
+
+                # Duration to runtime mapping
+                # First check loadpoint duration, then global settings
+                duration = lp_cfg.get("duration", settings.get("duration", 0))
+                if duration:
+                    fio_parts.append(f"--time_based=1")
+                    fio_parts.append(f"--runtime={duration}")
+
+                # Other common settings from global configuration if they exist
+                for key in ["gtod_reduce", "ramp_time", "randrepeat"]:
+                    if key in settings:
+                        fio_parts.append(f"--{key}={settings[key]}")
+
+                if "extra_args" in lp_cfg and lp_cfg["extra_args"]:
+                    fio_parts.append(lp_cfg["extra_args"])
+
+                cmd = " ".join(fio_parts)
+                filename = f"{CommonUtils.get_workload_base_name('fio', 'result', c, loadpoint, settings, lp_cfg)}.json"
+
                 remote_path = f"{results_dir}/{filename}"
                 cmd += f" --group_reporting --output-format=json --output={remote_path}"
 

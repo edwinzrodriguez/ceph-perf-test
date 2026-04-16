@@ -16,7 +16,6 @@ class FioWorkloadRunner(WorkloadRunner):
             ganesha_manager=None,
     ):
         fio_cfg = self.config.fio
-        commands = fio_cfg.get("commands", [])
         run_cmd = fio_cfg.get("run_command", "/cephfs_perf/sfs2020/run_fio_workload.py")
         perf_record_enabled = fio_cfg.get("perf_record", False)
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
@@ -40,19 +39,24 @@ class FioWorkloadRunner(WorkloadRunner):
         payload["fs_name"] = self.config.fs_name
         payload["results_dir"] = results_dir
 
+        loadpoints = fio_cfg.get("loadpoints", [])
+        if isinstance(loadpoints, dict):
+            loadpoints = [loadpoints]
+        expanded_loadpoints = CommonUtils.expand_loadpoints(loadpoints)
+
         settings_json = json.dumps(payload)
-        commands_json = json.dumps(commands)
         mount_points_json = json.dumps(mount_points)
         clients_json = json.dumps(self.config.clients)
+        loadpoints_json = json.dumps(expanded_loadpoints)
 
         print(f"Running Fio Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
         full_cmd = (
             f"python3 {run_cmd} "
             f"--settings '{settings_json}' "
-            f"--commands '{commands_json}' "
             f"--mount-points '{mount_points_json}' "
-            f"--clients '{clients_json}'"
+            f"--clients '{clients_json}' "
+            f"--loadpoints '{loadpoints_json}'"
         )
         print(f"[{self.admin}] Executing: {full_cmd}")
         ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", port, f"{user}@{host}", full_cmd]
@@ -147,6 +151,7 @@ class FioWorkloadRunner(WorkloadRunner):
             files_to_copy = [
                 ("run_fio_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
+                ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
             ]
             if stap_script and os.path.exists(os.path.basename(stap_script)):
                 files_to_copy.append((os.path.basename(stap_script), stap_script))
