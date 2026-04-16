@@ -514,6 +514,9 @@ def main():
     parser.add_argument("--report-file", help="Path to report.txt for --only-report")
     parser.add_argument("--script-file", help="Path to script.txt for --only-report")
     parser.add_argument("--stap-script", help="Path to SystemTap script (.stp)")
+    parser.add_argument(
+        "--output-dir", default="/tmp", help="Output directory for generated files"
+    )
 
     args = parser.parse_args()
 
@@ -522,6 +525,13 @@ def main():
     duration = args.duration
     s_name = args.server.split("@")[-1]
     flamegraph_dir = _resolve_flamegraph_dir(args.flamegraph_path)
+    output_dir = args.output_dir
+
+    if not os.path.exists(output_dir):
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+        except Exception as e:
+            print(f"Warning: Could not create output directory {output_dir}: {e}")
 
     if args.only_report:
         if not (args.perf_data and args.report_file and args.script_file):
@@ -589,10 +599,10 @@ def main():
             print(f"Could not read cmdline for PID {pid}: {e}")
 
         lp_tag = f"{int(loadpoint):02d}"
-        report_file = f"{s_name}_lp{lp_tag}_{service_id}_perf_report.txt"
-        script_file = f"{s_name}_lp{lp_tag}_{service_id}_perf_script.txt"
-        perf_data_file = f"{s_name}_lp{lp_tag}_{service_id}_perf.data"
-        stap_out_file = f"{s_name}_lp{lp_tag}_{service_id}_stap_trace.txt"
+        report_file = os.path.join(output_dir, f"{s_name}_lp{lp_tag}_{service_id}_perf_report.txt")
+        script_file = os.path.join(output_dir, f"{s_name}_lp{lp_tag}_{service_id}_perf_script.txt")
+        perf_data_file = os.path.join(output_dir, f"{s_name}_lp{lp_tag}_{service_id}_perf.data")
+        stap_out_file = os.path.join(output_dir, f"{s_name}_lp{lp_tag}_{service_id}_stap_trace.txt")
 
         print(
             f"Starting perf record on {args.server} for PID {pid} ({service_id}) for Load Point {loadpoint}..."

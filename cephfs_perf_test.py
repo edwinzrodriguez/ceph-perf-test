@@ -1188,12 +1188,13 @@ class CephFSPerfTest:
             admin_user, admin_host, admin_port = self.get_ssh_details(self.admin)
             for server_name in self.mdss:
                 lp_tag = f"{int(loadpoint):02d}"
-                # Find all report and script files for this loadpoint using wildcard
+                # Find all report and script files for this loadpoint using wildcard in /tmp
                 find_cmd = (
-                    f"ls {server_name}_lp{lp_tag}_*_perf_report.txt "
-                    f"{server_name}_lp{lp_tag}_*_perf_script.txt "
-                    f"{server_name}_lp{lp_tag}_*_perf.data "
-                    f"{server_name}_lp{lp_tag}_*_perf_script.svg"
+                    f"ls /tmp/{server_name}_lp{lp_tag}_*_perf_report.txt "
+                    f"/tmp/{server_name}_lp{lp_tag}_*_perf_script.txt "
+                    f"/tmp/{server_name}_lp{lp_tag}_*_perf.data "
+                    f"/tmp/{server_name}_lp{lp_tag}_*.svg "
+                    f"/tmp/{server_name}_lp{lp_tag}_*_stap_trace.txt 2>/dev/null"
                 )
                 reports_output = self.run_remote(server_name, find_cmd).strip()
 
@@ -1225,6 +1226,10 @@ class CephFSPerfTest:
                             copy_tmp_cmd = f"scp -o StrictHostKeyChecking=no -P {admin_port} {tmp_path} {admin_user}@{admin_host}:{results_dir}/"
                             self.run_remote(server_name, copy_tmp_cmd)
                             self.run_remote(server_name, f"sudo -n rm -f {tmp_path}")
+                        
+                        # Also remove the original file if it was in /tmp but we copied it directly
+                        if report_file.startswith("/tmp/") and can_read == "OK":
+                            self.run_remote(server_name, f"sudo -n rm -f {report_file}")
                 else:
                     print(
                         f"[{server_name}] No report files found for Load Point {loadpoint}, skipping copy."

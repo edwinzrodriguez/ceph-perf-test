@@ -208,7 +208,7 @@ class FioWorkloadRunner(WorkloadRunner):
             print(f"Copying perf reports and stap traces to {results_dir} on {self.admin}...")
             au, ah, ap = self.executor.get_ssh_details(self.admin)
             for s_name in ganeshas:
-                check_cmd = f"ls /tmp/perf_report_{s_name}_lp{int(loadpoint):02d}.* /tmp/*_lp{int(loadpoint):02d}_*_stap_trace.txt 2>/dev/null"
+                check_cmd = f"ls /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf_report.txt /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf_script.txt /tmp/{s_name}_lp{int(loadpoint):02d}_*_perf.data /tmp/{s_name}_lp{int(loadpoint):02d}_*.svg /tmp/{s_name}_lp{int(loadpoint):02d}_*_stap_trace.txt 2>/dev/null"
                 try:
                     files = self.executor.run_remote(s_name, check_cmd).strip().split()
                     for f_path in files:
