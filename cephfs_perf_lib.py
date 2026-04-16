@@ -322,6 +322,30 @@ class CommonUtils:
         return str(value)
 
     @staticmethod
+    def expand_loadpoints(loadpoints):
+        import itertools
+        import copy
+        expanded_list = []
+        for lp in loadpoints:
+            # Find keys with list values
+            list_keys = [k for k, v in lp.items() if isinstance(v, list)]
+            if not list_keys:
+                expanded_list.append(lp)
+                continue
+
+            # Get all combinations of list values
+            keys = list_keys
+            value_lists = [lp[k] for k in keys]
+
+            for values in itertools.product(*value_lists):
+                new_lp = copy.deepcopy(lp)
+                for k, v in zip(keys, values):
+                    new_lp[k] = v
+                expanded_list.append(new_lp)
+
+        return expanded_list
+
+    @staticmethod
     def get_workload_base_name(settings, lp_cfg=None):
         exclude = {
             "results_dir", "fs_name", "executable_path", "ceph_args",

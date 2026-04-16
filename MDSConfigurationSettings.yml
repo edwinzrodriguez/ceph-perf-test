@@ -56,12 +56,12 @@ cephfs_tool:
   loadpoints:
     - files: 1024
       size: "128MiB"
-      threads: 32
       iterations: 3
-      client-oc: 1
-      client-oc-size: "1GiB"
-      block-size: "4MB"
       extra_args: ""
+      threads: [16]
+      client-oc: [1]
+      client-oc-size: ["256MiB", "1GiB"]
+      block-size: "4MB"
 
 ganesha:
   enabled: false

@@ -17,6 +17,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
     ):
         cfg = self.config.cephfs_tool
         loadpoints = cfg.get("loadpoints", [])
+        loadpoints = CommonUtils.expand_loadpoints(loadpoints)
         run_cmd = cfg.get("run_command", "/cephfs_perf/cephfs_tool/run_cephfs_workload.py")
         perf_record_enabled = cfg.get("perf_record", False)
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
