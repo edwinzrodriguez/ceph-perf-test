@@ -342,6 +342,10 @@ class CommonUtils:
                 parts.append(f"s{lp_cfg['size']}")
             if "threads" in lp_cfg:
                 parts.append(f"t{lp_cfg['threads']}")
+            if "client-oc" in lp_cfg:
+                parts.append(f"oc{lp_cfg['client-oc']}")
+            if "client-oc-size" in lp_cfg:
+                parts.append(f"ocs{CommonUtils.format_si_units(lp_cfg['client-oc-size'])}")
 
             if parts:
                 return f"{mds_p}_{'_'.join(parts)}"

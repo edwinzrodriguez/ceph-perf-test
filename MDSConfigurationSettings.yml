@@ -58,6 +58,8 @@ cephfs_tool:
       size: "128MiB"
       threads: 32
       iterations: 3
+      client-oc: 1
+      client-oc-size: "1GiB"
       extra_args: ""
 
 ganesha:
