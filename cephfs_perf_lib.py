@@ -255,27 +255,47 @@ class CommonUtils:
     def parse_si_unit(value):
         if not isinstance(value, str):
             return value
+        
+        # Support common unit formats like "128MiB", "1GiB", "100MB", "100k", etc.
+        # Normalize: remove "B" and "iB" from the end if they exist, but keep "i" for binary.
+        # e.g., "MiB" -> "Mi", "MB" -> "M", "Mi" -> "Mi", "M" -> "M"
+        
+        normalized = value.strip()
+        if normalized.endswith("iB"):
+            normalized = normalized[:-1] # "MiB" -> "Mi"
+        elif normalized.endswith("B"):
+            normalized = normalized[:-1] # "MB" -> "M"
+            
         units = {
-            "Ki": 1024,
-            "Mi": 1024**2,
-            "Gi": 1024**3,
-            "Ti": 1024**4,
             "Pi": 1024**5,
-            "k": 1000,
-            "m": 1000**2,
-            "g": 1000**3,
-            "t": 1000**4,
+            "Ti": 1024**4,
+            "Gi": 1024**3,
+            "Mi": 1024**2,
+            "Ki": 1024,
+            "P": 1000**5,
+            "T": 1000**4,
+            "G": 1000**3,
+            "M": 1000**2,
+            "K": 1000,
             "p": 1000**5,
+            "t": 1000**4,
+            "g": 1000**3,
+            "m": 1000**2,
+            "k": 1000,
         }
+        
         for unit, mult in units.items():
-            if value.endswith(unit):
+            if normalized.endswith(unit):
                 try:
-                    return int(value[: -len(unit)]) * mult
-                except:
+                    num_part = normalized[: -len(unit)].strip()
+                    if not num_part:
+                        return value
+                    return int(num_part) * mult
+                except (ValueError, TypeError):
                     continue
         try:
-            return int(value)
-        except:
+            return int(normalized)
+        except (ValueError, TypeError):
             return value
 
     @staticmethod

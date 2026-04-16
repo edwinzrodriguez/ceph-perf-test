@@ -43,14 +43,25 @@ cephfs_tool:
   results_base_dir: "/cephfs_perf/cephfs_tool"
   run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
   perf_record_script: "/cephfs_perf/sfs2020/perf_record.py"
-  perf_record_executable: "ceph-mds"
+  perf_record_executable: "cephfs-tool"
   perf_record: true
   perf_record_duration: 5
-  commands:
-    - 'env CEPH_ARGS="--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log" /usr/local/bin/cephfs-tool bench -c /etc/ceph/ceph.conf -k /etc/ceph/ceph.client.admin.keyring -i admin --filesystem {fs_name} --root-path / --files 1024 --size=$(( 128 * 2 ** 20 )) --threads=32 --iterations 3'
+  executable_path: "/usr/local/bin/cephfs-tool"
+  ceph_args: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  root_path: "/"
+  duration: 15
+  loadpoints:
+    - files: 1024
+      size: "128MiB"
+      threads: 32
+      iterations: 3
+      extra_args: ""
 
 ganesha:
-  enabled: true
+  enabled: false
   service_id: "ganesha"
   type: "systemd"
   binary_path: "/usr/local/bin/ganesha.nfsd"
