@@ -4,7 +4,7 @@ import subprocess
 import time
 import yaml
 from lib.ganesha.ganesha_manager import GaneshaManager
-from cephfs_perf_lib import CephFSManager
+from cephfs_perf_lib import CephFSManager, CommonUtils
 
 
 class GaneshaCephadmManager(GaneshaManager):
@@ -92,6 +92,20 @@ class GaneshaCephadmManager(GaneshaManager):
         self.executor.run_remote(self.admin, f"sudo ceph orch restart nfs.{sid}")
 
         # After ganesha starts, run 'config diff' via the admin socket and store results in the output directory
+        print("Waiting for Ganesha nodes to start and admin socket to be available...")
+        for g_host in self.ganeshas:
+            asok_pattern = "/var/run/ceph/ganesha-*.asok"
+            print(f"[{g_host}] Waiting for Ganesha admin socket matching {asok_pattern}...")
+            for i in range(30):
+                cmd = f"ls {asok_pattern} | grep -v 'client.admin.asok' | head -n 1"
+                asok_path = self.executor.run_remote(g_host, cmd).strip()
+                if asok_path and "No such file" not in asok_path:
+                    print(f"[{g_host}] Ganesha admin socket {asok_path} is available.")
+                    break
+                if i == 29:
+                    print(f"[{g_host}] Warning: Ganesha admin socket NOT found after 300 seconds.")
+                time.sleep(10)
+
         print("Collecting Ganesha 'config diff' from all ganesha nodes...")
         if results_dir:
             self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
@@ -143,6 +157,24 @@ class GaneshaCephadmManager(GaneshaManager):
             "    }\n"
         ) if worker_threads else ""
 
+        # Add CEPH block for top-level settings if any are defined
+        ceph_block = ""
+        ceph_options = ""
+        if self.config.ganesha_umask is not None:
+            ceph_options += f"    umask = {self.config.ganesha_umask};\n"
+        if self.config.ganesha_client_oc is not None:
+            val = "true" if self.config.ganesha_client_oc else "false"
+            ceph_options += f"    client_oc = {val};\n"
+        if self.config.ganesha_async is not None:
+            val = "true" if self.config.ganesha_async else "false"
+            ceph_options += f"    async = {val};\n"
+        if self.config.ganesha_zerocopy is not None:
+            val = "true" if self.config.ganesha_zerocopy else "false"
+            ceph_options += f"    zerocopy = {val};\n"
+
+        if ceph_options:
+            ceph_block = f"CEPH {{\n{ceph_options}}}\n"
+
         config_content = (
             "NFS_Core_Param {\n"
             "    Protocols = 4;\n"
@@ -156,6 +188,7 @@ class GaneshaCephadmManager(GaneshaManager):
             '    RecoveryBackend = "rados_cluster";\n'
             "    Minor_Versions = 1, 2;\n"
             "}\n"
+            f"{ceph_block}"
             "RADOS_KV {\n"
             "    nodeid = 0;\n"
             '    pool = ".nfs";\n'
@@ -222,7 +255,7 @@ class GaneshaCephadmManager(GaneshaManager):
                         "--env",
                         "CEPH_CONF=/etc/ceph/ceph.conf",
                         "--env",
-                        "CEPH_ARGS=--admin-socket=/var/run/ceph/ganesha-$cluster-$name.asok",
+                        f"CEPH_ARGS=--admin-socket=/var/run/ceph/ganesha-$cluster-$name.asok{f' --client-oc-size {CommonUtils.parse_si_unit(self.config.ganesha_client_oc_size)}' if self.config.ganesha_client_oc_size else ''}",
                         "--entrypoint",
                         "/usr/bin/ganesha.nfsd",
                     ],

@@ -3,7 +3,7 @@ import os
 import subprocess
 import time
 from lib.ganesha.ganesha_manager import GaneshaManager
-from cephfs_perf_lib import CephFSManager
+from cephfs_perf_lib import CephFSManager, CommonUtils
 
 
 class GaneshaSystemdManager(GaneshaManager):
@@ -58,7 +58,12 @@ class GaneshaSystemdManager(GaneshaManager):
             self.executor.run_remote(host_name, cleanup_cmd)
 
             # We'll use a simpler asok version: ganesha-<hostname>.asok
-            ceph_args = f"export CEPH_ARGS='--admin-socket=/var/run/ceph/ganesha-{host_name}.asok'; "
+            ceph_args_val = f"--admin-socket=/var/run/ceph/ganesha-{host_name}.asok"
+            if self.config.ganesha_client_oc_size:
+                oc_size = CommonUtils.parse_si_unit(self.config.ganesha_client_oc_size)
+                ceph_args_val += f" --client_oc_size={oc_size}"
+
+            ceph_args = f"export CEPH_ARGS='{ceph_args_val}'; "
 
             # Start as a background process with nohup. 
             # We use sudo bash to execute the string with environment variables and background it.
@@ -66,13 +71,24 @@ class GaneshaSystemdManager(GaneshaManager):
             self.executor.run_remote(host_name, cmd, check=True )
             print(f"[{host_name}] Ganesha started with PID file {pid_path}")
 
+            # Wait for the admin socket to appear, indicating Ganesha has started
+            asok_path = f"/var/run/ceph/ganesha-{host_name}.asok"
+            print(f"[{host_name}] Waiting for Ganesha admin socket {asok_path}...")
+            for i in range(30):
+                check_asok = f"test -S {asok_path}"
+                try:
+                    self.executor.run_remote(host_name, check_asok, check=True)
+                    print(f"[{host_name}] Ganesha admin socket {asok_path} is available.")
+                    break
+                except Exception:
+                    if i == 29:
+                        print(f"[{host_name}] Warning: Ganesha admin socket {asok_path} NOT found after 30 seconds.")
+                    time.sleep(1)
+
         # Collect config diff if results_dir is provided
         if results_dir:
             self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
             for host_name in self.ganeshas:
-                # Wait a bit for asok to appear
-                time.sleep(2)
-
                 asok_path = f"/var/run/ceph/ganesha-{host_name}.asok"
                 print(f"[{host_name}] Running 'config diff' via {asok_path}...")
                 try:
@@ -125,6 +141,24 @@ class GaneshaSystemdManager(GaneshaManager):
             "    }\n"
         ) if worker_threads else ""
 
+        # Add CEPH block for top-level settings if any are defined
+        ceph_block = ""
+        ceph_options = ""
+        if self.config.ganesha_umask is not None:
+            ceph_options += f"    umask = {self.config.ganesha_umask};\n"
+        if self.config.ganesha_client_oc is not None:
+            val = "true" if self.config.ganesha_client_oc else "false"
+            ceph_options += f"    client_oc = {val};\n"
+        if self.config.ganesha_async is not None:
+            val = "true" if self.config.ganesha_async else "false"
+            ceph_options += f"    async = {val};\n"
+        if self.config.ganesha_zerocopy is not None:
+            val = "true" if self.config.ganesha_zerocopy else "false"
+            ceph_options += f"    zerocopy = {val};\n"
+
+        if ceph_options:
+            ceph_block = f"CEPH {{\n{ceph_options}}}\n"
+
         config_content = (
             "NFS_Core_Param {\n"
             "    Protocols = 4;\n"
@@ -138,6 +172,7 @@ class GaneshaSystemdManager(GaneshaManager):
             "    RecoveryBackend = \"fs\";\n"
             "    Minor_Versions = 1, 2;\n"
             "}\n"
+            f"{ceph_block}"
         )
 
         # Add EXPORT blocks for each filesystem manually
@@ -155,6 +190,9 @@ class GaneshaSystemdManager(GaneshaManager):
                 f'        Name = "CEPH";\n'
                 f'        Filesystem = "{fs}";\n'
                 f'        User_Id = "admin";\n'
+            )
+
+            export_block += (
                 f'    }}\n'
                 f"}}\n"
             )

@@ -202,6 +202,26 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("worker_threads")
 
     @property
+    def ganesha_umask(self):
+        return self._config.get("ganesha", {}).get("umask")
+
+    @property
+    def ganesha_client_oc(self):
+        return self._config.get("ganesha", {}).get("client_oc")
+
+    @property
+    def ganesha_async(self):
+        return self._config.get("ganesha", {}).get("async")
+
+    @property
+    def ganesha_zerocopy(self):
+        return self._config.get("ganesha", {}).get("zerocopy")
+
+    @property
+    def ganesha_client_oc_size(self):
+        return self._config.get("ganesha", {}).get("client_oc_size")
+
+    @property
     def fio(self):
         return self._config.get("fio")
 
@@ -346,7 +366,7 @@ class CommonUtils:
         return expanded_list
 
     @staticmethod
-    def get_workload_base_name(workload, output_type, client, lp, settings, lp_cfg=None):
+    def get_workload_base_name(workload, output_type, client, lp, settings, lp_cfg=None, config=None):
         exclude = {
             "results_dir", "fs_name", "executable_path", "ceph_args",
             "config_path", "keyring", "client_id", "root_path",
@@ -359,6 +379,24 @@ class CommonUtils:
             for k, v in sorted(settings.items())
             if k not in exclude
         )
+
+        g_p = ""
+        if config and config.ganesha_enabled:
+            g_parts = []
+            if config.ganesha_worker_threads:
+                g_parts.append(f"gwt{config.ganesha_worker_threads}")
+            if config.ganesha_umask:
+                g_parts.append(f"gum{config.ganesha_umask}")
+            if config.ganesha_client_oc is not None:
+                g_parts.append(f"goc{1 if config.ganesha_client_oc else 0}")
+            if config.ganesha_async is not None:
+                g_parts.append(f"gas{1 if config.ganesha_async else 0}")
+            if config.ganesha_zerocopy is not None:
+                g_parts.append(f"gzc{1 if config.ganesha_zerocopy else 0}")
+            if config.ganesha_client_oc_size:
+                g_parts.append(f"gocs{CommonUtils.format_si_units(config.ganesha_client_oc_size)}")
+            if g_parts:
+                g_p = "-" + "-".join(g_parts)
 
         lp_str = f"lp{int(lp):02d}" if lp is not None else "lp00"
         
@@ -387,7 +425,7 @@ class CommonUtils:
             if "create_serialize" in lp_cfg:
                 parts.append(f"cs{lp_cfg['create_serialize']}")
 
-        options = mds_p
+        options = mds_p + g_p
         if parts:
             options += f"_{'_'.join(parts)}"
 

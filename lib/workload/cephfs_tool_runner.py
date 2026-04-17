@@ -141,7 +141,25 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}" for k, v in settings.items()
         )
-        return os.path.join(base, f"{ts}_{fs_p}_{mds_p}")
+        g_p = ""
+        if self.config.ganesha_enabled:
+            g_parts = []
+            if self.config.ganesha_worker_threads:
+                g_parts.append(f"gwt{self.config.ganesha_worker_threads}")
+            if self.config.ganesha_umask:
+                g_parts.append(f"gum{self.config.ganesha_umask}")
+            if self.config.ganesha_client_oc is not None:
+                g_parts.append(f"goc{1 if self.config.ganesha_client_oc else 0}")
+            if self.config.ganesha_async is not None:
+                g_parts.append(f"gas{1 if self.config.ganesha_async else 0}")
+            if self.config.ganesha_zerocopy is not None:
+                g_parts.append(f"gzc{1 if self.config.ganesha_zerocopy else 0}")
+            if self.config.ganesha_client_oc_size:
+                g_parts.append(f"gocs{CommonUtils.format_si_units(self.config.ganesha_client_oc_size)}")
+            if g_parts:
+                g_p = "_" + "_".join(g_parts)
+
+        return os.path.join(base, f"{ts}_{fs_p}_{mds_p}{g_p}")
 
     def prepare_storage(self):
         cfg = self.config.get("cephfs_tool", {})
@@ -200,7 +218,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             # We want just the options part, not the whole workload_result_...
             # get_workload_base_name returns workload_type_client_lp_options
             # We can extract options by splitting and taking everything after lpXX
-            full_base = CommonUtils.get_workload_base_name('cephfs_tool', 'perf_record', 'client', loadpoint, settings, lp_cfg)
+            full_base = CommonUtils.get_workload_base_name('cephfs_tool', 'perf_record', 'client', loadpoint, settings, lp_cfg, self.config)
             # Find the index of lpXX_ and take what's after it
             lp_tag = f"lp{int(loadpoint):02d}_"
             idx = full_base.find(lp_tag)
