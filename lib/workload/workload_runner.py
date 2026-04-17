@@ -13,6 +13,7 @@ class WorkloadRunner(abc.ABC):
             shared_ts=None,
             cephfs_manager=None,
             ganesha_manager=None,
+            results_dir=None,
     ):
         pass
 

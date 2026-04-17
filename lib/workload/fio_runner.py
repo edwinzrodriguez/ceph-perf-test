@@ -14,6 +14,7 @@ class FioWorkloadRunner(WorkloadRunner):
             shared_ts=None,
             cephfs_manager=None,
             ganesha_manager=None,
+            results_dir=None,
     ):
         fio_cfg = self.config.fio
         run_cmd = fio_cfg.get("run_command", "/cephfs_perf/sfs2020/run_fio_workload.py")
@@ -21,7 +22,7 @@ class FioWorkloadRunner(WorkloadRunner):
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )
-        results_dir = self.get_results_dir(settings, ts)
+        results_dir = results_dir or self.get_results_dir(settings, ts)
 
         # Create results directory on admin host
         self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
@@ -38,6 +39,11 @@ class FioWorkloadRunner(WorkloadRunner):
         payload = settings.copy()
         payload["fs_name"] = self.config.fs_name
         payload["results_dir"] = results_dir
+
+        # Add global fio settings to payload
+        for key in ["gtod_reduce", "ramp_time"]:
+            if key in fio_cfg:
+                payload[key] = fio_cfg[key]
 
         loadpoints = fio_cfg.get("loadpoints", [])
         if isinstance(loadpoints, dict):
@@ -93,7 +99,7 @@ class FioWorkloadRunner(WorkloadRunner):
                     print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=(current_lp, results_dir, settings),
+                        args=(current_lp, results_dir, settings, expanded_loadpoints[current_lp-1]),
                     )
                     t.start()
                     perf_threads.append(t)
@@ -132,21 +138,16 @@ class FioWorkloadRunner(WorkloadRunner):
         )
         g_p = ""
         if self.config.ganesha_enabled:
-            g_parts = []
-            if self.config.ganesha_worker_threads:
-                g_parts.append(f"gwt{self.config.ganesha_worker_threads}")
-            if self.config.ganesha_umask:
-                g_parts.append(f"gum{self.config.ganesha_umask}")
-            if self.config.ganesha_client_oc is not None:
-                g_parts.append(f"goc{1 if self.config.ganesha_client_oc else 0}")
-            if self.config.ganesha_async is not None:
-                g_parts.append(f"gas{1 if self.config.ganesha_async else 0}")
-            if self.config.ganesha_zerocopy is not None:
-                g_parts.append(f"gzc{1 if self.config.ganesha_zerocopy else 0}")
-            if self.config.ganesha_client_oc_size:
-                g_parts.append(f"gocs{CommonUtils.format_si_units(self.config.ganesha_client_oc_size)}")
-            if g_parts:
-                g_p = "_" + "_".join(g_parts)
+            # Dynamically determine ganesha manager to call get_ganesha_config_str
+            from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
+            from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
+            if self.config.ganesha_type == "systemd":
+                gm = GaneshaSystemdManager(self.executor, self.config)
+            else:
+                gm = GaneshaCephadmManager(self.executor, self.config)
+            g_str = gm.get_ganesha_config_str(self.config.get("ganesha", {}))
+            if g_str:
+                g_p = "_" + g_str
 
         return os.path.join(base, f"{ts}_{fs_p}_{mds_p}{g_p}")
 
@@ -189,7 +190,7 @@ class FioWorkloadRunner(WorkloadRunner):
                         ]
                     )
 
-    def execute_perf_record(self, loadpoint, results_dir=None, settings=None):
+    def execute_perf_record(self, loadpoint, results_dir=None, settings=None, lp_cfg=None):
         fio_cfg = self.config.get("fio", {})
         perf_script = fio_cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
         perf_exe = fio_cfg.get("perf_record_executable", "ganesha.nfsd")
@@ -201,7 +202,7 @@ class FioWorkloadRunner(WorkloadRunner):
 
         options_str = ""
         if settings:
-            full_base = CommonUtils.get_workload_base_name('fio', 'perf_record', 'server', loadpoint, settings, config=self.config)
+            full_base = CommonUtils.get_workload_base_name('fio', 'perf_record', 'server', loadpoint, settings, lp_cfg=lp_cfg, config=self.config)
             lp_tag = f"lp{int(loadpoint):02d}_"
             idx = full_base.find(lp_tag)
             if idx != -1:

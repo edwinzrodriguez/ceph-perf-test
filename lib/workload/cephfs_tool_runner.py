@@ -14,6 +14,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             shared_ts=None,
             cephfs_manager=None,
             ganesha_manager=None,
+            results_dir=None,
     ):
         cfg = self.config.cephfs_tool
         loadpoints = cfg.get("loadpoints", [])
@@ -23,7 +24,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )
-        results_dir = self.get_results_dir(settings, ts)
+        results_dir = results_dir or self.get_results_dir(settings, ts)
 
         # Create results directory on admin host
         self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
@@ -143,21 +144,16 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         )
         g_p = ""
         if self.config.ganesha_enabled:
-            g_parts = []
-            if self.config.ganesha_worker_threads:
-                g_parts.append(f"gwt{self.config.ganesha_worker_threads}")
-            if self.config.ganesha_umask:
-                g_parts.append(f"gum{self.config.ganesha_umask}")
-            if self.config.ganesha_client_oc is not None:
-                g_parts.append(f"goc{1 if self.config.ganesha_client_oc else 0}")
-            if self.config.ganesha_async is not None:
-                g_parts.append(f"gas{1 if self.config.ganesha_async else 0}")
-            if self.config.ganesha_zerocopy is not None:
-                g_parts.append(f"gzc{1 if self.config.ganesha_zerocopy else 0}")
-            if self.config.ganesha_client_oc_size:
-                g_parts.append(f"gocs{CommonUtils.format_si_units(self.config.ganesha_client_oc_size)}")
-            if g_parts:
-                g_p = "_" + "_".join(g_parts)
+            # Dynamically determine ganesha manager to call get_ganesha_config_str
+            from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
+            from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
+            if self.config.ganesha_type == "systemd":
+                gm = GaneshaSystemdManager(self.executor, self.config)
+            else:
+                gm = GaneshaCephadmManager(self.executor, self.config)
+            g_str = gm.get_ganesha_config_str(self.config.get("ganesha", {}))
+            if g_str:
+                g_p = "_" + g_str
 
         return os.path.join(base, f"{ts}_{fs_p}_{mds_p}{g_p}")
 

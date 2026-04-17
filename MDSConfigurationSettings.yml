@@ -24,7 +24,7 @@ ganesha:
   client_oc: true
   # async: false
   # zerocopy: false
-  client_oc_size: "1GiB"
+  client_oc_size: ["250MiB", "1GiB"]
 
 # SpecStorage configuration
 specstorage_bak:
@@ -54,10 +54,10 @@ fio:
   flamegraph_path: "/cephfs_perf/FlameGraph"
 #  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
   mounts_per_fs: 1
-  duration: 15
   gtod_reduce: 1
   ramp_time: 2
   loadpoints:
+      duration: 15
       size: "5GiB"
       block-size: ["256KiB","1MiB"]
       iodepth: [1, 16]
@@ -68,7 +68,6 @@ fio:
       create_serialize: 0
       threads: 8
       extra_args: ""
-#    - "fio --name=ibm_01 --directory={mount_point} --size=5G --bs=256k --iodepth=1 --rw=randrw --ioengine=libaio --time_based=1 --runtime=60 -direct=1 --buffered=0 --gtod_reduce=1 --randrepeat=1 --create_serialize=0 --ramp_time=1s --numjobs=8"
 
 # CephFS-Tool configuration
 cephfs_tool_bak:

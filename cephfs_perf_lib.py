@@ -436,6 +436,14 @@ class CommonUtils:
                 parts.append(f"buf{lp_cfg['buffered']}")
             if "create_serialize" in lp_cfg:
                 parts.append(f"cs{lp_cfg['create_serialize']}")
+            # if "gtod_reduce" in lp_cfg:
+            #     parts.append(f"gr{lp_cfg['gtod_reduce']}")
+            # elif "gtod_reduce" in settings:
+            #     parts.append(f"gr{settings['gtod_reduce']}")
+            # if "ramp_time" in lp_cfg:
+            #     parts.append(f"rt{lp_cfg['ramp_time']}")
+            # elif "ramp_time" in settings:
+            #     parts.append(f"rt{settings['ramp_time']}")
 
         options = mds_p + g_p
         if parts:

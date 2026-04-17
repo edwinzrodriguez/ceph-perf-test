@@ -84,11 +84,11 @@ def main():
 
     for idx, config in enumerate(workload_configs):
         loadpoint = idx + 1
-        print(f"Starting Fio Load Point: {loadpoint}")
+        print(f"Starting Fio Load Point: {loadpoint}", flush=True)
 
         # Signal that a new load point is starting for external monitoring
-        print(f"Starting tests... Load Point: {loadpoint}")
-        print("Starting RUN phase")
+        print(f"Starting tests... Load Point: {loadpoint}", flush=True)
+        print("Starting RUN phase", flush=True)
         # Sleep for a few seconds to allow performance tools (perf, lockstat) to start
         import time
         time.sleep(5)
@@ -139,9 +139,11 @@ def main():
                     fio_parts.append(f"--time_based=1")
                     fio_parts.append(f"--runtime={duration}")
 
-                # Other common settings from global configuration if they exist
+                # Other common settings from loadpoint or global settings
                 for key in ["gtod_reduce", "ramp_time", "randrepeat"]:
-                    if key in settings:
+                    if key in lp_cfg:
+                        fio_parts.append(f"--{key}={lp_cfg[key]}")
+                    elif key in settings:
                         fio_parts.append(f"--{key}={settings[key]}")
 
                 if "extra_args" in lp_cfg and lp_cfg["extra_args"]:
@@ -153,14 +155,14 @@ def main():
                 remote_path = f"{results_dir}/{filename}"
                 cmd += f" --group_reporting --output-format=json --output={remote_path}"
 
-                print(f"[{c}] Executing Fio: {cmd}")
+                print(f"[{c}] Executing Fio: {cmd}", flush=True)
                 subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", c, cmd])
 
                 # Copy results from client to admin (where this script is running)
-                print(f"[{c}] Copying results to {results_dir}...")
+                print(f"[{c}] Copying results to {results_dir}...", flush=True)
                 subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", f"{c}:{remote_path}", f"{results_dir}/{filename}"])
 
-        print(f"Finished Fio Load Point: {loadpoint}")
+        print(f"Finished Fio Load Point: {loadpoint}", flush=True)
 
 
 if __name__ == "__main__":

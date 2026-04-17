@@ -62,7 +62,7 @@ def main():
     unix_ts = int(now.timestamp())
     shared_timestamp = f"{timestamp}-{unix_ts}"
 
-    keys = config["mds_settings"].keys()
+    keys = list(config["mds_settings"].keys())
     ranges = []
     for k in keys:
         r_config = config["mds_settings"][k]
@@ -77,13 +77,36 @@ def main():
         else:
             ranges.append(parsed_r)
 
-    for values in itertools.product(*ranges):
-        current_settings = dict(zip(keys, values))
-        print(f"\n--- Starting Test Iteration: {current_settings} ---")
+    ganesha_settings_raw = config.get("ganesha", {})
+    ganesha_keys = []
+    ganesha_ranges = []
+    # Relevant CEPH FSAL options that can be iterated
+    for k in ["worker_threads", "umask", "client_oc", "async", "zerocopy", "client_oc_size"]:
+        if k in ganesha_settings_raw:
+            val = ganesha_settings_raw[k]
+            if isinstance(val, list):
+                ganesha_keys.append(k)
+                ganesha_ranges.append(val)
+
+    combined_keys = keys + ganesha_keys
+    combined_ranges = ranges + ganesha_ranges
+
+    for values in itertools.product(*combined_ranges):
+        all_settings = dict(zip(combined_keys, values))
+        current_settings = {k: all_settings[k] for k in keys}
+        current_ganesha_settings = {k: all_settings[k] for k in ganesha_keys}
+        
+        # Merge current_ganesha_settings back into config's ganesha block for runners to use
+        # This is a bit tricky as PerformanceTestConfig might be used by reference.
+        # We'll update the underlying _config dict if needed, or better, pass it.
+        if current_ganesha_settings:
+            config["ganesha"].update(current_ganesha_settings)
+
+        print(f"\n--- Starting Test Iteration: {all_settings} ---")
 
         # Use the workload runner to determine the results directory
         results_dir = workload_runner.get_results_dir(current_settings, shared_timestamp)
-
+        
         cephfs_manager.rebuild_filesystem(
             current_settings, ganesha_manager, results_dir
         )
@@ -102,6 +125,7 @@ def main():
             shared_timestamp,
             cephfs_manager=cephfs_manager,
             ganesha_manager=ganesha_manager,
+            results_dir=results_dir,
         )
 
         mount_manager.unmount_clients()
