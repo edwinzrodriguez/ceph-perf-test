@@ -222,6 +222,18 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("client_oc_size")
 
     @property
+    def ganesha_user_id(self):
+        return self._config.get("ganesha", {}).get("user_id", "admin")
+
+    @property
+    def ganesha_keyring_path(self):
+        return self._config.get("ganesha", {}).get("keyring_path")
+
+    @property
+    def ganesha_ceph_binary_path(self):
+        return self._config.get("ganesha", {}).get("ceph_binary_path", "/usr/bin/ceph")
+
+    @property
     def fio(self):
         return self._config.get("fio")
 
