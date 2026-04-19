@@ -25,6 +25,29 @@
         cmd: dnf repository-packages ibm-storage-ceph-9 remove -y
       ignore_errors: yes
 
+    - name: Remove epel-release
+      ansible.builtin.dnf:
+        name: epel-release
+        state: absent
+      ignore_errors: yes
+
+    - name: Install epel-release
+      ansible.builtin.dnf:
+        name: epel-release
+        state: present
+
+    - name: Enable CRB for RHEL/CentOS 9
+      ansible.builtin.command:
+        cmd: crb enable
+      when: ansible_distribution_major_version == "9"
+      ignore_errors: yes
+
+    - name: Enable PowerTools for RHEL/CentOS 8
+      ansible.builtin.command:
+        cmd: dnf config-manager --set-enabled powertools
+      when: ansible_distribution_major_version == "8"
+      ignore_errors: yes
+
     - name: Install Development Tools group
       ansible.builtin.dnf:
         name: "@Development Tools"
