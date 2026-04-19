@@ -30,12 +30,13 @@ def main():
     client_id = settings.get("client_id")
     root_path = settings.get("root_path", "/")
     duration = settings.get("duration", 0)
+    progress = settings.get("progress", True)
+    progress_interval = settings.get("progress_interval", 10)
 
     for i, lp_cfg in enumerate(loadpoints):
         lp = i + 1
         print(f"Starting tests... Load Point: {lp}", flush=True)
         time.sleep(2)  # Give time for runner to detect and reset perf
-        print("Starting RUN phase", flush=True)
         
         processes = []
         for client in clients:
@@ -60,6 +61,11 @@ def main():
             cmd_parts.extend(["--root-path", root_path])
             if duration:
                 cmd_parts.extend(["--duration", str(duration)])
+            
+            if progress:
+                cmd_parts.append("--progress")
+                if progress_interval:
+                    cmd_parts.extend(["--progress-interval", str(progress_interval)])
             
             json_output = f"/tmp/{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, lp, settings, lp_cfg)}.json"
             perf_dump_output = f"/tmp/{CommonUtils.get_workload_base_name('cephfs_tool', 'perf_dump', client, lp, settings, lp_cfg)}.json"
@@ -108,9 +114,31 @@ def main():
             processes.append((client, proc))
 
         # Wait for all clients to finish this load point
+        import re
+        status_re = re.compile(r"\[(?P<percent>\d+)%\](?:\[.*\])*\[eta (?P<eta>.*)\]")
+        
         for client, proc in processes:
-            stdout, _ = proc.communicate()
-            print(f"[{client}] CephFS-Tool output:\n{stdout}")
+            run_phase_started = False
+            full_stdout = []
+            for line in proc.stdout:
+                line_clean = line.strip()
+                match = status_re.search(line_clean)
+                if match:
+                    percent = int(match.group("percent"))
+                    eta = match.group("eta")
+                    
+                    if not run_phase_started and percent > 0:
+                        print("Starting RUN phase", flush=True)
+                        run_phase_started = True
+                        
+                    print(f"[{client}] CephFS-Tool Status: {percent}% complete, ETA: {eta}", flush=True)
+                else:
+                    print(f"[{client}] {line_clean}", flush=True)
+                
+                full_stdout.append(line)
+            
+            proc.wait()
+            stdout = "".join(full_stdout)
             if proc.returncode != 0:
                 print(f"[{client}] CephFS-Tool failed with return code {proc.returncode}")
             

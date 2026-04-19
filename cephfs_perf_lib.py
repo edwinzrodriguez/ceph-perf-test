@@ -512,7 +512,7 @@ class CommonUtils:
         exclude = {
             "results_dir", "fs_name", "executable_path", "ceph_args",
             "config_path", "keyring", "client_id", "root_path",
-            "duration", "workload_dir", "run_name", "num_filesystems",
+            "duration", "progress", "progress_interval", "workload_dir", "run_name", "num_filesystems",
             "mounts_per_fs", "perf_record", "perf_record_script",
             "perf_record_executable", "perf_record_duration", "lockstat"
         }

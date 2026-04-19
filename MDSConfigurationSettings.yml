@@ -175,6 +175,8 @@ cephfs_tool_bak:
   client_id: "admin"
   root_path: "/"
   duration: 30
+  progress: true
+  progress_interval: 10
   loadpoints:
     - files: 1024
       size: "128MiB"
