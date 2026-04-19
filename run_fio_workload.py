@@ -88,10 +88,6 @@ def main():
 
         # Signal that a new load point is starting for external monitoring
         print(f"Starting tests... Load Point: {loadpoint}", flush=True)
-        print("Starting RUN phase", flush=True)
-        # Sleep for a few seconds to allow performance tools (perf, lockstat) to start
-        import time
-        time.sleep(5)
 
         for c in clients:
             # Ensure results directory exists on each client
@@ -153,10 +149,48 @@ def main():
                 filename = f"{CommonUtils.get_workload_base_name('fio', 'result', c, loadpoint, settings, lp_cfg)}.json"
 
                 remote_path = f"{results_dir}/{filename}"
-                cmd += f" --group_reporting --output-format=json --output={remote_path}"
+                cmd += f" --group_reporting --output-format=json --output={remote_path} --eta=always"
 
                 print(f"[{c}] Executing Fio: {cmd}", flush=True)
-                subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", c, cmd])
+                
+                # Use Popen to read output in real-time
+                ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", c, cmd]
+                process = subprocess.Popen(
+                    ssh_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1
+                )
+
+                import re
+                # Regex for Jobs: 8 (f=8): [w(8)][18.8%][w=454MiB/s][w=1858 IOPS][eta 02m:27s]
+                # During ramp: Jobs: 8 (f=0): [/(8)][-.-%][eta 02m:57s]
+                status_re = re.compile(r"Jobs: \d+ \(f=\d+\): \[.*\]\[(?P<percent>[\d\.-]+)%\](?:\[.*\])?\[eta (?P<eta>.*)\]")
+
+                run_phase_started = False
+                for line in process.stdout:
+                    line = line.strip()
+                    if line.startswith("Jobs:"):
+                        match = status_re.search(line)
+                        if match:
+                            percent = match.group("percent")
+                            eta = match.group("eta")
+                            
+                            if not run_phase_started and percent != "-.-":
+                                print("Starting RUN phase", flush=True)
+                                run_phase_started = True
+
+                            # Report percentage and status back to caller
+                            print(f"[{c}] Fio Status: {percent}% complete, ETA: {eta}", flush=True)
+                    else:
+                        # Print other output as is
+                        print(f"[{c}] {line}", flush=True)
+
+                process.wait()
+
+                if process.returncode != 0:
+                    print(f"[{c}] Fio failed with return code {process.returncode}", flush=True)
 
                 # Copy results from client to admin (where this script is running)
                 print(f"[{c}] Copying results to {results_dir}...", flush=True)
