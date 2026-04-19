@@ -149,7 +149,7 @@ def main():
                 filename = f"{CommonUtils.get_workload_base_name('fio', 'result', c, loadpoint, settings, lp_cfg)}.json"
 
                 remote_path = f"{results_dir}/{filename}"
-                cmd += f" --group_reporting --output-format=json --output={remote_path} --eta=always"
+                cmd += f" --group_reporting --output-format=json+ --output={remote_path} --eta=always"
 
                 print(f"[{c}] Executing Fio: {cmd}", flush=True)
                 
