@@ -3,6 +3,7 @@ import json
 import subprocess
 import time
 import os
+import sys
 from cephfs_perf_lib import CommonUtils
 
 def main():
@@ -12,9 +13,13 @@ def main():
     parser.add_argument("--clients", type=str, required=True, help="JSON list of clients")
     args = parser.parse_args()
 
-    settings = json.loads(args.settings)
-    loadpoints = json.loads(args.loadpoints)
-    clients = json.loads(args.clients)
+    try:
+        settings = json.loads(args.settings)
+        loadpoints = json.loads(args.loadpoints)
+        clients = json.loads(args.clients)
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+        sys.exit(1)
     results_dir = settings.get("results_dir")
     fs_name = settings.get("fs_name")
     
@@ -108,6 +113,27 @@ def main():
             print(f"[{client}] CephFS-Tool output:\n{stdout}")
             if proc.returncode != 0:
                 print(f"[{client}] CephFS-Tool failed with return code {proc.returncode}")
+            
+            # Copy result JSON from client to results_dir and inject parameters
+            json_filename = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, lp, settings, lp_cfg)}.json"
+            remote_json = f"/tmp/{json_filename}"
+            local_json = os.path.join(results_dir, json_filename)
+            
+            print(f"[{client}] Copying results to {results_dir}...", flush=True)
+            subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", f"{client}:{remote_json}", local_json])
+            
+            # Inject test parameters
+            try:
+                with open(local_json, "r") as f:
+                    data = json.load(f)
+                
+                data["test_parameters"] = CommonUtils.get_human_readable_settings(settings, lp_cfg)
+                
+                with open(local_json, "w") as f:
+                    json.dump(data, f, indent=4)
+                print(f"[{client}] Injected test parameters into {local_json}", flush=True)
+            except Exception as e:
+                print(f"[{client}] Failed to inject test parameters into {local_json}: {e}", flush=True)
 
         print(f"Finished CephFS-Tool Load Point: {lp}", flush=True)
         time.sleep(2)

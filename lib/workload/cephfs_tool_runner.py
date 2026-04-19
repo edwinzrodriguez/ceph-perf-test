@@ -37,9 +37,20 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         payload["results_dir"] = results_dir
 
         # Add global cephfs_tool config options to payload
-        for key in ["executable_path", "ceph_args", "config_path", "keyring", "client_id", "root_path", "duration"]:
+        for key in ["executable_path", "ceph_args", "config_path", "keyring", "client_id", "root_path", "duration", "progress", "progress_interval"]:
             if key in cfg:
                 payload[key] = cfg[key]
+
+        # Add Ganesha settings to payload if enabled
+        if self.config.ganesha_enabled:
+            ganesha_keys = [
+                "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
+                "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size"
+            ]
+            for k in ganesha_keys:
+                val = getattr(self.config, k, None)
+                if val is not None:
+                    payload[k] = val
 
         settings_json = json.dumps(payload)
         loadpoints_json = json.dumps(loadpoints)

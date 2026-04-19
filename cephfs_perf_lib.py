@@ -436,6 +436,78 @@ class CommonUtils:
         return expanded_list
 
     @staticmethod
+    def get_human_readable_settings(settings, lp_cfg=None, config=None):
+        """Construct a dictionary of test parameters with human-readable names."""
+        params = {}
+        
+        # Mapping of internal keys to human-readable names
+        name_map = {
+            "mds_cache_memory_limit": "MDS Cache Memory Limit",
+            "fs_name": "Filesystem Name",
+            "num_filesystems": "Number of Filesystems",
+            "mounts_per_fs": "Mounts per Filesystem",
+            "size": "File Size",
+            "threads": "Threads",
+            "block-size": "Block Size",
+            "iodepth": "I/O Depth",
+            "readwrite": "Read/Write Pattern",
+            "ioengine": "I/O Engine",
+            "direct": "Direct I/O",
+            "buffered": "Buffered I/O",
+            "create_serialize": "Create Serialize",
+            "duration": "Duration",
+            "ramp_time": "Ramp Time",
+            "gtod_reduce": "GTOD Reduce",
+            "client-oc": "Client Object Cache",
+            "client-oc-size": "Client Object Cache Size",
+            "ganesha_worker_threads": "Ganesha Worker Threads",
+            "ganesha_umask": "Ganesha Umask",
+            "ganesha_client_oc": "Ganesha Client Object Cache",
+            "ganesha_async": "Ganesha Async",
+            "ganesha_zerocopy": "Ganesha Zero Copy",
+            "ganesha_client_oc_size": "Ganesha Client Object Cache Size",
+        }
+
+        # Helper to format values
+        def format_val(v):
+            if isinstance(v, (int, float)):
+                return CommonUtils.format_si_units(v)
+            return v
+
+        # Add global settings
+        for k, v in settings.items():
+            name = name_map.get(k, k)
+            params[name] = format_val(v)
+
+        # Add Ganesha settings if config is provided or already in settings
+        ganesha_keys = [
+            "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
+            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size"
+        ]
+        
+        # Check settings first for Ganesha keys
+        for k in ganesha_keys:
+            if k in settings:
+                name = name_map.get(k, k)
+                params[name] = format_val(settings[k])
+
+        if config and config.ganesha_enabled:
+            for k in ganesha_keys:
+                if k not in settings:  # Don't overwrite if already added from settings
+                    val = getattr(config, k, None)
+                    if val is not None:
+                        name = name_map.get(k, k)
+                        params[name] = format_val(val)
+
+        # Add loadpoint-specific settings (overriding globals if necessary)
+        if lp_cfg:
+            for k, v in lp_cfg.items():
+                name = name_map.get(k, k)
+                params[name] = format_val(v)
+
+        return params
+
+    @staticmethod
     def get_workload_base_name(workload, output_type, client, lp, settings, lp_cfg=None, config=None):
         exclude = {
             "results_dir", "fs_name", "executable_path", "ceph_args",

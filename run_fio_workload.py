@@ -194,7 +194,21 @@ def main():
 
                 # Copy results from client to admin (where this script is running)
                 print(f"[{c}] Copying results to {results_dir}...", flush=True)
-                subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", f"{c}:{remote_path}", f"{results_dir}/{filename}"])
+                local_path = f"{results_dir}/{filename}"
+                subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", f"{c}:{remote_path}", local_path])
+
+                # Inject test parameters into the JSON file
+                try:
+                    with open(local_path, "r") as f:
+                        data = json.load(f)
+                    
+                    data["test_parameters"] = CommonUtils.get_human_readable_settings(settings, lp_cfg)
+                    
+                    with open(local_path, "w") as f:
+                        json.dump(data, f, indent=4)
+                    print(f"[{c}] Injected test parameters into {local_path}", flush=True)
+                except Exception as e:
+                    print(f"[{c}] Failed to inject test parameters: {e}", flush=True)
 
         print(f"Finished Fio Load Point: {loadpoint}", flush=True)
 
