@@ -122,7 +122,7 @@ class GaneshaSystemdManager(GaneshaManager):
                             "-o",
                             "StrictHostKeyChecking=no",
                             "-P",
-                            p,
+                            str(p),
                             local_temp,
                             f"{u}@{h}:{remote_path}",
                         ]

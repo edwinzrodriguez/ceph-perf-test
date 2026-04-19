@@ -1,7 +1,97 @@
-nodes:
-  admin: "root@172.21.13.10"
-  servers: ["root@172.21.13.12", "root@172.21.13.13", "root@172.21.13.14"]
-  clients: ["root@172.21.13.11"]
+inventory:
+  mgrs:
+    mon-000:
+      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.69
+    mon-001:
+      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.71
+    mon-002:
+      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.68
+  mons:
+    mon-000:
+      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.69
+      monitor_address: 10.241.64.69
+    mon-001:
+      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.71
+      monitor_address: 10.241.64.71
+    mon-002:
+      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.68
+      monitor_address: 10.241.64.68
+  ganeshas:
+    client-000:
+      ansible_ssh_host: 169.63.179.214
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.70
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+  mdss:
+    mon-000:
+      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.69
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+    mon-001:
+      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.71
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+    mon-002:
+      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.68
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+  clients:
+    client-000:
+      ansible_ssh_host: 169.63.179.214
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.70
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+  osds:
+    mon-000:
+      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.69
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+    mon-001:
+      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.71
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+    mon-002:
+      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.68
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
 
 fs_name: "perf_test_fs"
 num_filesystems: 1
@@ -21,7 +111,7 @@ ganesha:
   worker_threads: 8
   # CEPH FSAL options
   # umask: 0
-  client_oc: true
+  client_oc: [false, true]
   # async: false
   # zerocopy: false
   client_oc_size: ["250MiB", "1GiB"]
@@ -50,14 +140,14 @@ fio:
   perf_record_script: "/cephfs_perf/fio/perf_record.py"
   perf_record_executable: "ganesha.nfsd"
   perf_record: true
-  perf_record_duration: 5
+  perf_record_duration: 30
   flamegraph_path: "/cephfs_perf/FlameGraph"
 #  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
   mounts_per_fs: 1
   gtod_reduce: 1
-  ramp_time: 2
+  ramp_time: 10
   loadpoints:
-      duration: 15
+      duration: 150
       size: "5GiB"
       block-size: ["256KiB","1MiB"]
       iodepth: [1, 16]

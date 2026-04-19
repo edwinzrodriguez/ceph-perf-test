@@ -10,28 +10,63 @@ import yaml
 
 
 class InventoryProvider(abc.ABC):
+    """
+    Abstract Base Class for Inventory Providers.
+    An inventory provider is responsible for supplying host information and global variables
+    to the performance test framework.
+    """
     @abc.abstractmethod
     def get_hosts(self):
+        """
+        Returns host information grouped by sections (e.g., 'mons', 'clients', 'ganeshas').
+        
+        Returns:
+            dict: A dictionary where keys are section names and values are lists of dictionaries.
+                  Each host dictionary must contain at least a 'name' key.
+                  Example: {'clients': [{'name': 'client-000', 'ansible_ssh_user': 'root'}]}
+        """
         pass
 
     @abc.abstractmethod
     def get_vars(self):
+        """
+        Returns global variables that can be used for parameter expansion.
+        
+        Returns:
+            dict: A dictionary of variable names and their values.
+        """
         pass
 
     @abc.abstractmethod
     def get_all_hosts_meta(self):
+        """
+        Returns a flat mapping of all host names to their metadata.
+        
+        Returns:
+            dict: A dictionary where keys are host names and values are metadata dictionaries.
+        """
         pass
 
 
 class AnsibleInventoryProvider(InventoryProvider):
+    """
+    Implementation of InventoryProvider that parses an Ansible-style INI inventory file.
+    
+    It also loads global variables from 'group_vars/all.yml' and 'cluster.json' if they exist
+    relative to the script directory.
+    """
     def __init__(self, inventory_path, extra_vars=None):
         self.inventory_path = inventory_path
         self.vars = extra_vars or {}
         self._load_global_vars()
         self.hosts_meta = self._parse_inventory(inventory_path)
+        print(f"Loaded inventory from {inventory_path}")
+        print(f"Loaded global vars: {self.vars}")
+        print(f"Hosts: {self.all_hosts}")
+        print(f"Hosts meta: {self.hosts_meta}")
 
     def _load_global_vars(self):
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        base_dir = os.path.dirname(os.path.abspath(__file__))
         for p in [
             os.path.join(base_dir, "group_vars", "all.yml"),
             os.path.join(base_dir, "cluster.json"),
@@ -102,13 +137,35 @@ class AnsibleInventoryProvider(InventoryProvider):
 
 
 class DirectInventoryProvider(InventoryProvider):
-    def __init__(self, hosts_meta, vars=None):
-        self.hosts_meta = hosts_meta
+    """
+    Implementation of InventoryProvider that uses direct dictionary input.
+    Useful for programmatic usage without external inventory files.
+    """
+    def __init__(self, inventory_dict, vars=None):
+        """
+        Initializes the provider with a dictionary.
+        The dictionary can be in two formats:
+        1. Internal format: {'section': [{'name': 'host', 'key': 'val'}]}
+        2. YAML format: {'section': {'host': {'key': 'val'}}}
+        """
         self.vars = vars or {}
+        self.hosts_meta = {}
         self.all_hosts = {}
-        for hosts in hosts_meta.values():
-            for h in hosts:
-                self.all_hosts.setdefault(h["name"], {}).update(h)
+        
+        for section, hosts in inventory_dict.items():
+            self.hosts_meta[section] = []
+            if isinstance(hosts, list):
+                # Internal format
+                for h in hosts:
+                    self.hosts_meta[section].append(h)
+                    self.all_hosts.setdefault(h["name"], {}).update(h)
+            elif isinstance(hosts, dict):
+                # YAML format
+                for host_name, meta in hosts.items():
+                    h = {"name": host_name}
+                    h.update(meta)
+                    self.hosts_meta[section].append(h)
+                    self.all_hosts.setdefault(host_name, {}).update(h)
 
     def get_hosts(self):
         return self.hosts_meta
@@ -175,6 +232,7 @@ class PerformanceTestConfig:
 
     @property
     def admin_host(self):
+        # The first 'mons' host is used as the admin host to drive tests
         return self.mons[0] if self.mons else None
 
     @property
@@ -253,9 +311,9 @@ class SSHExecutor:
     def get_ssh_details(self, host_name):
         meta = self.all_hosts.get(host_name, {})
         return (
-            meta.get("ansible_ssh_user", "root"),
-            meta.get("ansible_ssh_host", host_name),
-            meta.get("ansible_ssh_port", "22"),
+            str(meta.get("ansible_ssh_user", "root")),
+            str(meta.get("ansible_ssh_host", host_name)),
+            str(meta.get("ansible_ssh_port", "22")),
         )
 
     def run_remote(self, host_name, cmd, stream=False, check=False):
@@ -721,7 +779,7 @@ class CephFSManager:
                     "-o",
                     "StrictHostKeyChecking=no",
                     "-P",
-                    p,
+                    str(p),
                     "mds.yaml",
                     f"{u}@{h}:{self.config.mds_yaml_path}",
                 ]

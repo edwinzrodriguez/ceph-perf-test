@@ -115,6 +115,7 @@ class FioWorkloadRunner(WorkloadRunner):
                             with open(local_temp, "w") as f:
                                 json.dump(perf_dump, f)
                             u, h, p = self.executor.get_ssh_details(self.admin)
+                            p = str(p)
                             remote_path = f"{results_dir}/{filename}"
                             subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp,
                                             f"{u}@{h}:{remote_path}"])
@@ -184,7 +185,7 @@ class FioWorkloadRunner(WorkloadRunner):
                             "-o",
                             "StrictHostKeyChecking=no",
                             "-P",
-                            p,
+                            str(p),
                             local_file,
                             f"{u}@{h}:{remote_path}",
                         ]
@@ -214,6 +215,7 @@ class FioWorkloadRunner(WorkloadRunner):
             stap_arg = f" --stap-script {stap_script}" if stap_script else ""
             opt_arg = f" --options {options_str}" if options_str else ""
             u, h, p = self.executor.get_ssh_details(server_name)
+            p = str(p)
             ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
                        f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur} --workload fio{opt_arg}{fg_arg}{stap_arg}"]
             print(f"[{server_name}] Executing perf record for Load Point {loadpoint}: {ssh_cmd}")

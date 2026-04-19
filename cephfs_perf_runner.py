@@ -5,6 +5,7 @@ import datetime
 import itertools
 from cephfs_perf_lib import (
     AnsibleInventoryProvider,
+    DirectInventoryProvider,
     PerformanceTestConfig,
     SSHExecutor,
     CephFSManager,
@@ -21,17 +22,24 @@ from lib.mount.mount_nfs_manager import MountNfsManager
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: cephfs-perf-runner <config.yaml> <ansible_inventory>")
+    if len(sys.argv) < 2:
+        print("Usage: cephfs-perf-runner <config.yaml> [ansible_inventory]")
         sys.exit(1)
 
     config_path = sys.argv[1]
-    inventory_path = sys.argv[2]
+    inventory_path = sys.argv[2] if len(sys.argv) > 2 else None
 
     with open(config_path, "r") as f:
         config_dict = yaml.safe_load(f)
 
-    inventory_provider = AnsibleInventoryProvider(inventory_path)
+    if inventory_path:
+        inventory_provider = AnsibleInventoryProvider(inventory_path)
+    elif "inventory" in config_dict:
+        inventory_provider = DirectInventoryProvider(config_dict["inventory"])
+    else:
+        print("Error: No inventory provided (neither via command line nor in config file)")
+        sys.exit(1)
+
     config = PerformanceTestConfig(config_dict, inventory_provider)
 
     executor = SSHExecutor(config.all_hosts_meta)

@@ -190,7 +190,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                             "-o",
                             "StrictHostKeyChecking=no",
                             "-P",
-                            p,
+                            str(p),
                             local_file,
                             f"{u}@{h}:{remote_path}",
                         ]
@@ -227,6 +227,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             stap_arg = f" --stap-script {stap_script}" if stap_script else ""
             opt_arg = f" --options {options_str}" if options_str else ""
             u, h, p = self.executor.get_ssh_details(server_name)
+            p = str(p)
             ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
                        f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {client_perf_exe} --duration {perf_dur} --workload cephfs_tool{opt_arg}{fg_arg}{stap_arg}"]
             print(f"[{server_name}] Executing perf record for Load Point {loadpoint}: {subprocess.list2cmdline(ssh_cmd)}")

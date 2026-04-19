@@ -125,7 +125,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             stap_arg = f" --stap-script {stap_script}" if stap_script else ""
             opt_arg = f" --options {options_str}" if options_str else ""
             u, h, p = self.executor.get_ssh_details(server_name)
-            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
+            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", str(p), f"{u}@{h}",
                        f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur} --workload sfs2020{opt_arg}{fg_arg}{stap_arg}"]
             proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
                                     stdin=subprocess.DEVNULL)
@@ -168,7 +168,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         with open(local_temp, "w") as f:
             json.dump(data, f, indent=4)
         u, h, p = self.executor.get_ssh_details(self.admin)
-        subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp, f"{u}@{h}:{results_dir}/"])
+        subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", str(p), local_temp, f"{u}@{h}:{results_dir}/"])
         os.remove(local_temp)
 
     def prepare_storage(self):
@@ -201,7 +201,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                         "-o",
                         "StrictHostKeyChecking=no",
                         "-P",
-                        p,
+                        str(p),
                         local_file,
                         f"{u}@{h}:{remote_path}",
                     ]

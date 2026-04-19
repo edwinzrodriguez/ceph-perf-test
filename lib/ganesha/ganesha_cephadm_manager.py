@@ -163,7 +163,7 @@ class GaneshaCephadmManager(GaneshaManager):
 
             u, h, p = self.executor.get_ssh_details(self.admin)
             remote_path = f"{results_dir}/{filename}" if results_dir else f"/cephfs_perf/sfs2020/{filename}"
-            subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp, f"{u}@{h}:{remote_path}"])
+            subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", str(p), local_temp, f"{u}@{h}:{remote_path}"])
             os.remove(local_temp)
             print(f"[{g_host}] Config diff saved to {self.admin}:{remote_path}")
 

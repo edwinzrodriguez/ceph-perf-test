@@ -77,6 +77,63 @@ When `ganesha_enabled` is true, the framework provisions NFS-Ganesha on specifie
 -   `async`: Enable Ceph async operations.
 -   `zerocopy`: Enable Ceph zero-copy I/O.
 
+## Inventory Providers
+
+The framework uses **Inventory Providers** to manage host information and SSH connectivity details.
+
+### `AnsibleInventoryProvider`
+
+Parses an Ansible-style INI inventory file.
+
+> **Note**: A `[mons]` group is required, as the first host in this group is designated as the **admin host** to drive the performance tests.
+
+- **Global Variables**: Loads from `group_vars/all.yml` and `cluster.json` (relative to the project parent directory).
+- **Variable Expansion**: Supports `{{ var_name }}` syntax in inventory files.
+- **Data Format**:
+    - **Group Sections**: Expects groups like `[mons]`, `[clients]`, `[mdss]`, `[ganeshas]`.
+    - **Host Metadata**: Each host entry can have attributes like `ansible_ssh_user`, `ansible_ssh_host`, and `ansible_ssh_port`.
+    - **Example**:
+      ```ini
+      [clients]
+      client-000 ansible_ssh_user=root ansible_ssh_host=10.241.64.100
+      ```
+
+### `DirectInventoryProvider`
+
+Parses a YAML-based inventory structure, typically defined directly within the main configuration file under the `inventory` key. This provider is automatically used if no external Ansible inventory file is provided to `cephfs_perf_runner.py`.
+
+> **Note**: A `mons` group is required, as the first host in this group is designated as the **admin host** to drive the performance tests.
+
+- **Data Format**: A nested dictionary mapping group names to host names, where each host contains its metadata.
+- **Required Host Fields**:
+    - `ansible_ssh_host`: The IP address or hostname to connect to via SSH.
+    - `ansible_ssh_user`: The username for SSH authentication.
+    - `ansible_ssh_port`: (Optional) The SSH port (defaults to 22).
+    - `ansible_ssh_private_key_file`: (Optional) Path to the private key for authentication.
+    - `private_ip`: (Optional) The IP address on the cluster/private network, used for internal communication between clients and the cluster.
+- **Example (YAML)**:
+  ```yaml
+  inventory:
+    clients:
+      client-000:
+        ansible_ssh_host: 169.63.179.214
+        ansible_ssh_user: root
+        ansible_ssh_port: 22
+        private_ip: 10.241.64.70
+    mons:
+      mon-000:
+        ansible_ssh_host: 169.63.188.95
+        ansible_ssh_user: root
+        private_ip: 10.241.64.69
+  ```
+
+### `InventoryProvider` Interface
+
+If you need a custom provider, implement the following abstract methods:
+- `get_hosts()`: Returns a dict of group names to host metadata lists.
+- `get_vars()`: Returns a dict of global variables.
+- `get_all_hosts_meta()`: Returns a flat map of host names to metadata.
+
 ## Performance Recording
 
 The framework can automatically capture performance data during benchmarks:
