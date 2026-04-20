@@ -466,6 +466,10 @@ class CommonUtils:
             "ganesha_async": "Ganesha Async",
             "ganesha_zerocopy": "Ganesha Zero Copy",
             "ganesha_client_oc_size": "Ganesha Client Object Cache Size",
+            "ganesha_user_id": "Ganesha User ID",
+            "ganesha_keyring_path": "Ganesha Keyring Path",
+            "ganesha_ceph_binary_path": "Ganesha Ceph Binary Path",
+            "ganesha_enabled": "Ganesha Enabled",
         }
 
         # Helper to format values
@@ -481,8 +485,9 @@ class CommonUtils:
 
         # Add Ganesha settings if config is provided or already in settings
         ganesha_keys = [
-            "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
-            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size"
+            "ganesha_enabled", "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
+            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size",
+            "ganesha_user_id", "ganesha_keyring_path", "ganesha_ceph_binary_path"
         ]
         
         # Check settings first for Ganesha keys
@@ -512,7 +517,10 @@ class CommonUtils:
         exclude = {
             "results_dir", "fs_name", "executable_path", "ceph_args",
             "config_path", "keyring", "client_id", "root_path",
-            "duration", "progress", "progress_interval", "workload_dir", "run_name", "num_filesystems",
+            "ganesha_enabled", "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
+            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size",
+            "ganesha_user_id", "ganesha_keyring_path", "ganesha_ceph_binary_path",
+            "workload_dir", "run_name", "num_filesystems",
             "mounts_per_fs", "perf_record", "perf_record_script",
             "perf_record_executable", "perf_record_duration", "lockstat"
         }

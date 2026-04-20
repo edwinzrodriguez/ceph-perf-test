@@ -45,16 +45,15 @@ class FioWorkloadRunner(WorkloadRunner):
             if key in fio_cfg:
                 payload[key] = fio_cfg[key]
 
-        # Add Ganesha settings to payload if enabled
-        if self.config.ganesha_enabled:
-            ganesha_keys = [
-                "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
-                "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size"
-            ]
-            for k in ganesha_keys:
-                val = getattr(self.config, k, None)
-                if val is not None:
-                    payload[k] = val
+        # Add Ganesha settings to payload
+        ganesha_keys = [
+            "ganesha_enabled", "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
+            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size"
+        ]
+        for k in ganesha_keys:
+            val = getattr(self.config, k, None)
+            if val is not None:
+                payload[k] = val
 
         loadpoints = fio_cfg.get("loadpoints", [])
         if isinstance(loadpoints, dict):

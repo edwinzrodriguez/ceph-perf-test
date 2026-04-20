@@ -29,11 +29,29 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )
-        fs_part = f"{self.config.fs_name}-x{len(self.fs_names)}-c{len(self.config.clients)}-m{self.config.get('specstorage', {}).get('mounts_per_fs', 1)}"
-        payload["run_name"] = f"{ts}_{fs_part}"
+        # Use CommonUtils.get_workload_base_name to form the run_name
+        options = CommonUtils.get_workload_base_name('sfs2020', 'result', self.admin, 0, settings, config=self.config)
+        # Remove the prefix part (workload_result_client_lp00_) to get just the options
+        prefix = f"sfs2020_result_{self.admin}_lp00_"
+        if options.startswith(prefix):
+            options = options[len(prefix):]
+
+        payload["run_name"] = f"{ts}_{options}"
         results_dir = results_dir or self.get_results_dir(settings, ts)
         if results_dir:
             payload["results_dir"] = results_dir
+
+        # Add Ganesha settings to payload
+        ganesha_keys = [
+            "ganesha_enabled", "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
+            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size",
+            "ganesha_user_id", "ganesha_keyring_path", "ganesha_ceph_binary_path"
+        ]
+        for k in ganesha_keys:
+            val = getattr(self.config, k, None)
+            if val is not None:
+                payload[k] = val
+
         settings_json = json.dumps(payload)
         print(f"Running SPECSTORAGE on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
@@ -184,7 +202,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         remote_dir = os.path.dirname(run_cmd)
         files_to_copy = [
             ("sfs_rc", proto),
-            ("run_workload.py", run_cmd),
+            ("run_sfs2020_workload.py", run_cmd),
             ("perf_record.py", perf_script),
             ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
         ]

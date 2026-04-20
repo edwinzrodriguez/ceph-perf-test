@@ -7,38 +7,6 @@ import os
 from cephfs_perf_lib import CommonUtils
 
 
-def snake_to_pascal(snake_str):
-    return "".join(x.capitalize() for x in snake_str.split("_"))
-
-
-def format_si_units(value):
-    try:
-        val = int(value)
-    except (ValueError, TypeError):
-        return str(value)
-
-    s_val = str(val)
-    if len(s_val) <= 3:
-        return s_val
-
-    # Binary units (powers of 1024)
-    if val > 0 and val % 1024 == 0:
-        for unit in ["Ki", "Mi", "Gi", "Ti", "Pi"]:
-            val //= 1024
-            if val % 1024 != 0 or val < 1024:
-                return f"{val}{unit}"
-
-    # Decimal units (powers of 1000)
-    if val > 0 and val % 1000 == 0:
-        temp_val = int(s_val)
-        for unit in ["k", "m", "g", "t", "p"]:
-            temp_val //= 1000
-            if temp_val % 1000 != 0 or temp_val < 1000:
-                return f"{temp_val}{unit}"
-
-    return s_val
-
-
 def main():
     parser = argparse.ArgumentParser(description="Run SPECSTORAGE 2020 workload")
     parser.add_argument(
@@ -64,7 +32,11 @@ def main():
     run_name = settings.get("run_name")
     if not run_name:
         # Construct a string from mds_settings
-        options = CommonUtils.get_workload_base_name('sfs2020', 'result', 'admin', 0, settings)
+        options = CommonUtils.get_workload_base_name('sfs2020', 'result', 'admin', 0, settings, config=None)
+        # Remove prefix
+        prefix = "sfs2020_result_admin_lp00_"
+        if options.startswith(prefix):
+            options = options[len(prefix):]
 
         # Timestamp
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -91,6 +63,88 @@ def main():
 
     print(f"Executing: {' '.join(cmd)}")
     subprocess.run(cmd)
+
+    if results_dir:
+        # Inject test parameters into sfssum_<run_name>.xml
+        xml_file = os.path.join(results_dir, f"sfssum_{run_name}.xml")
+        if os.path.exists(xml_file):
+            print(f"Injecting test parameters into {xml_file}...")
+            try:
+                import xml.etree.ElementTree as ET
+                tree = ET.parse(xml_file)
+                root = tree.getroot()
+                
+                # Check if test_parameters already exists
+                test_params = CommonUtils.get_human_readable_settings(settings)
+
+                tree_root = tree.getroot()
+                if tree_root.tag == "summary":
+                    # We need to create a new root to have summary and test_parameters as siblings
+                    new_root = ET.Element("results")
+                    new_root.append(tree_root)
+                    tree._setroot(new_root)
+                    root = new_root
+                else:
+                    root = tree_root
+
+                params_elem = root.find("test_parameters")
+                
+                if params_elem is None:
+                    # Inject test parameters
+                    params_elem = ET.SubElement(root, "test_parameters")
+                    for k, v in test_params.items():
+                        param_elem = ET.SubElement(params_elem, "param", name=k)
+                        param_elem.text = str(v)
+                    
+                    # Indent for better readability (Python 3.9+)
+                    if hasattr(ET, "indent"):
+                        ET.indent(tree, space="  ", level=0)
+                    
+                    tree.write(xml_file, encoding="utf-8", xml_declaration=True)
+                    print(f"Successfully injected test parameters into {xml_file}")
+                else:
+                    print(f"Test parameters already present in {xml_file}, skipping injection.")
+
+                # Save a JSON version as well
+                # We want the original summary root for JSON if we wrapped it
+                summary_elem = root.find("summary") if root.tag != "summary" else root
+                summary_json = {
+                    "id": summary_elem.attrib.get("id"),
+                    "runs": [],
+                    "test_parameters": test_params
+                }
+                for run in summary_elem.findall("run"):
+                    run_data = {
+                        "time": run.attrib.get("time"),
+                        "fingerprint": run.attrib.get("fingerprint"),
+                        "version": run.attrib.get("version"),
+                        "metrics": {},
+                        "benchmark": run.find("benchmark").attrib.get("name") if run.find("benchmark") is not None else None,
+                        "business_metric": run.find("business_metric").text if run.find("business_metric") is not None else None,
+                        "valid_run": run.find("valid_run").text if run.find("valid_run") is not None else True
+                    }
+                    for metric in run.findall("metric"):
+                        name = metric.attrib.get("name")
+                        units = metric.attrib.get("units")
+                        value = metric.text
+                        try:
+                            f_value = float(value) if value else None
+                        except (ValueError, TypeError):
+                            f_value = value
+                        run_data["metrics"][name] = {
+                            "value": f_value,
+                            "units": units
+                        }
+                    summary_json["runs"].append(run_data)
+                
+                json_file = xml_file.replace(".xml", ".json")
+                with open(json_file, "w") as f:
+                    json.dump(summary_json, f, indent=2)
+                print(f"Successfully saved JSON summary to {json_file}")
+            except Exception as e:
+                print(f"Failed to inject test parameters or save JSON: {e}")
+        else:
+            print(f"XML summary file {xml_file} not found, skipping injection.")
 
 
 if __name__ == "__main__":
