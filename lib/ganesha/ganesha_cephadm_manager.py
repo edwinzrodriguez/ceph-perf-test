@@ -4,10 +4,12 @@ import subprocess
 import time
 import yaml
 from lib.ganesha.ganesha_manager import GaneshaManager
-from cephfs_perf_lib import CephFSManager, CommonUtils
+from cephfs_perf_lib import CommonUtils, FSManager
 
 
 class GaneshaCephadmManager(GaneshaManager):
+    def __init__(self, executor, config, fs_manager):
+        super().__init__(executor, config, fs_manager)
     def provision_ganesha(self, use_custom=True, results_dir=None):
         if self._provisioned:
             print("Ganesha already provisioned. Skipping.")
@@ -57,6 +59,7 @@ class GaneshaCephadmManager(GaneshaManager):
 
         # Wait for the NFS service to be running BEFORE applying exports
         print(f"Waiting for NFS service {sid} to be running...")
+        fs_names = self.get_fs_names()
         for _ in range(30):
             ceph_bin = self.config.ganesha_ceph_binary_path
             svcs = self.safe_json_load(
@@ -71,7 +74,7 @@ class GaneshaCephadmManager(GaneshaManager):
                 break
             time.sleep(10)
 
-        for idx, fs in enumerate(CephFSManager(self.executor, self.config).fs_names):
+        for idx, fs in enumerate(fs_names):
             exp = {
                 "export_id": 100 + idx,
                 "path": "/",

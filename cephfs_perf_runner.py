@@ -8,9 +8,10 @@ from cephfs_perf_lib import (
     DirectInventoryProvider,
     PerformanceTestConfig,
     SSHExecutor,
-    CephFSManager,
     CommonUtils,
+    FSManager,
 )
+from lib.fs.cephfs_manager import CephFSManager
 from lib.workload.workload_runner import WorkloadRunner
 from lib.workload.spec_storage_runner import SpecStorageWorkloadRunner
 from lib.workload.fio_runner import FioWorkloadRunner
@@ -44,23 +45,24 @@ def main():
 
     executor = SSHExecutor(config.all_hosts_meta)
     cephfs_manager = CephFSManager(executor, config)
+    fs_names = cephfs_manager.get_fs_names()
 
     if config.ganesha_type == "systemd":
-        ganesha_manager = GaneshaSystemdManager(executor, config)
+        ganesha_manager = GaneshaSystemdManager(executor, config, cephfs_manager)
     else:
-        ganesha_manager = GaneshaCephadmManager(executor, config)
+        ganesha_manager = GaneshaCephadmManager(executor, config, cephfs_manager)
 
     if config.ganesha_enabled:
-        mount_manager = MountNfsManager(executor, config)
+        mount_manager = MountNfsManager(executor, config, cephfs_manager)
     else:
-        mount_manager = MountKernelManager(executor, config)
+        mount_manager = MountKernelManager(executor, config, cephfs_manager)
 
     if config.fio:
-        workload_runner = FioWorkloadRunner(executor, config, cephfs_manager.fs_names)
+        workload_runner = FioWorkloadRunner(executor, config, fs_names)
     elif config.cephfs_tool:
-        workload_runner = CephFSToolWorkloadRunner(executor, config, cephfs_manager.fs_names)
+        workload_runner = CephFSToolWorkloadRunner(executor, config, fs_names)
     else:
-        workload_runner = SpecStorageWorkloadRunner(executor, config, cephfs_manager.fs_names)
+        workload_runner = SpecStorageWorkloadRunner(executor, config, fs_names)
 
     # Execute test matrix
     mount_manager.unmount_clients()
@@ -118,7 +120,7 @@ def main():
         cephfs_manager.rebuild_filesystem(
             current_settings, ganesha_manager, results_dir
         )
-        cephfs_manager.apply_mds_settings(current_settings)
+        cephfs_manager.apply_fs_settings(current_settings)
 
         if config.ganesha_enabled:
             ganesha_manager.provision_ganesha(use_custom=True, results_dir=results_dir)
@@ -140,7 +142,7 @@ def main():
 
     # Final cleanup/collection
     if config.get("specstorage", {}).get("lockstat", {}).get("enabled", False):
-        for fs in cephfs_manager.fs_names:
+        for fs in fs_names:
             # workload_runner.stop_lockstat(fs)
             pass
 

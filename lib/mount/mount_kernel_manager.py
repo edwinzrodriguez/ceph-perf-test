@@ -2,6 +2,9 @@ from lib.mount.mount_manager import MountManager
 
 
 class MountKernelManager(MountManager):
+    def __init__(self, executor, config, fs_manager):
+        super().__init__(executor, config, fs_manager)
+
     def mount(self):
         admin_host = self.config.admin_host
         maddrs = self.executor.run_remote(

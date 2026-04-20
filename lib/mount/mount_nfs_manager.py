@@ -2,6 +2,9 @@ from lib.mount.mount_manager import MountManager
 
 
 class MountNfsManager(MountManager):
+    def __init__(self, executor, config, fs_manager):
+        super().__init__(executor, config, fs_manager)
+
     def mount(self):
         gs = self.config.ganeshas
         mpfs = self.config.get("specstorage", {}).get("mounts_per_fs", 1)

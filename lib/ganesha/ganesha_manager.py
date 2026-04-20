@@ -1,11 +1,12 @@
 import abc
-from cephfs_perf_lib import CephFSManager
+from cephfs_perf_lib import FSManager
 
 
 class GaneshaManager(abc.ABC):
-    def __init__(self, executor, config):
+    def __init__(self, executor, config, fs_manager):
         self.executor = executor
         self.config = config
+        self.fs_manager = fs_manager
         self.ganeshas = config.ganeshas
         self.admin = config.admin_host
         self._provisioned = False
@@ -18,7 +19,8 @@ class GaneshaManager(abc.ABC):
     def cleanup_ganesha(self):
         pass
 
-    def get_ganesha_config_str(self, settings):
+    @staticmethod
+    def get_ganesha_config_str(settings):
         parts = []
         if "worker_threads" in settings:
             parts.append(f"gwt{settings['worker_threads']}")
@@ -42,7 +44,11 @@ class GaneshaManager(abc.ABC):
         return "_".join(parts)
 
     def safe_json_load(self, raw, default=None):
-        return CephFSManager(self.executor, self.config).safe_json_load(raw, default)
+        return FSManager.safe_json_load(self, raw, default)
+
+    def get_fs_names(self):
+        """Return list of filesystem names. Delegated to FSManager."""
+        return self.fs_manager.get_fs_names()
 
     def reset_ganesha_perf(self, host_name):
         cmd = "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"

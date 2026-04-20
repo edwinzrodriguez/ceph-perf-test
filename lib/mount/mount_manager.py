@@ -3,14 +3,11 @@ import os
 
 
 class MountManager(abc.ABC):
-    def __init__(self, executor, config):
+    def __init__(self, executor, config, fs_manager):
         self.executor = executor
         self.config = config
         self.clients = config.clients
-        # Avoid circular import, we use fs_names from config if available or just calculate it
-        from cephfs_perf_lib import CephFSManager
-        fs_mgr = CephFSManager(executor, config)
-        self.fs_names = fs_mgr.fs_names
+        self.fs_names = fs_manager.get_fs_names()
 
     def unmount_clients(self):
         for c in self.clients:

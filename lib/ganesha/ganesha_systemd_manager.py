@@ -3,10 +3,12 @@ import os
 import subprocess
 import time
 from lib.ganesha.ganesha_manager import GaneshaManager
-from cephfs_perf_lib import CephFSManager, CommonUtils
+from cephfs_perf_lib import CommonUtils, FSManager
 
 
 class GaneshaSystemdManager(GaneshaManager):
+    def __init__(self, executor, config, fs_manager):
+        super().__init__(executor, config, fs_manager)
     def provision_ganesha(self, use_custom=True, results_dir=None):
         if self._provisioned:
             print("Ganesha already provisioned. Skipping.")
@@ -193,7 +195,8 @@ class GaneshaSystemdManager(GaneshaManager):
         )
 
         # Add EXPORT blocks for each filesystem manually
-        for idx, fs in enumerate(CephFSManager(self.executor, self.config).fs_names):
+        fs_names = self.get_fs_names()
+        for idx, fs in enumerate(fs_names):
             export_block = (
                 f"\nEXPORT {{\n"
                 f"    Export_ID = {100 + idx};\n"

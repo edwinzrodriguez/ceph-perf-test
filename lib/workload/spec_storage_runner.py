@@ -84,7 +84,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                     cephfs_manager.reset_lockstat()
                 if self.config.get("logging", {}).get("enabled") and not logging_triggered and cephfs_manager:
                     print(f"Triggering MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.start_mds_logging(current_lp)
+                    cephfs_manager.start_fs_logging(current_lp)
                     logging_triggered = True
                 if ganesha_perf_enabled:
                     print(f"Resetting Ganesha perf counters for Load Point {current_lp}...")
@@ -97,7 +97,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                     cephfs_manager.dump_lockstat(current_lp, r_dir)
                 if logging_triggered and cephfs_manager:
                     print(f"Stopping MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.stop_mds_logging(current_lp, r_dir)
+                    cephfs_manager.stop_fs_logging(current_lp, r_dir)
                 if ganesha_perf_enabled and r_dir:
                     print(f"Collecting Ganesha perf dumps for Load Point {current_lp}...")
                     lp_tag = f"{int(current_lp):02d}"
@@ -230,14 +230,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         )
         g_p = ""
         if self.config.ganesha_enabled:
-            # Dynamically determine ganesha manager to call get_ganesha_config_str
-            from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
-            from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
-            if self.config.ganesha_type == "systemd":
-                gm = GaneshaSystemdManager(self.executor, self.config)
-            else:
-                gm = GaneshaCephadmManager(self.executor, self.config)
-            g_str = gm.get_ganesha_config_str(self.config.get("ganesha", {}))
+            from lib.ganesha.ganesha_manager import GaneshaManager
+            g_str = GaneshaManager.get_ganesha_config_str(self.config.get("ganesha", {}))
             if g_str:
                 g_p = "_" + g_str
 

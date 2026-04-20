@@ -163,14 +163,8 @@ class FioWorkloadRunner(WorkloadRunner):
         )
         g_p = ""
         if self.config.ganesha_enabled:
-            # Dynamically determine ganesha manager to call get_ganesha_config_str
-            from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
-            from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
-            if self.config.ganesha_type == "systemd":
-                gm = GaneshaSystemdManager(self.executor, self.config)
-            else:
-                gm = GaneshaCephadmManager(self.executor, self.config)
-            g_str = gm.get_ganesha_config_str(self.config.get("ganesha", {}))
+            from lib.ganesha.ganesha_manager import GaneshaManager
+            g_str = GaneshaManager.get_ganesha_config_str(self.config.get("ganesha", {}))
             if g_str:
                 g_p = "_" + g_str
 
