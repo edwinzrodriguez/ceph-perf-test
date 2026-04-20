@@ -122,7 +122,7 @@ specstorage_bak:
   output_path: "/cephfs_perf/sfs2020/spec_2020.txt"
   run_command: "/cephfs_perf/sfs2020/run_sfs2020_workload.py"
   workload_dir: "/cephfs_perf/sfs2020/SPECstorage2020"
-  results_base_dir: "/cephfs_perf/sfs2020/SPECstorage2020/results"
+  results_base_dir: "/cephfs_perf/results"
   mounts_per_fs: 1
   perf_record: true
   perf_record_script: "/cephfs_perf/sfs2020/perf_record.py"
