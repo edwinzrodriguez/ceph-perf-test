@@ -59,7 +59,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         print(f"[{self.admin}] Executing: {full_cmd}")
         ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", port, f"{user}@{host}", full_cmd]
         current_lp, run_phase_started = 0, False
-        perf_triggered, logging_triggered = False, False
+        perf_triggered, ganesha_perf_triggered, logging_triggered = False, False, False
         ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
         perf_threads = []
         process = subprocess.Popen(
@@ -75,7 +75,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             output.append(line)
             if "Starting tests..." in line:
                 current_lp += 1
-                run_phase_started, perf_triggered, logging_triggered = False, False, False
+                run_phase_started, perf_triggered, ganesha_perf_triggered, logging_triggered = False, False, False, False
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
                 run_phase_started = True
@@ -105,14 +105,26 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                         dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
                         if dump:
                             self.save_json_to_results(f"{g_host}_lp{lp_tag}_ganesha_perf.json", dump, r_dir)
-            if perf_record_enabled and run_phase_started and not perf_triggered:
-                if "Run " in line and " percent complete" in line:
-                    print(f"Triggering perf record for Load Point {current_lp}...")
+            if run_phase_started:
+                if perf_record_enabled and not perf_triggered:
+                    if "Run " in line and " percent complete" in line:
+                        print(f"Triggering perf record for Load Point {current_lp}...")
+                        r_dir = payload.get("results_dir")
+                        t = threading.Thread(target=self.execute_perf_record, args=("sfs2020", self.config.mdss, current_lp, r_dir, settings, None))
+                        t.start()
+                        perf_threads.append(t)
+                        perf_triggered = True
+
+                if self.config.ganesha_enabled and self.config.ganesha_perf_record and not ganesha_perf_triggered:
+                    print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
                     r_dir = payload.get("results_dir")
-                    t = threading.Thread(target=self.execute_perf_record, args=("sfs2020", self.config.mdss, current_lp, r_dir, settings, None))
+                    t = threading.Thread(
+                        target=self.execute_perf_record,
+                        args=("ganesha", self.config.ganeshas, current_lp, r_dir, settings, None),
+                    )
                     t.start()
                     perf_threads.append(t)
-                    perf_triggered = True
+                    ganesha_perf_triggered = True
         process.wait()
         for t in perf_threads:
             t.join()
@@ -134,36 +146,50 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         proto = spec_cfg["prototype"]
         out = spec_cfg["output_path"]
         run_cmd = spec_cfg.get("run_command", "/cephfs_perf/sfs2020/run_sfs2020_workload.py")
-        perf_script = spec_cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
+        perf_script = spec_cfg.get("perf_record_script", "/cephfs_perf/perf_record.py")
 
-        u, h, p = self.executor.get_ssh_details(self.admin)
+        # Collect all targets to copy scripts to: admin, clients, ganeshas, mons, mdss
+        targets = set([self.admin] + self.config.clients + self.config.ganeshas + self.config.mons + self.config.mdss)
 
-        # Copy local files to the remote machine
-        remote_dir = os.path.dirname(run_cmd)
-        files_to_copy = [
-            ("sfs_rc", proto),
-            ("run_sfs2020_workload.py", run_cmd),
-            ("perf_record.py", perf_script),
-            ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
-        ]
-        stap_script = spec_cfg.get("stap_script")
-        if stap_script and os.path.exists(os.path.basename(stap_script)):
-            files_to_copy.append((os.path.basename(stap_script), stap_script))
+        for target in targets:
+            u, h, p = self.executor.get_ssh_details(target)
 
-        for local_file, remote_path in files_to_copy:
-            if os.path.exists(local_file):
-                print(f"Copying local {local_file} to {remote_path} on {self.admin}...")
-                subprocess.run(
-                    [
-                        "scp",
-                        "-o",
-                        "StrictHostKeyChecking=no",
-                        "-P",
-                        str(p),
-                        local_file,
-                        f"{u}@{h}:{remote_path}",
-                    ]
-                )
+            # Copy local files to the remote machine
+            remote_dir = os.path.dirname(run_cmd)
+            files_to_copy = [
+                ("sfs_rc", proto),
+                ("run_sfs2020_workload.py", run_cmd),
+                ("perf_record.py", perf_script),
+                ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
+            ]
+
+            # Also copy ganesha perf record script if different
+            g_cfg = self.config.get("ganesha", {})
+            g_perf_script = g_cfg.get("perf_record_script")
+            if g_perf_script and g_perf_script != perf_script:
+                # Ensure the directory exists on each target
+                g_remote_dir = os.path.dirname(g_perf_script)
+                self.executor.run_remote(self.admin, f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}")
+                files_to_copy.append(("perf_record.py", g_perf_script))
+
+            stap_script = spec_cfg.get("stap_script")
+            if stap_script and os.path.exists(os.path.basename(stap_script)):
+                files_to_copy.append((os.path.basename(stap_script), stap_script))
+
+            for local_file, remote_path in files_to_copy:
+                if os.path.exists(local_file):
+                    print(f"Copying local {local_file} to {remote_path} on {self.admin}...")
+                    subprocess.run(
+                        [
+                            "scp",
+                            "-o",
+                            "StrictHostKeyChecking=no",
+                            "-P",
+                            str(p),
+                            local_file,
+                            f"{u}@{h}:{remote_path}",
+                        ]
+                    )
 
         mpfs = spec_cfg.get("mounts_per_fs", 1)
         mps = []

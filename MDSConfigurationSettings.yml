@@ -109,6 +109,10 @@ ganesha:
   user_id: "admin"
   keyring_path: "/etc/ceph/ceph.client.admin.keyring"
   worker_threads: 8
+  perf_record: true
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record_executable: "ganesha.nfsd"
+  perf_record_duration: 5
   # CEPH FSAL options
   # umask: 0
   client_oc: [false, true]
@@ -137,9 +141,9 @@ specstorage_bak:
 fio:
   results_base_dir: "/cephfs_perf/results"
   run_command: "/cephfs_perf/fio/run_fio_workload.py"
-  perf_record_script: "/cephfs_perf/fio/perf_record.py"
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record: false
   perf_record_executable: "ganesha.nfsd"
-  perf_record: true
   perf_record_duration: 30
   flamegraph_path: "/cephfs_perf/FlameGraph"
 #  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
@@ -163,9 +167,9 @@ fio:
 cephfs_tool_bak:
   results_base_dir: "/cephfs_perf/results"
   run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
-  perf_record_script: "/cephfs_perf/sfs2020/perf_record.py"
-  perf_record_executable: "cephfs-tool"
+  perf_record_script: "/cephfs_perf/perf_record.py"
   perf_record: true
+  perf_record_executable: "cephfs-tool"
   perf_record_duration: 30
 #  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
   executable_path: "/usr/local/bin/cephfs-tool"

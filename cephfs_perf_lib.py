@@ -292,6 +292,10 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("ceph_binary_path", "/usr/bin/ceph")
 
     @property
+    def ganesha_perf_record(self):
+        return self._config.get("ganesha", {}).get("perf_record", False)
+
+    @property
     def fio(self):
         return self._config.get("fio")
 

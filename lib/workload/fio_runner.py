@@ -108,11 +108,22 @@ class FioWorkloadRunner(WorkloadRunner):
                     for g_host in ganesha_manager.ganeshas:
                         ganesha_manager.reset_ganesha_perf(g_host)
             if run_phase_started and not perf_triggered:
-                if perf_record_enabled and ganesha_manager:
-                    print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
+                if perf_record_enabled:
+                    print(f"Triggering perf recording for Load Point {current_lp}...")
+                    lp_cfg = expanded_loadpoints[current_lp - 1]
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=("fio", ganeshas, current_lp, results_dir, settings, expanded_loadpoints[current_lp-1]),
+                        args=("fio", self.config.mdss, current_lp, results_dir, settings, lp_cfg),
+                    )
+                    t.start()
+                    perf_threads.append(t)
+
+                if self.config.ganesha_enabled and self.config.ganesha_perf_record:
+                    print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
+                    lp_cfg = expanded_loadpoints[current_lp - 1]
+                    t = threading.Thread(
+                        target=self.execute_perf_record,
+                        args=("ganesha", self.config.ganeshas, current_lp, results_dir, settings, lp_cfg),
                     )
                     t.start()
                     perf_threads.append(t)
@@ -167,8 +178,8 @@ class FioWorkloadRunner(WorkloadRunner):
 
     def prepare_storage(self):
         fio_cfg = self.config.get("fio", {})
-        run_cmd = fio_cfg.get("run_command", "/cephfs_perf/sfs2020/run_fio_workload.py")
-        perf_script = fio_cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
+        run_cmd = fio_cfg.get("run_command", "/cephfs_perf/fio/run_fio_workload.py")
+        perf_script = fio_cfg.get("perf_record_script", "/cephfs_perf/perf_record.py")
         stap_script = fio_cfg.get("stap_script")
 
         # Collect all targets to copy scripts to: admin, clients, ganeshas, mons, mdss
@@ -186,6 +197,16 @@ class FioWorkloadRunner(WorkloadRunner):
                 ("perf_record.py", perf_script),
                 ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
             ]
+
+            # Also copy ganesha perf record script if different
+            g_cfg = self.config.get("ganesha", {})
+            g_perf_script = g_cfg.get("perf_record_script")
+            if g_perf_script and g_perf_script != perf_script:
+                # Ensure the directory exists on each target
+                g_remote_dir = os.path.dirname(g_perf_script)
+                self.executor.run_remote(target, f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}")
+                files_to_copy.append(("perf_record.py", g_perf_script))
+
             if stap_script and os.path.exists(os.path.basename(stap_script)):
                 files_to_copy.append((os.path.basename(stap_script), stap_script))
 

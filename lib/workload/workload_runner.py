@@ -31,7 +31,7 @@ class WorkloadRunner(abc.ABC):
 
     def execute_perf_record(self, workload_name, target_nodes, loadpoint, results_dir=None, settings=None, lp_cfg=None):
         workload_cfg = self.config.get(workload_name, {})
-        perf_script = workload_cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
+        perf_script = workload_cfg.get("perf_record_script", "/cephfs_perf/perf_record.py")
         perf_exe = workload_cfg.get("perf_record_executable", "ceph-mds")
         perf_dur = workload_cfg.get("perf_record_duration", 5)
         fg_path = workload_cfg.get("perf_record_flamegraph_path", "/cephfs_perf/FlameGraph")
