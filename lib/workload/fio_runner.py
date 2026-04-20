@@ -77,6 +77,9 @@ class FioWorkloadRunner(WorkloadRunner):
         print(f"[{self.admin}] Executing: {full_cmd}")
         ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", port, f"{user}@{host}", full_cmd]
 
+        processes = []
+        ganeshas = self.config.ganeshas
+
         current_lp, run_phase_started = 0, False
         perf_triggered = False
         ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
@@ -109,7 +112,7 @@ class FioWorkloadRunner(WorkloadRunner):
                     print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=(current_lp, results_dir, settings, expanded_loadpoints[current_lp-1]),
+                        args=("fio", ganeshas, current_lp, results_dir, settings, expanded_loadpoints[current_lp-1]),
                     )
                     t.start()
                     perf_threads.append(t)
@@ -201,66 +204,3 @@ class FioWorkloadRunner(WorkloadRunner):
                         ]
                     )
 
-    def execute_perf_record(self, loadpoint, results_dir=None, settings=None, lp_cfg=None):
-        fio_cfg = self.config.get("fio", {})
-        perf_script = fio_cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
-        perf_exe = fio_cfg.get("perf_record_executable", "ganesha.nfsd")
-        perf_dur = fio_cfg.get("perf_record_duration", 5)
-        fg_path = fio_cfg.get("perf_record_flamegraph_path", "/cephfs_perf/FlameGraph")
-        stap_script = fio_cfg.get("stap_script", "")
-        processes = []
-        ganeshas = self.config.ganeshas
-
-        options_str = ""
-        if settings:
-            full_base = CommonUtils.get_workload_base_name('fio', 'perf_record', 'server', loadpoint, settings, lp_cfg=lp_cfg, config=self.config)
-            lp_tag = f"lp{int(loadpoint):02d}_"
-            idx = full_base.find(lp_tag)
-            if idx != -1:
-                options_str = full_base[idx + len(lp_tag):]
-
-        for server_name in ganeshas:
-            print(f"[{server_name}] Starting parallel perf record for Load Point {loadpoint}")
-            fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
-            stap_arg = f" --stap-script {stap_script}" if stap_script else ""
-            opt_arg = f" --options {options_str}" if options_str else ""
-            u, h, p = self.executor.get_ssh_details(server_name)
-            p = str(p)
-            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
-                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {perf_exe} --duration {perf_dur} --workload fio{opt_arg}{fg_arg}{stap_arg}"]
-            print(f"[{server_name}] Executing perf record for Load Point {loadpoint}: {ssh_cmd}")
-            proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
-                                    stdin=subprocess.DEVNULL)
-            processes.append((server_name, proc))
-
-        def collect_output(s_name, p):
-            out_bytes, _ = p.communicate()
-            out = out_bytes.decode("utf-8", errors="replace")
-            if p.returncode != 0:
-                print(f"Error on {s_name} during perf record: {out}")
-            else:
-                if out_bytes:
-                    print(f"[{s_name}] Output:\n{out}")
-                print(f"[{s_name}] Finished perf record for Load Point {loadpoint}.")
-
-        threads = []
-        for s_name, proc in processes:
-            t = threading.Thread(target=collect_output, args=(s_name, proc))
-            t.start()
-            threads.append(t)
-        for t in threads:
-            t.join()
-        if results_dir:
-            print(f"Copying perf reports and stap traces to {results_dir} on {self.admin}...")
-            au, ah, ap = self.executor.get_ssh_details(self.admin)
-            for s_name in ganeshas:
-                check_cmd = f"ls /tmp/fio_perf_record_{s_name}_lp{int(loadpoint):02d}_* 2>/dev/null"
-                try:
-                    files = self.executor.run_remote(s_name, check_cmd).strip().split()
-                    for f_path in files:
-                        self.executor.run_remote(s_name, f"sudo -n chmod 0644 {f_path}")
-                        copy_cmd = f"scp -o StrictHostKeyChecking=no -P {ap} {f_path} {au}@{ah}:{results_dir}/"
-                        self.executor.run_remote(s_name, copy_cmd)
-                        self.executor.run_remote(s_name, f"sudo -n rm -f {f_path}")
-                except:
-                    print(f"[{s_name}] No trace/report files found for Load Point {loadpoint}, skipping copy.")

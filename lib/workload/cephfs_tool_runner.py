@@ -96,7 +96,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                     lp_cfg = loadpoints[current_lp - 1]
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=(current_lp, results_dir, payload, lp_cfg),
+                        args=("cephfs_tool", self.config.clients, current_lp, results_dir, payload, lp_cfg),
                     )
                     t.start()
                     perf_threads.append(t)
@@ -206,74 +206,3 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                         ]
                     )
 
-    def execute_perf_record(self, loadpoint, results_dir=None, settings=None, lp_cfg=None):
-        cfg = self.config.get("cephfs_tool", {})
-        perf_script = cfg.get("perf_record_script", "/cephfs_perf/sfs2020/perf_record.py")
-        perf_exe = cfg.get("perf_record_executable", "ceph-mds")
-        perf_dur = cfg.get("perf_record_duration", 5)
-        fg_path = cfg.get("perf_record_flamegraph_path", "/cephfs_perf/FlameGraph")
-        stap_script = cfg.get("stap_script", "")
-        processes = []
-
-        client_perf_exe = cfg.get("perf_record_executable", "cephfs-tool")
-        client_record_nodes = self.config.clients
-
-        # Construct options string for filename
-        options_str = ""
-        if settings and lp_cfg:
-            # We want just the options part, not the whole workload_result_...
-            # get_workload_base_name returns workload_type_client_lp_options
-            # We can extract options by splitting and taking everything after lpXX
-            full_base = CommonUtils.get_workload_base_name('cephfs_tool', 'perf_record', 'client', loadpoint, settings, lp_cfg, self.config)
-            # Find the index of lpXX_ and take what's after it
-            lp_tag = f"lp{int(loadpoint):02d}_"
-            idx = full_base.find(lp_tag)
-            if idx != -1:
-                options_str = full_base[idx + len(lp_tag):]
-
-        for server_name in client_record_nodes:
-            print(f"[{server_name}] Starting parallel perf record for Load Point {loadpoint}")
-            fg_arg = f" --flamegraph-path {fg_path}" if fg_path else ""
-            stap_arg = f" --stap-script {stap_script}" if stap_script else ""
-            opt_arg = f" --options {options_str}" if options_str else ""
-            u, h, p = self.executor.get_ssh_details(server_name)
-            p = str(p)
-            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", p, f"{u}@{h}",
-                       f"python3 {perf_script} --loadpoint {loadpoint} --server {server_name} --executable {client_perf_exe} --duration {perf_dur} --workload cephfs_tool{opt_arg}{fg_arg}{stap_arg}"]
-            print(f"[{server_name}] Executing perf record for Load Point {loadpoint}: {subprocess.list2cmdline(ssh_cmd)}")
-            proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=False,
-                                    stdin=subprocess.DEVNULL)
-            processes.append((server_name, proc))
-
-        def collect_output(s_name, p):
-            out_bytes, _ = p.communicate()
-            out = out_bytes.decode("utf-8", errors="replace")
-            if p.returncode != 0:
-                print(f"Error on {s_name} during perf record: {out}")
-            else:
-                if out_bytes:
-                    print(f"[{s_name}] Output:\n{out}")
-                print(f"[{s_name}] Finished perf record for Load Point {loadpoint}.")
-
-        threads = []
-        for s_name, proc in processes:
-            t = threading.Thread(target=collect_output, args=(s_name, proc))
-            t.start()
-            threads.append(t)
-        for t in threads:
-            t.join()
-
-        if results_dir:
-            print(f"Copying perf reports and stap traces to {results_dir} on {self.admin}...")
-            au, ah, ap = self.executor.get_ssh_details(self.admin)
-            for s_name in list(client_record_nodes):
-                check_cmd = f"ls /tmp/cephfs_tool_perf_record_{s_name}_lp{int(loadpoint):02d}_* 2>/dev/null"
-                try:
-                    files = self.executor.run_remote(s_name, check_cmd).strip().split()
-                    for f_path in files:
-                        self.executor.run_remote(s_name, f"sudo -n chmod 0644 {f_path}")
-                        copy_cmd = f"scp -o StrictHostKeyChecking=no -P {ap} {f_path} {au}@{ah}:{results_dir}/"
-                        self.executor.run_remote(s_name, copy_cmd)
-                        self.executor.run_remote(s_name, f"sudo -n rm -f {f_path}")
-                except:
-                    print(f"[{s_name}] No trace/report files found for Load Point {loadpoint}, skipping copy.")
