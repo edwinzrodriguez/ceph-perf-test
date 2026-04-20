@@ -194,7 +194,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
 
             # Copy local files to each target
             files_to_copy = [
-                ("run_cephfs_workload.py", run_cmd),
+                ("lib/workload/run_cephfs_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
                 ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
             ]

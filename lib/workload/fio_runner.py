@@ -17,7 +17,7 @@ class FioWorkloadRunner(WorkloadRunner):
             results_dir=None,
     ):
         fio_cfg = self.config.fio
-        run_cmd = fio_cfg.get("run_command", "/cephfs_perf/sfs2020/run_fio_workload.py")
+        run_cmd = fio_cfg.get("run_command", "/cephfs_perf/fio/run_fio_workload.py")
         perf_record_enabled = fio_cfg.get("perf_record", False)
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
@@ -193,7 +193,7 @@ class FioWorkloadRunner(WorkloadRunner):
 
             # Copy local files to each target
             files_to_copy = [
-                ("run_fio_workload.py", run_cmd),
+                ("lib/workload/run_fio_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
                 ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
             ]

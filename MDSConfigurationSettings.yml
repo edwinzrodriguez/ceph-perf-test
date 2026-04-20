@@ -129,7 +129,7 @@ specstorage_bak:
   results_base_dir: "/cephfs_perf/results"
   mounts_per_fs: 1
   perf_record: true
-  perf_record_script: "/cephfs_perf/sfs2020/perf_record.py"
+  perf_record_script: "/cephfs_perf/perf_record.py"
   perf_record_executable: "ceph-mds"
   perf_record_duration: 5
   lockstat:

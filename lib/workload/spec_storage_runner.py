@@ -158,7 +158,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             remote_dir = os.path.dirname(run_cmd)
             files_to_copy = [
                 ("sfs_rc", proto),
-                ("run_sfs2020_workload.py", run_cmd),
+                ("lib/workload/run_sfs2020_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
                 ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
             ]
