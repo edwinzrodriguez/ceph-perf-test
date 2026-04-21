@@ -3,8 +3,18 @@
   vars:
     debuginfo_repo_name: "{{ 'baseos-debuginfo' if ansible_distribution == 'CentOS' else 'baseos-debug-rpms' if ansible_distribution == 'RedHat' else 'baseos-debuginfo' }}"
     crb_debuginfo_repo_name: "{{ 'crb-debuginfo' if ansible_distribution == 'CentOS' else 'codeready-builder-for-rhel-' ~ ansible_distribution_major_version ~ '-x86_64-debug-rpms' if ansible_distribution == 'RedHat' else 'crb-debuginfo' }}"
-    sfs2020_archive: "SPECstorage2020-2529.tar"
   tasks:
+    - name: Read netmist.env
+      ansible.builtin.shell:
+        cmd: "grep '^sfs2020_archive=' netmist.env | cut -d'=' -f2 | tr -d '\"' | tr -d \"'\""
+      delegate_to: localhost
+      register: netmist_env_content
+      run_once: true
+
+    - name: Set sfs2020_archive fact
+      ansible.builtin.set_fact:
+        sfs2020_archive: "{{ netmist_env_content.stdout }}"
+
     - name: Ensure config-manager is available
       ansible.builtin.dnf:
         name: 'dnf-command(config-manager)'
