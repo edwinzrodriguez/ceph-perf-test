@@ -197,6 +197,8 @@
         name:
           - libacl-devel
           - libnsl2-devel
+          - procps-ng
+          - procps-ng-devel
         state: present
 
     - name: Check if Ganesha source directory exists
