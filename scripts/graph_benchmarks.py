@@ -20,16 +20,40 @@ def load_json_results(json_files):
                 test_params = data.get('test_parameters', {})
                 
                 job = data.get('jobs', [{}])[0]
-                read_bw = job.get('read', {}).get('bw_bytes', 0)
-                write_bw = job.get('write', {}).get('bw_bytes', 0)
-                read_iops = job.get('read', {}).get('iops', 0)
-                write_iops = job.get('write', {}).get('iops', 0)
+                read_data = job.get('read', {})
+                write_data = job.get('write', {})
                 
+                read_bw = read_data.get('bw_bytes', 0)
+                write_bw = write_data.get('bw_bytes', 0)
+                read_iops = read_data.get('iops', 0)
+                write_iops = write_data.get('iops', 0)
+                
+                # Compute aggregate bandwidth in MiB/s
+                # (read.io_bytes + write.io_bytes) / max(read.runtime, write.runtime)
+                read_bytes = read_data.get('io_bytes', 0)
+                write_bytes = write_data.get('io_bytes', 0)
+                read_runtime = read_data.get('runtime', 0)
+                write_runtime = write_data.get('runtime', 0)
+                max_runtime_ms = max(read_runtime, write_runtime)
+                
+                agg_bw_mib = 0.0
+                agg_iops = 0.0
+                if max_runtime_ms > 0:
+                    total_bytes = read_bytes + write_bytes
+                    agg_bw_mib = (total_bytes / (max_runtime_ms / 1000.0)) / (1024 * 1024)
+                    
+                    # Compute aggregate iops
+                    # (read.total_ios + write.total_ios) / max(read.runtime, write.runtime)
+                    total_ios = read_data.get('total_ios', 0) + write_data.get('total_ios', 0)
+                    agg_iops = total_ios / (max_runtime_ms / 1000.0)
+
                 result_entry = {**test_params}
                 result_entry['read_bw_bytes'] = read_bw
                 result_entry['write_bw_bytes'] = write_bw
                 result_entry['read_iops'] = read_iops
                 result_entry['write_iops'] = write_iops
+                result_entry['agg_bw_mib'] = agg_bw_mib
+                result_entry['agg_iops'] = agg_iops
                 result_entry['file_path'] = file_path
                 
                 results.append(result_entry)
@@ -48,6 +72,7 @@ def identify_swept_variables(results):
     ignore_cols = {
         'results_dir', 'file_path', 'extra_args', 'Filesystem Name', 
         'read_bw_bytes', 'write_bw_bytes', 'read_iops', 'write_iops',
+        'agg_bw_mib', 'agg_iops',
         'Duration', 'Ramp Time' # These might be constant but sometimes vary
     }
     
@@ -96,6 +121,8 @@ def print_representation(rep, swept_vars, indent=0):
         print("  " * indent + f"{current_var} = {val}")
         print_representation(rep[val], swept_vars, indent + 1)
 
+import itertools
+
 def plot_results(results, swept_vars, metric, output_file):
     if not HAS_MATPLOTLIB:
         print("Matplotlib not found. Skipping plot generation.")
@@ -105,10 +132,63 @@ def plot_results(results, swept_vars, metric, output_file):
         print("No swept variables to plot.")
         return
 
-    plt.figure(figsize=(10, 6))
-    
+    # Helper function to save plot and handle filename
+    def save_plot(plt, base_output, pair_vars=None, other_vars_info=None):
+        # Mapping of human-readable names to abbreviations for filenames
+        name_map = {
+            "MDS Cache Memory Limit": "m",
+            "Filesystem Name": "fs",
+            "Number of Filesystems": "nf",
+            "Mounts per Filesystem": "mpf",
+            "File Size": "s",
+            "Threads": "t",
+            "Block Size": "bs",
+            "I/O Depth": "iod",
+            "Read/Write Pattern": "rw",
+            "I/O Engine": "ioe",
+            "Direct I/O": "d",
+            "Buffered I/O": "buf",
+            "Create Serialize": "cs",
+            "Duration": "dur",
+            "Ramp Time": "rt",
+            "GTOD Reduce": "gr",
+            "Client Object Cache": "oc",
+            "Client Object Cache Size": "ocs",
+            "Ganesha Worker Threads": "gwt",
+            "Ganesha Umask": "gum",
+            "Ganesha Client Object Cache": "goc",
+            "Ganesha Async": "gas",
+            "Ganesha Zero Copy": "gzc",
+            "Ganesha Client Object Cache Size": "gocs",
+            "Ganesha User ID": "guid",
+            "Ganesha Keyring Path": "gkp",
+            "Ganesha Ceph Binary Path": "gcbp",
+            "Ganesha Enabled": "ge",
+        }
+
+        def get_short_name(var_name):
+            return name_map.get(var_name, var_name.replace(' ', '_').replace('/', '_'))
+
+        def format_val_for_filename(v):
+            if v == "True": return "1"
+            if v == "False": return "0"
+            return str(v).replace(' ', '_').replace('/', '_')
+
+        name, ext = os.path.splitext(base_output)
+        if pair_vars:
+            v_names = "_".join([get_short_name(v) for v in pair_vars])
+            name = f"{name}_{v_names}"
+        
+        if other_vars_info:
+            other_info_str = "_".join([f"{get_short_name(k)}={format_val_for_filename(v)}" for k, v in sorted(other_vars_info.items())])
+            name = f"{name}_{other_info_str}"
+
+        filename = f"{name}{ext}"
+        plt.savefig(filename)
+        print(f"Plot saved to {filename}")
+
     if len(swept_vars) == 1:
-        # Simple bar chart or line chart
+        plt.figure(figsize=(10, 6))
         var = swept_vars[0]
         data = sorted([(str(r.get(var)), r.get(metric, 0)) for r in results])
         x = [d[0] for d in data]
@@ -116,8 +196,14 @@ def plot_results(results, swept_vars, metric, output_file):
         plt.bar(x, y)
         plt.xlabel(var)
         plt.ylabel(metric)
+        plt.title(f"Benchmark Results: {metric}\n{var} sweep")
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        save_plot(plt, output_file)
+        plt.close()
+
     elif len(swept_vars) == 2:
-        # Multi-line chart
+        plt.figure(figsize=(10, 6))
         var1, var2 = swept_vars
         groups = defaultdict(list)
         for r in results:
@@ -132,28 +218,51 @@ def plot_results(results, swept_vars, metric, output_file):
         plt.xlabel(var2)
         plt.ylabel(metric)
         plt.legend()
-    else:
-        # For > 2 variables, we'd need more complex visualization or subplots
-        print(f"Plotting for {len(swept_vars)} variables not fully implemented. Plotting first two.")
-        var1, var2 = swept_vars[:2]
-        groups = defaultdict(list)
-        for r in results:
-            groups[str(r.get(var1))].append((str(r.get(var2)), r.get(metric, 0)))
-        
-        for group_label, values in sorted(groups.items()):
-            values.sort()
-            x = [v[0] for v in values]
-            y = [v[1] for v in values]
-            plt.plot(x, y, marker='o', label=f"{var1}={group_label}")
-        plt.xlabel(var2)
-        plt.ylabel(metric)
-        plt.legend()
+        plt.title(f"Benchmark Results: {metric}\n{var1} vs {var2}")
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        save_plot(plt, output_file)
+        plt.close()
 
-    plt.title(f"Benchmark Results: {metric}")
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.savefig(output_file)
-    print(f"Plot saved to {output_file}")
+    else:
+        # Generate plots for all unique pairs of swept variables
+        pairs = list(itertools.combinations(swept_vars, 2))
+        for var1, var2 in pairs:
+            other_vars = [v for v in swept_vars if v != var1 and v != var2]
+            
+            # Group results by the "other" variables
+            # Each unique combination of other variables gets its own plot
+            subsets = defaultdict(list)
+            for r in results:
+                other_vals = tuple((v, str(r.get(v))) for v in other_vars)
+                subsets[other_vals].append(r)
+            
+            for other_vals_tuple, subset_results in subsets.items():
+                other_vars_dict = dict(other_vals_tuple)
+                
+                plt.figure(figsize=(10, 6))
+                groups = defaultdict(list)
+                for r in subset_results:
+                    groups[str(r.get(var1))].append((str(r.get(var2)), r.get(metric, 0)))
+                
+                for group_label, values in sorted(groups.items()):
+                    values.sort()
+                    x = [v[0] for v in values]
+                    y = [v[1] for v in values]
+                    plt.plot(x, y, marker='o', label=f"{var1}={group_label}")
+                
+                plt.xlabel(var2)
+                plt.ylabel(metric)
+                plt.legend()
+                
+                title_lines = [f"{k}: {v}" for k, v in other_vars_dict.items()]
+                title_suffix = "\n".join(title_lines)
+                plt.title(f"Benchmark Results: {metric}\n{var1} vs {var2}\n{title_suffix}")
+                plt.grid(True, linestyle='--', alpha=0.7)
+                plt.tight_layout()
+                
+                save_plot(plt, output_file, pair_vars=(var1, var2), other_vars_info=other_vars_dict)
+                plt.close()
 
 def main():
     parser = argparse.ArgumentParser(description='Graph benchmark results from FIO JSON output files.')
@@ -181,10 +290,8 @@ def main():
     
     metric = args.metric
     if not metric:
-        # Auto-detect metric
-        total_read = sum(r.get('read_bw_bytes', 0) for r in results)
-        total_write = sum(r.get('write_bw_bytes', 0) for r in results)
-        metric = 'read_bw_bytes' if total_read > total_write else 'write_bw_bytes'
+        # Default to the new aggregate bandwidth metric
+        metric = 'agg_bw_mib'
         
     print(f"Using metric: {metric}")
     
