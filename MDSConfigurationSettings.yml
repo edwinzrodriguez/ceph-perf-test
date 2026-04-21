@@ -98,7 +98,7 @@ num_filesystems: 1
 mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec
 
 ganesha:
-  enabled: true
+  enabled: false
   service_id: "ganesha"
   # type = systemd|cephadm
   type: "systemd"
@@ -121,8 +121,7 @@ ganesha:
   client_oc_size: ["250MiB", "1GiB"]
 
 # SpecStorage configuration
-specstorage_bak:
-  prototype: "/cephfs_perf/sfs2020/sfs_rc"
+specstorage:
   output_path: "/cephfs_perf/sfs2020/spec_2020.txt"
   run_command: "/cephfs_perf/sfs2020/run_sfs2020_workload.py"
   workload_dir: "/cephfs_perf/sfs2020/SPECstorage2020"
@@ -156,7 +155,7 @@ fio:
   gtod_reduce: 1
   ramp_time: 10
   loadpoints:
-      duration: 150
+      duration: 60
       size: "5GiB"
       block-size: ["256KiB","1MiB"]
       iodepth: [1, 16]
@@ -169,7 +168,7 @@ fio:
       extra_args: ""
 
 # CephFS-Tool configuration
-cephfs_tool_bak:
+cephfs_tool:
   results_base_dir: "/cephfs_perf/results"
   run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
   perf_record_script: "/cephfs_perf/perf_record.py"
@@ -189,7 +188,7 @@ cephfs_tool_bak:
   loadpoints:
     - files: 1024
       size: "128MiB"
-      iterations: 3
+      iterations: 1
       extra_args: ""
       threads: [16]
       client-oc: [1, 0]

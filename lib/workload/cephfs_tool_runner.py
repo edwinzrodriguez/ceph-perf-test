@@ -37,7 +37,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         payload["results_dir"] = results_dir
 
         # Add global cephfs_tool config options to payload
-        for key in ["executable_path", "ceph_args", "config_path", "keyring", "client_id", "root_path", "duration", "progress", "progress_interval"]:
+        for key in ["executable_path", "ceph_args", "config_path", "keyring", "client_id", "root_path", "duration"]:
             if key in cfg:
                 payload[key] = cfg[key]
 
