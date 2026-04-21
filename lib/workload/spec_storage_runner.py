@@ -141,9 +141,82 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", str(p), local_temp, f"{u}@{h}:{results_dir}/"])
         os.remove(local_temp)
 
+    def _generate_spec_file(self):
+        spec_cfg = self.config.get("specstorage", {})
+        workload_dir = spec_cfg.get("workload_dir", "/cephfs_perf/sfs2020/SPECstorage2020")
+        
+        # Parse netmist_env
+        netmist_env_path = spec_cfg.get("netmist_env", "netmist.env")
+        license_key = ""
+        license_path = ""
+        
+        # We try to read it locally
+        if not os.path.exists(netmist_env_path):
+            raise FileNotFoundError(f"Error: netmist_env not found at {netmist_env_path}. This file is required for SPECstorage benchmark.")
+            
+        try:
+            with open(netmist_env_path, "r") as f:
+                env_content = f.read()
+            for line in env_content.splitlines():
+                if "NETMIST_LICENSE_KEY=" in line:
+                    license_key = line.split("=", 1)[1].strip().strip("\"").strip("'")
+                if "NETMIST_LICENSE_KEY_PATH=" in line:
+                    license_path = line.split("=", 1)[1].strip().strip("\"").strip("'")
+        except Exception as e:
+            raise RuntimeError(f"Error: Could not read netmist_env from {netmist_env_path}: {e}")
+
+        if not license_key:
+            raise RuntimeError(f"Error: NETMIST_LICENSE_KEY is not defined or empty in {netmist_env_path}")
+        if not license_path:
+            raise RuntimeError(f"Error: NETMIST_LICENSE_KEY_PATH is not defined or empty in {netmist_env_path}")
+
+        # Construct LOAD entry from loadpoints
+        loadpoints = spec_cfg.get("loadpoints", [])
+        load_str = " ".join(map(str, loadpoints))
+        
+        # Construct CLIENT_MOUNTPOINTS
+        mpfs = spec_cfg.get("mounts_per_fs", 1)
+        mps = []
+        for fs in self.fs_names:
+            for i in range(mpfs):
+                for c in self.config.clients:
+                    mps.append(
+                        f"{c}:/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else "")
+                    )
+        mps_str = " ".join(mps)
+
+        # Build final content from scratch
+        lines = [
+            "USER=root",
+            "PASSWORD=",
+            f"EXEC_PATH={workload_dir}/binaries/linux/x86_64/netmist",
+            # f"NETMIST_LOGS={workload_dir}/test1",
+            f"BENCHMARK={spec_cfg.get('benchmark', 'SWBUILD')}",
+            f"LOAD={load_str}",
+            f"INCR_LOAD={spec_cfg.get('increment', 1)}",
+            f"NUM_RUNS={spec_cfg.get('num_runs', 1)}",
+            f"CLIENT_MOUNTPOINTS={mps_str}",
+            "IPV6_ENABLE=0",
+            # "PRIME_MON_SCRIPT=",
+            # "PRIME_MON_ARGS=",
+            "NETMIST_LICENSE_KEY=" + license_key,
+            "NETMIST_LICENSE_KEY_PATH=" + license_path,
+            # "MAX_FD=",
+            # "LOCAL_ONLY=0",
+            # "FILE_ACCESS_LIST=0",
+            # "PDSM_MODE=0",
+            # "PDSM_INTERVAL=",
+            # "UNIX_PDSM_LOG=",
+            # "WINDOWS_PDSM_LOG=",
+            # "UNIX_PDSM_CONTROL=",
+            # "WINDOWS_PDSM_CONTROL=",
+            ""
+        ]
+        
+        return "\n".join(lines)
+
     def prepare_storage(self):
         spec_cfg = self.config.get("specstorage", {})
-        proto = spec_cfg["prototype"]
         out = spec_cfg["output_path"]
         run_cmd = spec_cfg.get("run_command", "/cephfs_perf/sfs2020/run_sfs2020_workload.py")
         perf_script = spec_cfg.get("perf_record_script", "/cephfs_perf/perf_record.py")
@@ -157,7 +230,6 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             # Copy local files to the remote machine
             remote_dir = os.path.dirname(run_cmd)
             files_to_copy = [
-                ("sfs_rc", proto),
                 ("lib/workload/run_sfs2020_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
                 ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
@@ -191,32 +263,23 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                         ]
                     )
 
-        mpfs = spec_cfg.get("mounts_per_fs", 1)
-        mps = []
-        for fs in self.fs_names:
-            for i in range(mpfs):
-                for c in self.config.clients:
-                    mps.append(
-                        f"{c}:/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else "")
-                    )
-        content = (
-                self.executor.run_remote(self.admin, f"cat {proto}")
-                + f"\nCLIENT_MOUNTPOINTS={' '.join(mps)}\n"
-        )
+        content = self._generate_spec_file()
         with open("/tmp/spec_cfg", "w") as f:
             f.write(content)
 
+        u_admin, h_admin, p_admin = self.executor.get_ssh_details(self.admin)
         subprocess.run(
             [
                 "scp",
                 "-o",
                 "StrictHostKeyChecking=no",
                 "-P",
-                p,
+                str(p_admin),
                 "/tmp/spec_cfg",
-                f"{u}@{h}:{out}",
+                f"{u_admin}@{h_admin}:{out}",
             ]
         )
+        os.remove("/tmp/spec_cfg")
 
     def get_results_dir(self, settings, shared_ts=None):
         spec_cfg = self.config.get("specstorage", {})

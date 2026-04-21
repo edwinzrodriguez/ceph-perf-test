@@ -2,4 +2,7 @@
 **/.venv/
 ganesha.yaml
 mds.yaml
+netmist.env
 **/ceph-rpms/
+__pycache__/
+

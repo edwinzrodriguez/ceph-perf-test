@@ -136,6 +136,11 @@ specstorage_bak:
     enabled: true
     path: "/usr/local/bin/ceph-lockstat"
     threshold: 0
+  benchmark: "SWBUILD"
+  loadpoints: [1, 2, 3, 4]
+  increment: 1
+  num_runs: 1
+  netmist_env: "netmist.env"
 
 # Fio configuration (Uncomment to use FioWorkloadRunner instead of SpecStorageWorkloadRunner)
 fio:

@@ -59,6 +59,32 @@ Flexible I/O tester for industry-standard benchmarking.
 ### 3. SPECstorage 2020 (`spec_storage`)
 Standardized benchmark for storage solution performance.
 
+**Global Options:**
+-   `workload_dir`: Path to the SPECstorage installation directory on the admin host.
+-   `run_command`: Path to the remote driver script (default: `/cephfs_perf/sfs2020/run_sfs2020_workload.py`).
+-   `output_path`: Path where the generated spec file will be saved on the admin host.
+-   `netmist_env`: Path to a local file containing license keys and paths (default: `netmist.env`).
+-   `benchmark`: The SPECstorage workload to run (e.g., `SWBUILD`, `VDA`, `VIDEO`).
+-   `increment`: Increment value for loadpoints (maps to `INCR_LOAD`).
+-   `num_runs`: Number of runs per loadpoint (maps to `NUM_RUNS`).
+-   `mounts_per_fs`: Number of mount points per client per filesystem.
+
+**Loadpoint Options:**
+-   `loadpoints`: An array of numeric values representing the business metrics to test (e.g., `[1, 2, 4, 8]`).
+
+#### `netmist_env` File
+The SPECstorage runner requires a local environment file (specified by `netmist_env`) to provide licensing information. This file should be in YAML format with the following keys:
+-   `netmist_license_key`: Your SPECstorage license key.
+-   `netmist_license_path`: Remote path on the admin host where the license key file will be stored.
+-   `sfs2020_archive`: (Optional) Path to the SPECstorage installation archive.
+
+Example `netmist.env`:
+```yaml
+netmist_license_key: 1234
+netmist_license_path: "/tmp/netmist_license_key"
+sfs2020_archive: "/path/to/SPECstorage2020.tgz"
+```
+
 ## Ganesha Options
 
 When `ganesha_enabled` is true, the framework provisions NFS-Ganesha on specified hosts.
