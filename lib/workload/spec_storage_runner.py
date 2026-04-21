@@ -215,6 +215,85 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         )
         os.remove(local_temp)
 
+    def setup_sfs2020_on_target(
+        self, target, remote_dir, sfs2020_archive, remote_archive_path
+    ):
+        """
+        Copies the SPECstorage archive to the target, untars it, and runs SM2020 installation.
+        Only performs setup if /SM2020 does not exist.
+        """
+        # Check if SPECstorage is already installed
+        check_cmd = "test -d /SM2020"
+        try:
+            check_result = self.executor.run_remote(
+                target, "[ -d /SM2020 ] && echo 'EXISTS' || echo 'MISSING'"
+            )
+            if "EXISTS" in check_result:
+                print(
+                    f"SPECStorage already installed on {target} (/SM2020 exists). Skipping setup."
+                )
+                return
+        except Exception as e:
+            print(
+                f"Warning: Could not check for /SM2020 on {target}: {e}. Proceeding with setup."
+            )
+
+        u, h, p = self.executor.get_ssh_details(target)
+
+        # Copy the archive
+        print(f"Copying {sfs2020_archive} to {remote_archive_path} on {target}...")
+        subprocess.run(
+            [
+                "scp",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-P",
+                str(p),
+                sfs2020_archive,
+                f"{u}@{h}:{remote_archive_path}",
+            ],
+            check=True,
+        )
+
+        # Untar the archive
+        untar_cmd = f"tar -C {remote_dir} -xf {remote_archive_path}"
+        if sfs2020_archive.endswith(".tgz") or sfs2020_archive.endswith(".tar.gz"):
+            untar_cmd = f"tar -C {remote_dir} -zxf {remote_archive_path}"
+
+        print(f"Untarring {remote_archive_path} on {target}...")
+        self.executor.run_remote(target, untar_cmd)
+
+        # Run pyupgrade on SM2020
+        spec_dir = os.path.join(remote_dir, "SPECstorage2020")
+        pyupgrade_cmd = f"pyupgrade --py3-plus {spec_dir}/SM2020"
+        print(f"Running pyupgrade on {spec_dir}/SM2020 on {target}...")
+        self.executor.run_remote(target, pyupgrade_cmd)
+
+        # Run SM2020 installation
+        # cd remote_dir/SPECstorage2020 && python3 SM2020 --install-dir=/SPEC2020
+        install_cmd = f"cd {spec_dir} && python3 SM2020 --install-dir=/SM2020"
+        print(f"Running SM2020 install on {target}...")
+        self.executor.run_remote(target, install_cmd)
+
+    def _parse_netmist_env(self):
+        spec_cfg = self.config.get("specstorage", {})
+        netmist_env_path = spec_cfg.get("netmist_env", "netmist.env")
+        env_data = {}
+
+        if not os.path.exists(netmist_env_path):
+            return env_data
+
+        try:
+            with open(netmist_env_path, "r") as f:
+                content = f.read()
+            for line in content.splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    env_data[k.strip()] = v.strip().strip('"').strip("'")
+        except Exception as e:
+            print(f"Warning: Could not read netmist_env from {netmist_env_path}: {e}")
+        return env_data
+
     def _generate_spec_file(self):
         spec_cfg = self.config.get("specstorage", {})
         workload_dir = spec_cfg.get(
@@ -222,36 +301,14 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         )
 
         # Parse netmist_env
-        netmist_env_path = spec_cfg.get("netmist_env", "netmist.env")
-        license_key = ""
-        license_path = ""
+        env_data = self._parse_netmist_env()
+        license_key = env_data.get("NETMIST_LICENSE_KEY", "")
+        license_path = env_data.get("NETMIST_LICENSE_KEY_PATH", "")
 
-        # We try to read it locally
-        if not os.path.exists(netmist_env_path):
-            raise FileNotFoundError(
-                f"Error: netmist_env not found at {netmist_env_path}. This file is required for SPECstorage benchmark."
-            )
-
-        try:
-            with open(netmist_env_path, "r") as f:
-                env_content = f.read()
-            for line in env_content.splitlines():
-                if "NETMIST_LICENSE_KEY=" in line:
-                    license_key = line.split("=", 1)[1].strip().strip('"').strip("'")
-                if "NETMIST_LICENSE_KEY_PATH=" in line:
-                    license_path = line.split("=", 1)[1].strip().strip('"').strip("'")
-        except Exception as e:
+        if not license_key or not license_path:
+            netmist_env_path = spec_cfg.get("netmist_env", "netmist.env")
             raise RuntimeError(
-                f"Error: Could not read netmist_env from {netmist_env_path}: {e}"
-            )
-
-        if not license_key:
-            raise RuntimeError(
-                f"Error: NETMIST_LICENSE_KEY is not defined or empty in {netmist_env_path}"
-            )
-        if not license_path:
-            raise RuntimeError(
-                f"Error: NETMIST_LICENSE_KEY_PATH is not defined or empty in {netmist_env_path}"
+                f"Error: NETMIST_LICENSE_KEY or NETMIST_LICENSE_KEY_PATH is not defined or empty in {netmist_env_path}"
             )
 
         # Construct LOAD entry from loadpoints
@@ -299,6 +356,56 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
 
         return "\n".join(lines)
 
+    def _setup_target(
+        self,
+        target,
+        remote_dir,
+        base_files_to_copy,
+        g_perf_script,
+        perf_script,
+        skip_setup,
+        sfs2020_archive,
+        remote_archive_path,
+    ):
+        u, h, p = self.executor.get_ssh_details(target)
+
+        # Ensure the remote directory exists
+        self.executor.run_remote(
+            target,
+            f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}",
+        )
+
+        # Ensure g_remote_dir exists if applicable
+        if g_perf_script and g_perf_script != perf_script:
+            g_remote_dir = os.path.dirname(g_perf_script)
+            self.executor.run_remote(
+                target,
+                f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}",
+            )
+
+        files_to_copy = list(base_files_to_copy)
+
+        # If sfs2020_archive is valid and target is admin, setup SPECstorage
+        if not skip_setup and sfs2020_archive:
+            self.setup_sfs2020_on_target(
+                target, remote_dir, sfs2020_archive, remote_archive_path
+            )
+
+        for local_file, remote_path in files_to_copy:
+            if os.path.exists(local_file):
+                print(f"Copying local {local_file} to {remote_path} on {target}...")
+                subprocess.run(
+                    [
+                        "scp",
+                        "-o",
+                        "StrictHostKeyChecking=no",
+                        "-P",
+                        str(p),
+                        local_file,
+                        f"{u}@{h}:{remote_path}",
+                    ]
+                )
+
     def prepare_storage(self):
         spec_cfg = self.config.get("specstorage", {})
         out = spec_cfg["output_path"]
@@ -306,6 +413,30 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             "run_command", "/cephfs_perf/sfs2020/run_sfs2020_workload.py"
         )
         perf_script = spec_cfg.get("perf_record_script", "/cephfs_perf/perf_record.py")
+
+        env_data = self._parse_netmist_env()
+        sfs2020_archive = env_data.get("sfs2020_archive")
+        skip_setup = False
+
+        if not sfs2020_archive:
+            print(
+                "Warning: sfs2020_archive not found in netmist.env. Skipping SPECstorage setup."
+            )
+            skip_setup = True
+        elif not os.path.exists(sfs2020_archive):
+            print(
+                f"Warning: SPECstorage archive {sfs2020_archive} not found. Skipping SPECstorage setup."
+            )
+            skip_setup = True
+        elif not (
+            sfs2020_archive.endswith(".tar")
+            or sfs2020_archive.endswith(".tgz")
+            or sfs2020_archive.endswith(".tar.gz")
+        ):
+            print(
+                f"Warning: SPECstorage archive {sfs2020_archive} has unsupported extension. Skipping SPECstorage setup."
+            )
+            skip_setup = True
 
         # Collect all targets to copy scripts to: admin, clients, ganeshas, mons, mdss
         targets = set(
@@ -316,49 +447,50 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             + self.config.mdss
         )
 
+        remote_dir = os.path.dirname(run_cmd)
+        base_files_to_copy = [
+            ("lib/workload/run_sfs2020_workload.py", run_cmd),
+            ("perf_record.py", perf_script),
+            ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
+        ]
+
+        # Also copy ganesha perf record script if different
+        g_cfg = self.config.get("ganesha", {})
+        g_perf_script = g_cfg.get("perf_record_script")
+        if g_perf_script and g_perf_script != perf_script:
+            base_files_to_copy.append(("perf_record.py", g_perf_script))
+
+        stap_script = spec_cfg.get("stap_script")
+        if stap_script and os.path.exists(os.path.basename(stap_script)):
+            base_files_to_copy.append((os.path.basename(stap_script), stap_script))
+
+        archive_basename = (
+            os.path.basename(sfs2020_archive) if sfs2020_archive else None
+        )
+        remote_archive_path = (
+            os.path.join(remote_dir, archive_basename) if archive_basename else None
+        )
+
+        threads = []
         for target in targets:
-            u, h, p = self.executor.get_ssh_details(target)
+            t = threading.Thread(
+                target=self._setup_target,
+                args=(
+                    target,
+                    remote_dir,
+                    base_files_to_copy,
+                    g_perf_script,
+                    perf_script,
+                    skip_setup,
+                    sfs2020_archive,
+                    remote_archive_path,
+                ),
+            )
+            t.start()
+            threads.append(t)
 
-            # Copy local files to the remote machine
-            remote_dir = os.path.dirname(run_cmd)
-            files_to_copy = [
-                ("lib/workload/run_sfs2020_workload.py", run_cmd),
-                ("perf_record.py", perf_script),
-                ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
-            ]
-
-            # Also copy ganesha perf record script if different
-            g_cfg = self.config.get("ganesha", {})
-            g_perf_script = g_cfg.get("perf_record_script")
-            if g_perf_script and g_perf_script != perf_script:
-                # Ensure the directory exists on each target
-                g_remote_dir = os.path.dirname(g_perf_script)
-                self.executor.run_remote(
-                    self.admin,
-                    f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}",
-                )
-                files_to_copy.append(("perf_record.py", g_perf_script))
-
-            stap_script = spec_cfg.get("stap_script")
-            if stap_script and os.path.exists(os.path.basename(stap_script)):
-                files_to_copy.append((os.path.basename(stap_script), stap_script))
-
-            for local_file, remote_path in files_to_copy:
-                if os.path.exists(local_file):
-                    print(
-                        f"Copying local {local_file} to {remote_path} on {self.admin}..."
-                    )
-                    subprocess.run(
-                        [
-                            "scp",
-                            "-o",
-                            "StrictHostKeyChecking=no",
-                            "-P",
-                            str(p),
-                            local_file,
-                            f"{u}@{h}:{remote_path}",
-                        ]
-                    )
+        for t in threads:
+            t.join()
 
         content = self._generate_spec_file()
         with open("/tmp/spec_cfg", "w") as f:

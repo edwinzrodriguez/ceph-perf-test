@@ -3,6 +3,7 @@
   vars:
     debuginfo_repo_name: "{{ 'baseos-debuginfo' if ansible_distribution == 'CentOS' else 'baseos-debug-rpms' if ansible_distribution == 'RedHat' else 'baseos-debuginfo' }}"
     crb_debuginfo_repo_name: "{{ 'crb-debuginfo' if ansible_distribution == 'CentOS' else 'codeready-builder-for-rhel-' ~ ansible_distribution_major_version ~ '-x86_64-debug-rpms' if ansible_distribution == 'RedHat' else 'crb-debuginfo' }}"
+    sfs2020_archive: "SPECstorage2020-2529.tar"
   tasks:
     - name: Ensure config-manager is available
       ansible.builtin.dnf:
@@ -208,10 +209,10 @@
         state: directory
         mode: '0755'
 
-    - name: Copy SPECstorage2020-2529.tar to /cephfs_perf/sfs2020
+    - name: Copy SFS2020 archive to /cephfs_perf/sfs2020
       ansible.builtin.copy:
-        src: SPECstorage2020-2529.tar
-        dest: /cephfs_perf/sfs2020/SPECstorage2020-2529.tar
+        src: "{{ sfs2020_archive }}"
+        dest: "/cephfs_perf/sfs2020/{{ sfs2020_archive | basename }}"
         mode: '0644'
 
     - name: Install git
@@ -228,9 +229,10 @@
 
     - name: Untar SPECstorage2020
       ansible.builtin.unarchive:
-        src: "/cephfs_perf/sfs2020/SPECstorage2020-2529.tar"
+        src: "/cephfs_perf/sfs2020/{{ sfs2020_archive | basename }}"
         dest: /cephfs_perf/sfs2020/
         remote_src: true
+        extra_opts: "{{ ['--gzip'] if sfs2020_archive.endswith('.tgz') or sfs2020_archive.endswith('.tar.gz') else [] }}"
 
     - name: Run SM2020 install
       ansible.builtin.shell:
