@@ -9,6 +9,7 @@ from cephfs_perf_lib import CommonUtils, FSManager
 class GaneshaSystemdManager(GaneshaManager):
     def __init__(self, executor, config, fs_manager):
         super().__init__(executor, config, fs_manager)
+
     def provision_ganesha(self, use_custom=True, results_dir=None):
         if self._provisioned:
             print("Ganesha already provisioned. Skipping.")
@@ -19,7 +20,8 @@ class GaneshaSystemdManager(GaneshaManager):
         # but we'll mainly rely on the orchestrator to handle its own pool if possible.
         ceph_bin = self.config.ganesha_ceph_binary_path
         self.executor.run_remote(
-            self.admin, f"sudo {ceph_bin} osd pool create .nfs --yes-i-really-mean-it || true"
+            self.admin,
+            f"sudo {ceph_bin} osd pool create .nfs --yes-i-really-mean-it || true",
         )
         self.executor.run_remote(
             self.admin, f"sudo {ceph_bin} osd pool application enable .nfs nfs || true"
@@ -54,15 +56,22 @@ class GaneshaSystemdManager(GaneshaManager):
 
         for host_name in self.ganeshas:
             # Create recovery directory
-            self.executor.run_remote(host_name, "sudo mkdir -p /usr/local/var/lib/nfs/ganesha")
-            self.executor.run_remote(host_name, "sudo chmod 0755 /usr/local/var/lib/nfs/ganesha")
+            self.executor.run_remote(
+                host_name, "sudo mkdir -p /usr/local/var/lib/nfs/ganesha"
+            )
+            self.executor.run_remote(
+                host_name, "sudo chmod 0755 /usr/local/var/lib/nfs/ganesha"
+            )
 
             # Create a minimal ceph.conf for this ganesha host
             asok_path = f"/var/run/ceph/ganesha-{host_name}.asok"
             ganesha_ceph_conf = f"/etc/ceph/ganesha-ceph-{host_name}.conf"
             ceph_bin = self.config.ganesha_ceph_binary_path
-            self.executor.run_remote(host_name, f"sudo {ceph_bin} config generate-minimal-conf | sudo tee {ganesha_ceph_conf} > /dev/null")
-            
+            self.executor.run_remote(
+                host_name,
+                f"sudo {ceph_bin} config generate-minimal-conf | sudo tee {ganesha_ceph_conf} > /dev/null",
+            )
+
             client_section = f"\n[client.{self.config.ganesha_user_id}]\n    admin_socket = {asok_path}\n"
             if self.config.ganesha_keyring_path:
                 client_section += f"    keyring = {self.config.ganesha_keyring_path}\n"
@@ -71,7 +80,10 @@ class GaneshaSystemdManager(GaneshaManager):
                 client_section += f"    client_oc_size = {oc_size}\n"
 
             escaped_client_section = client_section.replace("'", "'\\''")
-            self.executor.run_remote(host_name, f"printf '{escaped_client_section}' | sudo tee -a {ganesha_ceph_conf} > /dev/null")
+            self.executor.run_remote(
+                host_name,
+                f"printf '{escaped_client_section}' | sudo tee -a {ganesha_ceph_conf} > /dev/null",
+            )
             self.executor.run_remote(host_name, f"sudo chmod 0644 {ganesha_ceph_conf}")
 
             self.setup_ganesha_config(host_name=host_name)
@@ -80,10 +92,10 @@ class GaneshaSystemdManager(GaneshaManager):
             cleanup_cmd = f"if [ -f {pid_path} ]; then sudo kill $(cat {pid_path}) || true; sudo rm -f {pid_path}; fi"
             self.executor.run_remote(host_name, cleanup_cmd)
 
-            # Start as a background process with nohup. 
+            # Start as a background process with nohup.
             # We use sudo bash to execute the string with environment variables and background it.
             cmd = f"sudo bash -c '{env_vars} nohup {' '.join(args)} > /var/log/ganesha.log 2>&1 &'"
-            self.executor.run_remote(host_name, cmd, check=True )
+            self.executor.run_remote(host_name, cmd, check=True)
             print(f"[{host_name}] Ganesha started with PID file {pid_path}")
 
             # Wait for the admin socket to appear, indicating Ganesha has started
@@ -93,11 +105,15 @@ class GaneshaSystemdManager(GaneshaManager):
                 check_asok = f"test -S {asok_path}"
                 try:
                     self.executor.run_remote(host_name, check_asok, check=True)
-                    print(f"[{host_name}] Ganesha admin socket {asok_path} is available.")
+                    print(
+                        f"[{host_name}] Ganesha admin socket {asok_path} is available."
+                    )
                     break
                 except Exception:
                     if i == 29:
-                        print(f"[{host_name}] Warning: Ganesha admin socket {asok_path} NOT found after 30 seconds.")
+                        print(
+                            f"[{host_name}] Warning: Ganesha admin socket {asok_path} NOT found after 30 seconds."
+                        )
                     time.sleep(1)
 
         # Collect config diff if results_dir is provided
@@ -109,7 +125,8 @@ class GaneshaSystemdManager(GaneshaManager):
                 try:
                     ceph_bin = self.config.ganesha_ceph_binary_path
                     diff_output = self.executor.run_remote(
-                        host_name, f"sudo {ceph_bin} --admin-daemon {asok_path} config diff"
+                        host_name,
+                        f"sudo {ceph_bin} --admin-daemon {asok_path} config diff",
                     )
                     filename = f"ganesha_config_diff_{host_name}.json"
                     local_temp = f"/tmp/{filename}"
@@ -152,16 +169,18 @@ class GaneshaSystemdManager(GaneshaManager):
         # STANDALONE Ganesha configuration without Cephadm URL includes
         worker_threads = self.config.ganesha_worker_threads
         worker_threads_block = (
-            "    _9P {\n"
-            f"        Nb_Worker = {worker_threads};\n"
-            "    }\n"
-        ) if worker_threads else ""
+            ("    _9P {\n" f"        Nb_Worker = {worker_threads};\n" "    }\n")
+            if worker_threads
+            else ""
+        )
 
         # Add CEPH block for top-level settings if any are defined
         ceph_block = ""
         ceph_options = ""
         if host_name:
-            ceph_options += f"    Ceph_Conf = /etc/ceph/ganesha-ceph-{host_name}.conf;\n"
+            ceph_options += (
+                f"    Ceph_Conf = /etc/ceph/ganesha-ceph-{host_name}.conf;\n"
+            )
 
         if self.config.ganesha_umask is not None:
             ceph_options += f"    umask = {self.config.ganesha_umask};\n"
@@ -188,7 +207,7 @@ class GaneshaSystemdManager(GaneshaManager):
             "}\n"
             f"{worker_threads_block}"
             "NFSv4 {\n"
-            "    RecoveryBackend = \"fs\";\n"
+            '    RecoveryBackend = "fs";\n'
             "    Minor_Versions = 1, 2;\n"
             "}\n"
             f"{ceph_block}"
@@ -204,18 +223,15 @@ class GaneshaSystemdManager(GaneshaManager):
                 f'    Pseudo = "/{fs}-export";\n'
                 f'    Access_Type = "RW";\n'
                 f'    Squash = "no_root_squash";\n'
-                f'    Protocols = 4;\n'
+                f"    Protocols = 4;\n"
                 f'    Transports = "TCP";\n'
-                f'    FSAL {{\n'
+                f"    FSAL {{\n"
                 f'        Name = "CEPH";\n'
                 f'        Filesystem = "{fs}";\n'
                 f'        User_Id = "{self.config.ganesha_user_id}";\n'
             )
 
-            export_block += (
-                f'    }}\n'
-                f"}}\n"
-            )
+            export_block += f"    }}\n" f"}}\n"
             config_content += export_block
 
         for host_name in self.ganeshas:

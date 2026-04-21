@@ -16,6 +16,7 @@ from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
 from lib.mount.mount_kernel_manager import MountKernelManager
 from lib.mount.mount_nfs_manager import MountNfsManager
 
+
 class BenchRunner:
     def __init__(self, description="CephFS Performance Runner"):
         self.description = description
@@ -24,8 +25,14 @@ class BenchRunner:
 
     def add_arguments(self):
         self.parser.add_argument("config", help="Path to the configuration YAML file")
-        self.parser.add_argument("inventory", nargs="?", help="Path to the Ansible inventory file (optional)")
-        self.parser.add_argument("--ganesha", choices=["cephadm", "systemd"], help="Enable Ganesha and specify the type")
+        self.parser.add_argument(
+            "inventory", nargs="?", help="Path to the Ansible inventory file (optional)"
+        )
+        self.parser.add_argument(
+            "--ganesha",
+            choices=["cephadm", "systemd"],
+            help="Enable Ganesha and specify the type",
+        )
 
     def load_config(self, args):
         with open(args.config, "r") as f:
@@ -33,7 +40,7 @@ class BenchRunner:
 
         if "ganesha" not in config_dict:
             config_dict["ganesha"] = {}
-        
+
         # Default ganesha.enabled can be handled here or in YAML
         if args.ganesha:
             config_dict["ganesha"]["enabled"] = True
@@ -46,7 +53,9 @@ class BenchRunner:
         elif "inventory" in config_dict:
             inventory_provider = DirectInventoryProvider(config_dict["inventory"])
         else:
-            print("Error: No inventory provided (neither via command line nor in config file)")
+            print(
+                "Error: No inventory provided (neither via command line nor in config file)"
+            )
             sys.exit(1)
 
         return PerformanceTestConfig(config_dict, inventory_provider)
@@ -58,16 +67,20 @@ class BenchRunner:
     def run(self):
         args = self.parser.parse_args()
         config = self.load_config(args)
-        
+
         executor = SSHExecutor(config.all_hosts_meta)
         cephfs_manager = CephFSManager(executor, config)
         fs_names = cephfs_manager.get_fs_names()
 
         if config.ganesha_enabled:
             if config.ganesha_type == "systemd":
-                ganesha_manager = GaneshaSystemdManager(executor, config, cephfs_manager)
+                ganesha_manager = GaneshaSystemdManager(
+                    executor, config, cephfs_manager
+                )
             elif config.ganesha_type == "cephadm":
-                ganesha_manager = GaneshaCephadmManager(executor, config, cephfs_manager)
+                ganesha_manager = GaneshaCephadmManager(
+                    executor, config, cephfs_manager
+                )
             else:
                 raise ValueError(f"Invalid Ganesha type: {config.ganesha_type}")
             mount_manager = MountNfsManager(executor, config, cephfs_manager)
@@ -94,7 +107,7 @@ class BenchRunner:
             if len(parsed_r) == 3:
                 ranges.append(range(*parsed_r))
             elif len(parsed_r) in [1, 2] and all(
-                    isinstance(x, int) and x < 1000 for x in parsed_r
+                isinstance(x, int) and x < 1000 for x in parsed_r
             ):
                 ranges.append(range(*parsed_r))
             else:
@@ -104,7 +117,14 @@ class BenchRunner:
         ganesha_keys = []
         ganesha_ranges = []
         # Relevant CEPH FSAL options that can be iterated
-        for k in ["worker_threads", "umask", "client_oc", "async", "zerocopy", "client_oc_size"]:
+        for k in [
+            "worker_threads",
+            "umask",
+            "client_oc",
+            "async",
+            "zerocopy",
+            "client_oc_size",
+        ]:
             if k in ganesha_settings_raw:
                 val = ganesha_settings_raw[k]
                 if isinstance(val, list):
@@ -118,22 +138,26 @@ class BenchRunner:
             all_settings = dict(zip(combined_keys, values))
             current_settings = {k: all_settings[k] for k in keys}
             current_ganesha_settings = {k: all_settings[k] for k in ganesha_keys}
-            
+
             if current_ganesha_settings:
                 config["ganesha"].update(current_ganesha_settings)
 
             print(f"\n--- Starting Test Iteration: {all_settings} ---")
 
-            results_dir = workload_runner.get_results_dir(current_settings, shared_timestamp)
-            
+            results_dir = workload_runner.get_results_dir(
+                current_settings, shared_timestamp
+            )
+
             cephfs_manager.rebuild_filesystem(
                 current_settings, ganesha_manager, results_dir
             )
             cephfs_manager.apply_fs_settings(current_settings)
 
             if config.ganesha_enabled:
-                ganesha_manager.provision_ganesha(use_custom=True, results_dir=results_dir)
-            
+                ganesha_manager.provision_ganesha(
+                    use_custom=True, results_dir=results_dir
+                )
+
             mount_manager.mount()
 
             workload_runner.prepare_storage()

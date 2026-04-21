@@ -4,6 +4,7 @@ import time
 import subprocess
 from cephfs_perf_lib import CommonUtils, FSManager
 
+
 class CephFSManager(FSManager):
     def __init__(self, executor, config):
         self.executor = executor
@@ -39,7 +40,9 @@ class CephFSManager(FSManager):
             print(
                 f"[{server_name}] Stopping MDS debug logging for Load Point {loadpoint}"
             )
-            self.executor.run_remote(server_name, "sudo ceph config set mds debug_mds 1")
+            self.executor.run_remote(
+                server_name, "sudo ceph config set mds debug_mds 1"
+            )
             self.executor.run_remote(server_name, "sudo ceph config set mds debug_ms 1")
             if results_dir:
                 lp_tag = f"{int(loadpoint):02d}"
@@ -69,7 +72,9 @@ class CephFSManager(FSManager):
                     copy_cmd = f"scp -o StrictHostKeyChecking=no -P {admin_port} /tmp/{dest_log} {admin_user}@{admin_host}:{results_dir}/"
                     self.executor.run_remote(server_name, copy_cmd)
                     self.executor.run_remote(server_name, f"rm -f /tmp/{dest_log}")
-                    self.executor.run_remote(server_name, f"sudo truncate -s 0 {src_log}")
+                    self.executor.run_remote(
+                        server_name, f"sudo truncate -s 0 {src_log}"
+                    )
 
     def start_lockstat(self, fs):
         lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
@@ -135,8 +140,8 @@ class CephFSManager(FSManager):
                         self.executor.run_remote(
                             server_name, f"sudo chown {user}:{user} {temp_file}"
                         )
-                        admin_user, admin_host, admin_port = self.executor.get_ssh_details(
-                            self.admin
+                        admin_user, admin_host, admin_port = (
+                            self.executor.get_ssh_details(self.admin)
                         )
                         copy_cmd = f"scp -o StrictHostKeyChecking=no -P {admin_port} {temp_file} {admin_user}@{admin_host}:{results_dir}/"
                         self.executor.run_remote(server_name, copy_cmd)
@@ -218,7 +223,9 @@ class CephFSManager(FSManager):
     def generate_mds_yaml(self, fs, count, settings=None):
         num_mdss = len(self.mdss)
         num_hosts = min(count + 2, num_mdss)
-        start_idx = (self.get_fs_names().index(fs) if fs in self.get_fs_names() else 0) % num_mdss
+        start_idx = (
+            self.get_fs_names().index(fs) if fs in self.get_fs_names() else 0
+        ) % num_mdss
         selected_hosts = [
             self.mdss[(start_idx + i) % num_mdss] for i in range(num_hosts)
         ]

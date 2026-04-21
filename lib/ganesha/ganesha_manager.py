@@ -37,6 +37,7 @@ class GaneshaManager(abc.ABC):
             parts.append(f"gzc{val}")
         if "client_oc_size" in settings:
             from cephfs_perf_lib import CommonUtils
+
             size_str = CommonUtils.format_si_units(
                 CommonUtils.parse_si_unit(settings["client_oc_size"])
             )
@@ -51,7 +52,9 @@ class GaneshaManager(abc.ABC):
         return self.fs_manager.get_fs_names()
 
     def reset_ganesha_perf(self, host_name):
-        cmd = "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"
+        cmd = (
+            "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"
+        )
         asok_path = self.executor.run_remote(host_name, cmd).strip()
         if not asok_path or "No such file" in asok_path:
             print(f"[{host_name}] Warning: Ganesha admin socket not found for reset.")
@@ -62,7 +65,9 @@ class GaneshaManager(abc.ABC):
         )
 
     def collect_ganesha_perf_dump(self, host_name):
-        cmd = "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"
+        cmd = (
+            "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"
+        )
         asok_path = self.executor.run_remote(host_name, cmd).strip()
         if not asok_path or "No such file" in asok_path:
             print(f"[{host_name}] Warning: Ganesha admin socket not found.")

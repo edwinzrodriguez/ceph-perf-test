@@ -91,7 +91,9 @@ def main():
 
         for c in clients:
             # Ensure results directory exists on each client
-            subprocess.run(["ssh", "-o", "StrictHostKeyChecking=no", c, f"mkdir -p {results_dir}"])
+            subprocess.run(
+                ["ssh", "-o", "StrictHostKeyChecking=no", c, f"mkdir -p {results_dir}"]
+            )
 
             for mp in mount_points:
                 variables = {
@@ -152,7 +154,7 @@ def main():
                 cmd += f" --group_reporting --output-format=json+ --output={remote_path} --eta=always"
 
                 print(f"[{c}] Executing Fio: {cmd}", flush=True)
-                
+
                 # Use Popen to read output in real-time
                 ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", c, cmd]
                 process = subprocess.Popen(
@@ -160,13 +162,16 @@ def main():
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
-                    bufsize=1
+                    bufsize=1,
                 )
 
                 import re
+
                 # Regex for Jobs: 8 (f=8): [w(8)][18.8%][w=454MiB/s][w=1858 IOPS][eta 02m:27s]
                 # During ramp: Jobs: 8 (f=0): [/(8)][-.-%][eta 02m:57s]
-                status_re = re.compile(r"Jobs: \d+ \(f=\d+\): \[.*\]\[(?P<percent>[\d\.-]+)%\](?:\[.*\])?\[eta (?P<eta>.*)\]")
+                status_re = re.compile(
+                    r"Jobs: \d+ \(f=\d+\): \[.*\]\[(?P<percent>[\d\.-]+)%\](?:\[.*\])?\[eta (?P<eta>.*)\]"
+                )
 
                 run_phase_started = False
                 for line in process.stdout:
@@ -176,13 +181,16 @@ def main():
                         if match:
                             percent = match.group("percent")
                             eta = match.group("eta")
-                            
+
                             if not run_phase_started and percent != "-.-":
                                 print("Starting RUN phase", flush=True)
                                 run_phase_started = True
 
                             # Report percentage and status back to caller
-                            print(f"[{c}] Fio Status: {percent}% complete, ETA: {eta}", flush=True)
+                            print(
+                                f"[{c}] Fio Status: {percent}% complete, ETA: {eta}",
+                                flush=True,
+                            )
                     else:
                         # Print other output as is
                         print(f"[{c}] {line}", flush=True)
@@ -190,23 +198,38 @@ def main():
                 process.wait()
 
                 if process.returncode != 0:
-                    print(f"[{c}] Fio failed with return code {process.returncode}", flush=True)
+                    print(
+                        f"[{c}] Fio failed with return code {process.returncode}",
+                        flush=True,
+                    )
 
                 # Copy results from client to admin (where this script is running)
                 print(f"[{c}] Copying results to {results_dir}...", flush=True)
                 local_path = f"{results_dir}/{filename}"
-                subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", f"{c}:{remote_path}", local_path])
+                subprocess.run(
+                    [
+                        "scp",
+                        "-o",
+                        "StrictHostKeyChecking=no",
+                        f"{c}:{remote_path}",
+                        local_path,
+                    ]
+                )
 
                 # Inject test parameters into the JSON file
                 try:
                     with open(local_path, "r") as f:
                         data = json.load(f)
-                    
-                    data["test_parameters"] = CommonUtils.get_human_readable_settings(settings, lp_cfg)
-                    
+
+                    data["test_parameters"] = CommonUtils.get_human_readable_settings(
+                        settings, lp_cfg
+                    )
+
                     with open(local_path, "w") as f:
                         json.dump(data, f, indent=4)
-                    print(f"[{c}] Injected test parameters into {local_path}", flush=True)
+                    print(
+                        f"[{c}] Injected test parameters into {local_path}", flush=True
+                    )
                 except Exception as e:
                     print(f"[{c}] Failed to inject test parameters: {e}", flush=True)
 

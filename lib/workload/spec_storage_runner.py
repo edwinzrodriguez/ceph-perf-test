@@ -10,12 +10,12 @@ from cephfs_perf_lib import CommonUtils
 
 class SpecStorageWorkloadRunner(WorkloadRunner):
     def run_workload(
-            self,
-            settings,
-            shared_ts=None,
-            cephfs_manager=None,
-            ganesha_manager=None,
-            results_dir=None,
+        self,
+        settings,
+        shared_ts=None,
+        cephfs_manager=None,
+        ganesha_manager=None,
+        results_dir=None,
     ):
         cmd = self.config["specstorage"]["run_command"]
         cfg = self.config["specstorage"]["output_path"]
@@ -30,11 +30,13 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             "%Y%m%d-%H%M%S-%f"
         )
         # Use CommonUtils.get_workload_base_name to form the run_name
-        options = CommonUtils.get_workload_base_name('sfs2020', 'result', self.admin, 0, settings, config=self.config)
+        options = CommonUtils.get_workload_base_name(
+            "sfs2020", "result", self.admin, 0, settings, config=self.config
+        )
         # Remove the prefix part (workload_result_client_lp00_) to get just the options
         prefix = f"sfs2020_result_{self.admin}_lp00_"
         if options.startswith(prefix):
-            options = options[len(prefix):]
+            options = options[len(prefix) :]
 
         payload["run_name"] = f"{ts}_{options}"
         results_dir = results_dir or self.get_results_dir(settings, ts)
@@ -43,9 +45,16 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
 
         # Add Ganesha settings to payload
         ganesha_keys = [
-            "ganesha_enabled", "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
-            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size",
-            "ganesha_user_id", "ganesha_keyring_path", "ganesha_ceph_binary_path"
+            "ganesha_enabled",
+            "ganesha_worker_threads",
+            "ganesha_umask",
+            "ganesha_client_oc",
+            "ganesha_async",
+            "ganesha_zerocopy",
+            "ganesha_client_oc_size",
+            "ganesha_user_id",
+            "ganesha_keyring_path",
+            "ganesha_ceph_binary_path",
         ]
         for k in ganesha_keys:
             val = getattr(self.config, k, None)
@@ -57,7 +66,15 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         user, host, port = self.executor.get_ssh_details(self.admin)
         full_cmd = f"{cmd} -f {cfg} --settings '{settings_json}'"
         print(f"[{self.admin}] Executing: {full_cmd}")
-        ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", port, f"{user}@{host}", full_cmd]
+        ssh_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-p",
+            port,
+            f"{user}@{host}",
+            full_cmd,
+        ]
         current_lp, run_phase_started = 0, False
         perf_triggered, ganesha_perf_triggered, logging_triggered = False, False, False
         ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
@@ -75,52 +92,100 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             output.append(line)
             if "Starting tests..." in line:
                 current_lp += 1
-                run_phase_started, perf_triggered, ganesha_perf_triggered, logging_triggered = False, False, False, False
+                (
+                    run_phase_started,
+                    perf_triggered,
+                    ganesha_perf_triggered,
+                    logging_triggered,
+                ) = (False, False, False, False)
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
                 run_phase_started = True
-                if self.config.get("specstorage", {}).get("lockstat", {}).get("enabled") and cephfs_manager:
+                if (
+                    self.config.get("specstorage", {})
+                    .get("lockstat", {})
+                    .get("enabled")
+                    and cephfs_manager
+                ):
                     print(f"Resetting lockstat for Load Point {current_lp}...")
                     cephfs_manager.reset_lockstat()
-                if self.config.get("logging", {}).get("enabled") and not logging_triggered and cephfs_manager:
+                if (
+                    self.config.get("logging", {}).get("enabled")
+                    and not logging_triggered
+                    and cephfs_manager
+                ):
                     print(f"Triggering MDS logging for Load Point {current_lp}...")
                     cephfs_manager.start_fs_logging(current_lp)
                     logging_triggered = True
                 if ganesha_perf_enabled:
-                    print(f"Resetting Ganesha perf counters for Load Point {current_lp}...")
+                    print(
+                        f"Resetting Ganesha perf counters for Load Point {current_lp}..."
+                    )
                     for g_host in self.config.ganeshas:
                         ganesha_manager.reset_ganesha_perf(g_host)
             if "Tests finished" in line:
                 r_dir = payload.get("results_dir")
-                if self.config.get("specstorage", {}).get("lockstat", {}).get("enabled") and cephfs_manager:
+                if (
+                    self.config.get("specstorage", {})
+                    .get("lockstat", {})
+                    .get("enabled")
+                    and cephfs_manager
+                ):
                     print(f"Dumping lockstat for Load Point {current_lp}...")
                     cephfs_manager.dump_lockstat(current_lp, r_dir)
                 if logging_triggered and cephfs_manager:
                     print(f"Stopping MDS logging for Load Point {current_lp}...")
                     cephfs_manager.stop_fs_logging(current_lp, r_dir)
                 if ganesha_perf_enabled and r_dir:
-                    print(f"Collecting Ganesha perf dumps for Load Point {current_lp}...")
+                    print(
+                        f"Collecting Ganesha perf dumps for Load Point {current_lp}..."
+                    )
                     lp_tag = f"{int(current_lp):02d}"
                     for g_host in self.config.ganeshas:
                         dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
                         if dump:
-                            self.save_json_to_results(f"{g_host}_lp{lp_tag}_ganesha_perf.json", dump, r_dir)
+                            self.save_json_to_results(
+                                f"{g_host}_lp{lp_tag}_ganesha_perf.json", dump, r_dir
+                            )
             if run_phase_started:
                 if perf_record_enabled and not perf_triggered:
                     if "Run " in line and " percent complete" in line:
                         print(f"Triggering perf record for Load Point {current_lp}...")
                         r_dir = payload.get("results_dir")
-                        t = threading.Thread(target=self.execute_perf_record, args=("sfs2020", self.config.mdss, current_lp, r_dir, settings, None))
+                        t = threading.Thread(
+                            target=self.execute_perf_record,
+                            args=(
+                                "sfs2020",
+                                self.config.mdss,
+                                current_lp,
+                                r_dir,
+                                settings,
+                                None,
+                            ),
+                        )
                         t.start()
                         perf_threads.append(t)
                         perf_triggered = True
 
-                if self.config.ganesha_enabled and self.config.ganesha_perf_record and not ganesha_perf_triggered:
-                    print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
+                if (
+                    self.config.ganesha_enabled
+                    and self.config.ganesha_perf_record
+                    and not ganesha_perf_triggered
+                ):
+                    print(
+                        f"Triggering Ganesha perf recording for Load Point {current_lp}..."
+                    )
                     r_dir = payload.get("results_dir")
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=("ganesha", self.config.ganeshas, current_lp, r_dir, settings, None),
+                        args=(
+                            "ganesha",
+                            self.config.ganeshas,
+                            current_lp,
+                            r_dir,
+                            settings,
+                            None,
+                        ),
                     )
                     t.start()
                     perf_threads.append(t)
@@ -132,48 +197,67 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             print(f"Error on {self.admin}: process exited with {process.returncode}")
         return "".join(output)
 
-
     def save_json_to_results(self, filename, data, results_dir):
         local_temp = f"/tmp/{filename}"
         with open(local_temp, "w") as f:
             json.dump(data, f, indent=4)
         u, h, p = self.executor.get_ssh_details(self.admin)
-        subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", str(p), local_temp, f"{u}@{h}:{results_dir}/"])
+        subprocess.run(
+            [
+                "scp",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-P",
+                str(p),
+                local_temp,
+                f"{u}@{h}:{results_dir}/",
+            ]
+        )
         os.remove(local_temp)
 
     def _generate_spec_file(self):
         spec_cfg = self.config.get("specstorage", {})
-        workload_dir = spec_cfg.get("workload_dir", "/cephfs_perf/sfs2020/SPECstorage2020")
-        
+        workload_dir = spec_cfg.get(
+            "workload_dir", "/cephfs_perf/sfs2020/SPECstorage2020"
+        )
+
         # Parse netmist_env
         netmist_env_path = spec_cfg.get("netmist_env", "netmist.env")
         license_key = ""
         license_path = ""
-        
+
         # We try to read it locally
         if not os.path.exists(netmist_env_path):
-            raise FileNotFoundError(f"Error: netmist_env not found at {netmist_env_path}. This file is required for SPECstorage benchmark.")
-            
+            raise FileNotFoundError(
+                f"Error: netmist_env not found at {netmist_env_path}. This file is required for SPECstorage benchmark."
+            )
+
         try:
             with open(netmist_env_path, "r") as f:
                 env_content = f.read()
             for line in env_content.splitlines():
                 if "NETMIST_LICENSE_KEY=" in line:
-                    license_key = line.split("=", 1)[1].strip().strip("\"").strip("'")
+                    license_key = line.split("=", 1)[1].strip().strip('"').strip("'")
                 if "NETMIST_LICENSE_KEY_PATH=" in line:
-                    license_path = line.split("=", 1)[1].strip().strip("\"").strip("'")
+                    license_path = line.split("=", 1)[1].strip().strip('"').strip("'")
         except Exception as e:
-            raise RuntimeError(f"Error: Could not read netmist_env from {netmist_env_path}: {e}")
+            raise RuntimeError(
+                f"Error: Could not read netmist_env from {netmist_env_path}: {e}"
+            )
 
         if not license_key:
-            raise RuntimeError(f"Error: NETMIST_LICENSE_KEY is not defined or empty in {netmist_env_path}")
+            raise RuntimeError(
+                f"Error: NETMIST_LICENSE_KEY is not defined or empty in {netmist_env_path}"
+            )
         if not license_path:
-            raise RuntimeError(f"Error: NETMIST_LICENSE_KEY_PATH is not defined or empty in {netmist_env_path}")
+            raise RuntimeError(
+                f"Error: NETMIST_LICENSE_KEY_PATH is not defined or empty in {netmist_env_path}"
+            )
 
         # Construct LOAD entry from loadpoints
         loadpoints = spec_cfg.get("loadpoints", [])
         load_str = " ".join(map(str, loadpoints))
-        
+
         # Construct CLIENT_MOUNTPOINTS
         mpfs = spec_cfg.get("mounts_per_fs", 1)
         mps = []
@@ -210,19 +294,27 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             # "WINDOWS_PDSM_LOG=",
             # "UNIX_PDSM_CONTROL=",
             # "WINDOWS_PDSM_CONTROL=",
-            ""
+            "",
         ]
-        
+
         return "\n".join(lines)
 
     def prepare_storage(self):
         spec_cfg = self.config.get("specstorage", {})
         out = spec_cfg["output_path"]
-        run_cmd = spec_cfg.get("run_command", "/cephfs_perf/sfs2020/run_sfs2020_workload.py")
+        run_cmd = spec_cfg.get(
+            "run_command", "/cephfs_perf/sfs2020/run_sfs2020_workload.py"
+        )
         perf_script = spec_cfg.get("perf_record_script", "/cephfs_perf/perf_record.py")
 
         # Collect all targets to copy scripts to: admin, clients, ganeshas, mons, mdss
-        targets = set([self.admin] + self.config.clients + self.config.ganeshas + self.config.mons + self.config.mdss)
+        targets = set(
+            [self.admin]
+            + self.config.clients
+            + self.config.ganeshas
+            + self.config.mons
+            + self.config.mdss
+        )
 
         for target in targets:
             u, h, p = self.executor.get_ssh_details(target)
@@ -241,7 +333,10 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             if g_perf_script and g_perf_script != perf_script:
                 # Ensure the directory exists on each target
                 g_remote_dir = os.path.dirname(g_perf_script)
-                self.executor.run_remote(self.admin, f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}")
+                self.executor.run_remote(
+                    self.admin,
+                    f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}",
+                )
                 files_to_copy.append(("perf_record.py", g_perf_script))
 
             stap_script = spec_cfg.get("stap_script")
@@ -250,7 +345,9 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
 
             for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
-                    print(f"Copying local {local_file} to {remote_path} on {self.admin}...")
+                    print(
+                        f"Copying local {local_file} to {remote_path} on {self.admin}..."
+                    )
                     subprocess.run(
                         [
                             "scp",
@@ -294,7 +391,10 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         g_p = ""
         if self.config.ganesha_enabled:
             from lib.ganesha.ganesha_manager import GaneshaManager
-            g_str = GaneshaManager.get_ganesha_config_str(self.config.get("ganesha", {}))
+
+            g_str = GaneshaManager.get_ganesha_config_str(
+                self.config.get("ganesha", {})
+            )
             if g_str:
                 g_p = "_" + g_str
 

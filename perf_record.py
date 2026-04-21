@@ -259,7 +259,9 @@ def run_reports(
             return
 
         # Check if /cephfs_perf/sfs2020/perf_record.py exists in the container
-        print(f"Checking for /cephfs_perf/sfs2020/perf_record.py in container {container_id}...")
+        print(
+            f"Checking for /cephfs_perf/sfs2020/perf_record.py in container {container_id}..."
+        )
         check_proc = _container_exec(
             runtime, container_id, ["test", "-f", "/cephfs_perf/sfs2020/perf_record.py"]
         )
@@ -601,12 +603,14 @@ def main():
             print(f"Could not read cmdline for PID {pid}: {e}")
 
         lp_tag = f"lp{int(loadpoint):02d}"
-        
+
         if args.workload and args.options:
-            base_filename = f"{args.workload}_perf_record_{s_name}_{lp_tag}_{args.options}"
+            base_filename = (
+                f"{args.workload}_perf_record_{s_name}_{lp_tag}_{args.options}"
+            )
         else:
             base_filename = f"{s_name}_{lp_tag}_{service_id}"
-            
+
         report_file = os.path.join(output_dir, f"{base_filename}_perf_report.txt")
         script_file = os.path.join(output_dir, f"{base_filename}_perf_script.txt")
         perf_data_file = os.path.join(output_dir, f"{base_filename}_perf.data")
@@ -710,7 +714,9 @@ def main():
         if args.stap_script:
             # SystemTap capture
             # sudo stap rdtsc-para-callgraph-verbose.stp 'process(<pid>).function("*")' for duration
-            print(f"Starting SystemTap capture on {args.server} for PID {pid} using {args.stap_script}...")
+            print(
+                f"Starting SystemTap capture on {args.server} for PID {pid} using {args.stap_script}..."
+            )
 
             stap_target_pid = pid
             stap_cmd = [
@@ -721,7 +727,7 @@ def main():
                 duration,
                 "stap",
                 args.stap_script,
-                f"process({stap_target_pid}).function(\"*\")",
+                f'process({stap_target_pid}).function("*")',
             ]
 
             if runtime and container_id:
@@ -735,24 +741,34 @@ def main():
                                     stap_target_pid = nspids[-1]
                                     break
                 except Exception as e:
-                    print(f"Could not read NSpid for SystemTap PID {pid} from host: {e}")
+                    print(
+                        f"Could not read NSpid for SystemTap PID {pid} from host: {e}"
+                    )
 
                 print(
                     f"Detected containerized PID {pid}. Wrapping SystemTap in {runtime} exec {container_id}..."
                 )
-                
+
                 # Copy SystemTap script to container to ensure it is available
                 # Point to a temporary path in the container
                 container_stap_script = f"/tmp/{os.path.basename(args.stap_script)}"
-                print(f"Copying {args.stap_script} to {container_id}:{container_stap_script}...")
-                cp_cmd = ["sudo", runtime, "cp", args.stap_script, f"{container_id}:{container_stap_script}"]
+                print(
+                    f"Copying {args.stap_script} to {container_id}:{container_stap_script}..."
+                )
+                cp_cmd = [
+                    "sudo",
+                    runtime,
+                    "cp",
+                    args.stap_script,
+                    f"{container_id}:{container_stap_script}",
+                ]
                 try:
                     subprocess.run(cp_cmd, check=True)
                 except subprocess.CalledProcessError as e:
                     print(f"Warning: Failed to copy stap script to container: {e}")
                     # Fallback to host path and hope it's mounted
                     container_stap_script = args.stap_script
-                
+
                 stap_cmd = [
                     "sudo",
                     runtime,
@@ -764,7 +780,7 @@ def main():
                     duration,
                     "stap",
                     container_stap_script,
-                    f"process({stap_target_pid}).function(\"*\")",
+                    f'process({stap_target_pid}).function("*")',
                 ]
 
             print(f"Executing SystemTap command: {' '.join(stap_cmd)}")
@@ -775,7 +791,14 @@ def main():
                     stap_cmd, stdout=outf, stderr=subprocess.PIPE, text=False
                 )
                 record_processes.append(
-                    (sp, pid, service_id, None, stap_out_file, None) # Use None for perf_data and script_file to distinguish
+                    (
+                        sp,
+                        pid,
+                        service_id,
+                        None,
+                        stap_out_file,
+                        None,
+                    )  # Use None for perf_data and script_file to distinguish
                 )
 
     # Wait for all processes to finish (perf and stap)
@@ -789,7 +812,7 @@ def main():
         script_file,
     ) in record_processes:
         stdout, stderr = p.communicate()
-        if p.returncode != 0 and p.returncode != 124: # timeout exits with 124
+        if p.returncode != 0 and p.returncode != 124:  # timeout exits with 124
             name = "perf record" if perf_data_file else "SystemTap"
             print(
                 f"Error during {name} for PID {pid} on {args.server}: {stderr.decode('utf-8', errors='replace')}"

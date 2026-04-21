@@ -15,11 +15,12 @@ class InventoryProvider(abc.ABC):
     An inventory provider is responsible for supplying host information and global variables
     to the performance test framework.
     """
+
     @abc.abstractmethod
     def get_hosts(self):
         """
         Returns host information grouped by sections (e.g., 'mons', 'clients', 'ganeshas').
-        
+
         Returns:
             dict: A dictionary where keys are section names and values are lists of dictionaries.
                   Each host dictionary must contain at least a 'name' key.
@@ -31,7 +32,7 @@ class InventoryProvider(abc.ABC):
     def get_vars(self):
         """
         Returns global variables that can be used for parameter expansion.
-        
+
         Returns:
             dict: A dictionary of variable names and their values.
         """
@@ -41,7 +42,7 @@ class InventoryProvider(abc.ABC):
     def get_all_hosts_meta(self):
         """
         Returns a flat mapping of all host names to their metadata.
-        
+
         Returns:
             dict: A dictionary where keys are host names and values are metadata dictionaries.
         """
@@ -54,6 +55,7 @@ class FSManager(abc.ABC):
     A filesystem manager is responsible for managing the filesystem lifecycle,
     including rebuilding the filesystem, applying settings, and managing logging.
     """
+
     @abc.abstractmethod
     def start_fs_logging(self, loadpoint):
         """Starts MDS debug logging for the specified loadpoint."""
@@ -82,11 +84,11 @@ class FSManager(abc.ABC):
     def safe_json_load(self, raw, default=None):
         """
         Safely loads a JSON string, returning a default value on failure.
-        
+
         Args:
             raw (str): The raw JSON string to parse.
             default: The default value to return if parsing fails. Defaults to an empty list.
-            
+
         Returns:
             The parsed JSON data or the default value.
         """
@@ -103,10 +105,11 @@ class FSManager(abc.ABC):
 class AnsibleInventoryProvider(InventoryProvider):
     """
     Implementation of InventoryProvider that parses an Ansible-style INI inventory file.
-    
+
     It also loads global variables from 'group_vars/all.yml' and 'cluster.json' if they exist
     relative to the script directory.
     """
+
     def __init__(self, inventory_path, extra_vars=None):
         self.inventory_path = inventory_path
         self.vars = extra_vars or {}
@@ -193,6 +196,7 @@ class DirectInventoryProvider(InventoryProvider):
     Implementation of InventoryProvider that uses direct dictionary input.
     Useful for programmatic usage without external inventory files.
     """
+
     def __init__(self, inventory_dict, vars=None):
         """
         Initializes the provider with a dictionary.
@@ -203,7 +207,7 @@ class DirectInventoryProvider(InventoryProvider):
         self.vars = vars or {}
         self.hosts_meta = {}
         self.all_hosts = {}
-        
+
         for section, hosts in inventory_dict.items():
             self.hosts_meta[section] = []
             if isinstance(hosts, list):
@@ -303,9 +307,7 @@ class PerformanceTestConfig:
 
     @property
     def ganesha_pid_path(self):
-        return self._config.get("ganesha", {}).get(
-            "pid_path", "/var/run/ganesha.pid"
-        )
+        return self._config.get("ganesha", {}).get("pid_path", "/var/run/ganesha.pid")
 
     @property
     def ganesha_worker_threads(self):
@@ -401,17 +403,17 @@ class CommonUtils:
     def parse_si_unit(value):
         if not isinstance(value, str):
             return value
-        
+
         # Support common unit formats like "128MiB", "1GiB", "100MB", "100k", etc.
         # Normalize: remove "B" and "iB" from the end if they exist, but keep "i" for binary.
         # e.g., "MiB" -> "Mi", "MB" -> "M", "Mi" -> "Mi", "M" -> "M"
-        
+
         normalized = value.strip()
         if normalized.endswith("iB"):
-            normalized = normalized[:-1] # "MiB" -> "Mi"
+            normalized = normalized[:-1]  # "MiB" -> "Mi"
         elif normalized.endswith("B"):
-            normalized = normalized[:-1] # "MB" -> "M"
-            
+            normalized = normalized[:-1]  # "MB" -> "M"
+
         units = {
             "Pi": 1024**5,
             "Ti": 1024**4,
@@ -429,7 +431,7 @@ class CommonUtils:
             "m": 1000**2,
             "k": 1000,
         }
-        
+
         for unit, mult in units.items():
             if normalized.endswith(unit):
                 try:
@@ -471,6 +473,7 @@ class CommonUtils:
     def expand_loadpoints(loadpoints):
         import itertools
         import copy
+
         expanded_list = []
         for lp in loadpoints:
             # Find keys with list values
@@ -495,7 +498,7 @@ class CommonUtils:
     def get_human_readable_settings(settings, lp_cfg=None, config=None):
         """Construct a dictionary of test parameters with human-readable names."""
         params = {}
-        
+
         # Mapping of internal keys to human-readable names
         name_map = {
             "mds_cache_memory_limit": "MDS Cache Memory Limit",
@@ -541,11 +544,18 @@ class CommonUtils:
 
         # Add Ganesha settings if config is provided or already in settings
         ganesha_keys = [
-            "ganesha_enabled", "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
-            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size",
-            "ganesha_user_id", "ganesha_keyring_path", "ganesha_ceph_binary_path"
+            "ganesha_enabled",
+            "ganesha_worker_threads",
+            "ganesha_umask",
+            "ganesha_client_oc",
+            "ganesha_async",
+            "ganesha_zerocopy",
+            "ganesha_client_oc_size",
+            "ganesha_user_id",
+            "ganesha_keyring_path",
+            "ganesha_ceph_binary_path",
         ]
-        
+
         # Check settings first for Ganesha keys
         for k in ganesha_keys:
             if k in settings:
@@ -569,16 +579,37 @@ class CommonUtils:
         return params
 
     @staticmethod
-    def get_workload_base_name(workload, output_type, client, lp, settings, lp_cfg=None, config=None):
+    def get_workload_base_name(
+        workload, output_type, client, lp, settings, lp_cfg=None, config=None
+    ):
         exclude = {
-            "results_dir", "fs_name", "executable_path", "ceph_args",
-            "config_path", "keyring", "client_id", "root_path",
-            "ganesha_enabled", "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
-            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size",
-            "ganesha_user_id", "ganesha_keyring_path", "ganesha_ceph_binary_path",
-            "workload_dir", "run_name", "num_filesystems",
-            "mounts_per_fs", "perf_record", "perf_record_script",
-            "perf_record_executable", "perf_record_duration", "lockstat"
+            "results_dir",
+            "fs_name",
+            "executable_path",
+            "ceph_args",
+            "config_path",
+            "keyring",
+            "client_id",
+            "root_path",
+            "ganesha_enabled",
+            "ganesha_worker_threads",
+            "ganesha_umask",
+            "ganesha_client_oc",
+            "ganesha_async",
+            "ganesha_zerocopy",
+            "ganesha_client_oc_size",
+            "ganesha_user_id",
+            "ganesha_keyring_path",
+            "ganesha_ceph_binary_path",
+            "workload_dir",
+            "run_name",
+            "num_filesystems",
+            "mounts_per_fs",
+            "perf_record",
+            "perf_record_script",
+            "perf_record_executable",
+            "perf_record_duration",
+            "lockstat",
         }
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}"
@@ -600,12 +631,14 @@ class CommonUtils:
             if config.ganesha_zerocopy is not None:
                 g_parts.append(f"gzc{1 if config.ganesha_zerocopy else 0}")
             if config.ganesha_client_oc_size:
-                g_parts.append(f"gocs{CommonUtils.format_si_units(config.ganesha_client_oc_size)}")
+                g_parts.append(
+                    f"gocs{CommonUtils.format_si_units(config.ganesha_client_oc_size)}"
+                )
             if g_parts:
                 g_p = "-" + "-".join(g_parts)
 
         lp_str = f"lp{int(lp):02d}" if lp is not None else "lp00"
-        
+
         parts = []
         if lp_cfg:
             if "size" in lp_cfg:
@@ -615,7 +648,9 @@ class CommonUtils:
             if "client-oc" in lp_cfg:
                 parts.append(f"oc{lp_cfg['client-oc']}")
             if "client-oc-size" in lp_cfg:
-                parts.append(f"ocs{CommonUtils.format_si_units(lp_cfg['client-oc-size'])}")
+                parts.append(
+                    f"ocs{CommonUtils.format_si_units(lp_cfg['client-oc-size'])}"
+                )
             if "block-size" in lp_cfg:
                 parts.append(f"bs{CommonUtils.format_si_units(lp_cfg['block-size'])}")
             if "iodepth" in lp_cfg:
@@ -644,14 +679,3 @@ class CommonUtils:
             options += f"_{'_'.join(parts)}"
 
         return f"{workload}_{output_type}_{client}_{lp_str}_{options}"
-
-
-
-
-
-
-
-
-
-
-

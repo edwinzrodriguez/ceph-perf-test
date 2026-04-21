@@ -9,12 +9,12 @@ from cephfs_perf_lib import CommonUtils
 
 class FioWorkloadRunner(WorkloadRunner):
     def run_workload(
-            self,
-            settings,
-            shared_ts=None,
-            cephfs_manager=None,
-            ganesha_manager=None,
-            results_dir=None,
+        self,
+        settings,
+        shared_ts=None,
+        cephfs_manager=None,
+        ganesha_manager=None,
+        results_dir=None,
     ):
         fio_cfg = self.config.fio
         run_cmd = fio_cfg.get("run_command", "/cephfs_perf/fio/run_fio_workload.py")
@@ -34,7 +34,9 @@ class FioWorkloadRunner(WorkloadRunner):
         mount_points = []
         for fs in self.fs_names:
             for i in range(mpfs):
-                mount_points.append(f"/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else ""))
+                mount_points.append(
+                    f"/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else "")
+                )
 
         payload = settings.copy()
         payload["fs_name"] = self.config.fs_name
@@ -47,8 +49,13 @@ class FioWorkloadRunner(WorkloadRunner):
 
         # Add Ganesha settings to payload
         ganesha_keys = [
-            "ganesha_enabled", "ganesha_worker_threads", "ganesha_umask", "ganesha_client_oc",
-            "ganesha_async", "ganesha_zerocopy", "ganesha_client_oc_size"
+            "ganesha_enabled",
+            "ganesha_worker_threads",
+            "ganesha_umask",
+            "ganesha_client_oc",
+            "ganesha_async",
+            "ganesha_zerocopy",
+            "ganesha_client_oc_size",
         ]
         for k in ganesha_keys:
             val = getattr(self.config, k, None)
@@ -75,7 +82,15 @@ class FioWorkloadRunner(WorkloadRunner):
             f"--loadpoints '{loadpoints_json}'"
         )
         print(f"[{self.admin}] Executing: {full_cmd}")
-        ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", port, f"{user}@{host}", full_cmd]
+        ssh_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-p",
+            port,
+            f"{user}@{host}",
+            full_cmd,
+        ]
 
         processes = []
         ganeshas = self.config.ganeshas
@@ -104,7 +119,9 @@ class FioWorkloadRunner(WorkloadRunner):
             if "Starting RUN phase" in line:
                 run_phase_started = True
                 if ganesha_perf_enabled:
-                    print(f"Resetting Ganesha perf counters for Load Point {current_lp}...")
+                    print(
+                        f"Resetting Ganesha perf counters for Load Point {current_lp}..."
+                    )
                     for g_host in ganesha_manager.ganeshas:
                         ganesha_manager.reset_ganesha_perf(g_host)
             if run_phase_started and not perf_triggered:
@@ -113,36 +130,65 @@ class FioWorkloadRunner(WorkloadRunner):
                     lp_cfg = expanded_loadpoints[current_lp - 1]
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=("fio", self.config.mdss, current_lp, results_dir, settings, lp_cfg),
+                        args=(
+                            "fio",
+                            self.config.mdss,
+                            current_lp,
+                            results_dir,
+                            settings,
+                            lp_cfg,
+                        ),
                     )
                     t.start()
                     perf_threads.append(t)
 
                 if self.config.ganesha_enabled and self.config.ganesha_perf_record:
-                    print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
+                    print(
+                        f"Triggering Ganesha perf recording for Load Point {current_lp}..."
+                    )
                     lp_cfg = expanded_loadpoints[current_lp - 1]
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=("ganesha", self.config.ganeshas, current_lp, results_dir, settings, lp_cfg),
+                        args=(
+                            "ganesha",
+                            self.config.ganeshas,
+                            current_lp,
+                            results_dir,
+                            settings,
+                            lp_cfg,
+                        ),
                     )
                     t.start()
                     perf_threads.append(t)
                 perf_triggered = True
             if "Finished Fio Load Point:" in line:
                 if ganesha_perf_enabled:
-                    print(f"Dumping Ganesha perf counters for Load Point {current_lp}...")
+                    print(
+                        f"Dumping Ganesha perf counters for Load Point {current_lp}..."
+                    )
                     for g_host in ganesha_manager.ganeshas:
                         perf_dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
                         if perf_dump:
-                            filename = f"ganesha_perf_dump_{g_host}_lp{current_lp:02d}.json"
+                            filename = (
+                                f"ganesha_perf_dump_{g_host}_lp{current_lp:02d}.json"
+                            )
                             local_temp = f"/tmp/{filename}"
                             with open(local_temp, "w") as f:
                                 json.dump(perf_dump, f)
                             u, h, p = self.executor.get_ssh_details(self.admin)
                             p = str(p)
                             remote_path = f"{results_dir}/{filename}"
-                            subprocess.run(["scp", "-o", "StrictHostKeyChecking=no", "-P", p, local_temp,
-                                            f"{u}@{h}:{remote_path}"])
+                            subprocess.run(
+                                [
+                                    "scp",
+                                    "-o",
+                                    "StrictHostKeyChecking=no",
+                                    "-P",
+                                    p,
+                                    local_temp,
+                                    f"{u}@{h}:{remote_path}",
+                                ]
+                            )
                             os.remove(local_temp)
 
         process.wait()
@@ -164,7 +210,10 @@ class FioWorkloadRunner(WorkloadRunner):
         g_p = ""
         if self.config.ganesha_enabled:
             from lib.ganesha.ganesha_manager import GaneshaManager
-            g_str = GaneshaManager.get_ganesha_config_str(self.config.get("ganesha", {}))
+
+            g_str = GaneshaManager.get_ganesha_config_str(
+                self.config.get("ganesha", {})
+            )
             if g_str:
                 g_p = "_" + g_str
 
@@ -177,13 +226,21 @@ class FioWorkloadRunner(WorkloadRunner):
         stap_script = fio_cfg.get("stap_script")
 
         # Collect all targets to copy scripts to: admin, clients, ganeshas, mons, mdss
-        targets = set([self.admin] + self.config.clients + self.config.ganeshas + self.config.mons + self.config.mdss)
+        targets = set(
+            [self.admin]
+            + self.config.clients
+            + self.config.ganeshas
+            + self.config.mons
+            + self.config.mdss
+        )
 
         for target in targets:
             u, h, p = self.executor.get_ssh_details(target)
             # Ensure the directory exists on each target
             remote_dir = os.path.dirname(run_cmd)
-            self.executor.run_remote(target, f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}")
+            self.executor.run_remote(
+                target, f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}"
+            )
 
             # Copy local files to each target
             files_to_copy = [
@@ -198,7 +255,10 @@ class FioWorkloadRunner(WorkloadRunner):
             if g_perf_script and g_perf_script != perf_script:
                 # Ensure the directory exists on each target
                 g_remote_dir = os.path.dirname(g_perf_script)
-                self.executor.run_remote(target, f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}")
+                self.executor.run_remote(
+                    target,
+                    f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}",
+                )
                 files_to_copy.append(("perf_record.py", g_perf_script))
 
             if stap_script and os.path.exists(os.path.basename(stap_script)):
@@ -218,4 +278,3 @@ class FioWorkloadRunner(WorkloadRunner):
                             f"{u}@{h}:{remote_path}",
                         ]
                     )
-

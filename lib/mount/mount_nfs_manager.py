@@ -12,8 +12,8 @@ class MountNfsManager(MountManager):
             for idx, c in enumerate(self.clients):
                 gh = gs[idx % len(gs)]
                 gt = (
-                        self.config.all_hosts_meta.get(gh, {}).get("private_ip")
-                        or self.executor.get_ssh_details(gh)[1]
+                    self.config.all_hosts_meta.get(gh, {}).get("private_ip")
+                    or self.executor.get_ssh_details(gh)[1]
                 )
                 for i in range(mpfs):
                     p = f"/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else "")
