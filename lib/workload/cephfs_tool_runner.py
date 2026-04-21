@@ -96,17 +96,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                     lp_cfg = loadpoints[current_lp - 1]
                     t = threading.Thread(
                         target=self.execute_perf_record,
-                        args=("cephfs_tool", self.config.mdss, current_lp, results_dir, payload, lp_cfg),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-
-                if self.config.ganesha_enabled and self.config.ganesha_perf_record:
-                    print(f"Triggering Ganesha perf recording for Load Point {current_lp}...")
-                    lp_cfg = loadpoints[current_lp - 1]
-                    t = threading.Thread(
-                        target=self.execute_perf_record,
-                        args=("ganesha", self.config.ganeshas, current_lp, results_dir, payload, lp_cfg),
+                        args=("cephfs_tool", self.config.clients, current_lp, results_dir, payload, lp_cfg),
                     )
                     t.start()
                     perf_threads.append(t)
