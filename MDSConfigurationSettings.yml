@@ -135,9 +135,15 @@ specstorage:
     enabled: true
     path: "/usr/local/bin/ceph-lockstat"
     threshold: 0
+# Official BENCHMARK values are
+#       SWBUILD, VDA, EDA_BLENDED, AI_IMAGE, ENOMICS
   benchmark: "SWBUILD"
-  loadpoints: [1, 2, 3, 4]
+  # loadpoints are either a starting value, or a sequence of ints
+  loadpoints: [1]
+  # When loadpoints is a starting value, num_runs is how many loadpoints
+  # are run, and increment is added to starting loadpoint between runs
   increment: 1
+  # Only used if increment is specified
   num_runs: 1
   netmist_env: "netmist.env"
 
