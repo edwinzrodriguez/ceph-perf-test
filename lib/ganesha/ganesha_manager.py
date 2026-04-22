@@ -21,27 +21,27 @@ class GaneshaManager(abc.ABC):
 
     @staticmethod
     def get_ganesha_config_str(settings):
+        from cephfs_perf_lib import CommonUtils
+
         parts = []
         if "worker_threads" in settings:
-            parts.append(f"gwt{settings['worker_threads']}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Worker Threads')}{settings['worker_threads']}")
         if "umask" in settings:
-            parts.append(f"gum{settings['umask']}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{settings['umask']}")
         if "client_oc" in settings:
             val = 1 if settings["client_oc"] else 0
-            parts.append(f"goc{val}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{val}")
         if "async" in settings:
             val = 1 if settings["async"] else 0
-            parts.append(f"gas{val}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{val}")
         if "zerocopy" in settings:
             val = 1 if settings["zerocopy"] else 0
-            parts.append(f"gzc{val}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Zero Copy')}{val}")
         if "client_oc_size" in settings:
-            from cephfs_perf_lib import CommonUtils
-
             size_str = CommonUtils.format_si_units(
                 CommonUtils.parse_si_unit(settings["client_oc_size"])
             )
-            parts.append(f"gocs{size_str}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache Size')}{size_str}")
         return "_".join(parts)
 
     def safe_json_load(self, raw, default=None):

@@ -122,6 +122,7 @@ def print_representation(rep, swept_vars, indent=0):
         print_representation(rep[val], swept_vars, indent + 1)
 
 import itertools
+from cephfs_perf_lib import CommonUtils
 
 def plot_results(results, swept_vars, metric, output_file):
     if not HAS_MATPLOTLIB:
@@ -134,41 +135,6 @@ def plot_results(results, swept_vars, metric, output_file):
 
     # Helper function to save plot and handle filename
     def save_plot(plt, base_output, pair_vars=None, other_vars_info=None):
-        # Mapping of human-readable names to abbreviations for filenames
-        name_map = {
-            "MDS Cache Memory Limit": "m",
-            "Filesystem Name": "fs",
-            "Number of Filesystems": "nf",
-            "Mounts per Filesystem": "mpf",
-            "File Size": "s",
-            "Threads": "t",
-            "Block Size": "bs",
-            "I/O Depth": "iod",
-            "Read/Write Pattern": "rw",
-            "I/O Engine": "ioe",
-            "Direct I/O": "d",
-            "Buffered I/O": "buf",
-            "Create Serialize": "cs",
-            "Duration": "dur",
-            "Ramp Time": "rt",
-            "GTOD Reduce": "gr",
-            "Client Object Cache": "oc",
-            "Client Object Cache Size": "ocs",
-            "Ganesha Worker Threads": "gwt",
-            "Ganesha Umask": "gum",
-            "Ganesha Client Object Cache": "goc",
-            "Ganesha Async": "gas",
-            "Ganesha Zero Copy": "gzc",
-            "Ganesha Client Object Cache Size": "gocs",
-            "Ganesha User ID": "guid",
-            "Ganesha Keyring Path": "gkp",
-            "Ganesha Ceph Binary Path": "gcbp",
-            "Ganesha Enabled": "ge",
-        }
-
-        def get_short_name(var_name):
-            return name_map.get(var_name, var_name.replace(' ', '_').replace('/', '_'))
-
         def format_val_for_filename(v):
             if v == "True": return "1"
             if v == "False": return "0"
@@ -176,11 +142,11 @@ def plot_results(results, swept_vars, metric, output_file):
 
         name, ext = os.path.splitext(base_output)
         if pair_vars:
-            v_names = "_".join([get_short_name(v) for v in pair_vars])
+            v_names = "_".join([CommonUtils.get_short_name(v) for v in pair_vars])
             name = f"{name}_{v_names}"
         
         if other_vars_info:
-            other_info_str = "_".join([f"{get_short_name(k)}={format_val_for_filename(v)}" for k, v in sorted(other_vars_info.items())])
+            other_info_str = "_".join([f"{CommonUtils.get_short_name(k)}={format_val_for_filename(v)}" for k, v in sorted(other_vars_info.items())])
             name = f"{name}_{other_info_str}"
 
         filename = f"{name}{ext}"
