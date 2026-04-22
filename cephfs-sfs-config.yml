@@ -4,6 +4,72 @@
     debuginfo_repo_name: "{{ 'baseos-debuginfo' if ansible_distribution == 'CentOS' else 'baseos-debug-rpms' if ansible_distribution == 'RedHat' else 'baseos-debuginfo' }}"
     crb_debuginfo_repo_name: "{{ 'crb-debuginfo' if ansible_distribution == 'CentOS' else 'codeready-builder-for-rhel-' ~ ansible_distribution_major_version ~ '-x86_64-debug-rpms' if ansible_distribution == 'RedHat' else 'crb-debuginfo' }}"
   tasks:
+    - name: Disable SELinux
+      ansible.posix.selinux:
+        state: disabled
+      ignore_errors: yes
+
+    # controls whether the kernel will randomize the virtual memory addresses of processes
+    - name: Disable kernel ASLR
+      ansible.posix.sysctl:
+        name: kernel.randomize_va_space
+        value: '0'
+        state: present
+        reload: yes
+
+    # controls whether restrictions are placed on exposing kernel memory addresses
+    # via /proc and other interfaces,
+    - name: Set kptr_restrict to 0
+      ansible.posix.sysctl:
+        name: kernel.kptr_restrict
+        value: '0'
+        state: present
+        reload: yes
+
+    # controls the use of the Linux performance events system by unprivileged users
+    # (those without CAP_SYS_ADMIN)
+    - name: Set perf_event_paranoid to -1
+      ansible.posix.sysctl:
+        name: kernel.perf_event_paranoid
+        value: '-1'
+        state: present
+        reload: yes
+
+    # controls the maximum amount of memory that can be locked by a process
+    - name: Set perf_event_mlock_kb to 2048
+      ansible.posix.sysctl:
+        name: kernel.perf_event_mlock_kb
+        value: '2048'
+        state: present
+        reload: yes
+
+    # controls whether the kernel will allow a process to ptrace() another process
+    # (useful for debugging and security)
+    - name: Set yama.ptrace_scope to 0
+      ansible.posix.sysctl:
+        name: kernel.yama.ptrace_scope
+        value: '0'
+        state: present
+        reload: yes
+
+    # controls whether the kernel will allow a process to send a signal to itself
+    # (useful for security and preventing accidental signal sending)
+    - name: Set nmi_watchdog to 0
+      ansible.posix.sysctl:
+        name: kernel.nmi_watchdog
+        value: '0'
+        state: present
+        reload: yes
+
+    # controls the maximum number of stack frames that can be recorded for a perf event
+    # (useful for debugging and performance analysis)
+    - name: Set perf_event_max_stack to 255
+      ansible.posix.sysctl:
+        name: kernel.perf_event_max_stack
+        value: '255'
+        state: present
+        reload: yes
+
     - name: Read netmist.env
       ansible.builtin.shell:
         cmd: "grep '^sfs2020_archive=' netmist.env | cut -d'=' -f2 | tr -d '\"' | tr -d \"'\""
@@ -105,13 +171,6 @@
         path: /usr/bin/perf
         capability: cap_perfmon,cap_sys_ptrace,cap_syslog=ep
         state: present
-
-    - name: Set perf_event_paranoid to -1
-      ansible.posix.sysctl:
-        name: kernel.perf_event_paranoid
-        value: '-1'
-        state: present
-        reload: yes
 
     - name: Install fio
       ansible.builtin.dnf:
