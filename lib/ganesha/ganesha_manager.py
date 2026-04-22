@@ -61,7 +61,7 @@ class GaneshaManager(abc.ABC):
             return
         print(f"[{host_name}] Resetting Ganesha perf counters via {asok_path}...")
         self.executor.run_remote(
-            host_name, f"sudo ceph --admin-daemon {asok_path} perf reset all"
+            host_name, f"sudo {self.config.ganesha_ceph_binary_path} --admin-daemon {asok_path} perf reset all"
         )
 
     def collect_ganesha_perf_dump(self, host_name):
@@ -74,6 +74,6 @@ class GaneshaManager(abc.ABC):
             return None
         print(f"[{host_name}] Collecting Ganesha perf dump from {asok_path}...")
         dump_raw = self.executor.run_remote(
-            host_name, f"sudo ceph --admin-daemon {asok_path} perf dump"
+            host_name, f"sudo {self.config.ganesha_ceph_binary_path} --admin-daemon {asok_path} perf dump"
         )
         return self.safe_json_load(dump_raw, default=None)
