@@ -166,6 +166,7 @@ fio:
       block-size: ["256KiB","1MiB"]
       iodepth: [1, 16]
       readwrite: ["randrw", "randread", "randwrite"]
+      #rwmixread: [75, 50, 25]
       ioengine: ["libaio"]
       direct: 1
       buffered: 0

@@ -125,6 +125,8 @@ def main():
                     fio_parts.append(f"--direct={lp_cfg['direct']}")
                 if "buffered" in lp_cfg:
                     fio_parts.append(f"--buffered={lp_cfg['buffered']}")
+                if "rwmixread" in lp_cfg:
+                    fio_parts.append(f"--rwmixread={lp_cfg['rwmixread']}")
                 if "create_serialize" in lp_cfg:
                     fio_parts.append(f"--create_serialize={lp_cfg['create_serialize']}")
                 if "threads" in lp_cfg:
