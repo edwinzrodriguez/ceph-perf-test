@@ -38,7 +38,16 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         payload["fs_name"] = self.config.fs_name
         payload["results_dir"] = results_dir
 
-        # Add global cephfs_tool config options to payload
+        # Add global ceph config to payload
+        for key, config_val in [
+            ("config_path", self.config.ceph_conf_path),
+            ("keyring", self.config.ceph_keyring_path),
+            ("client_id", self.config.ceph_user_id),
+        ]:
+            if config_val:
+                payload[key] = config_val
+
+        # Add global cephfs_tool config options to payload, overriding with tool-specific if present
         for key in [
             "executable_path",
             "ceph_args",

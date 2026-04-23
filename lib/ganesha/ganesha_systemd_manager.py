@@ -21,10 +21,10 @@ class GaneshaSystemdManager(GaneshaManager):
         ceph_bin = self.config.ganesha_ceph_binary_path
         self.executor.run_remote(
             self.admin,
-            f"sudo {ceph_bin} osd pool create .nfs --yes-i-really-mean-it || true",
+            f"sudo {ceph_bin} {self._get_ceph_args()} osd pool create .nfs --yes-i-really-mean-it || true",
         )
         self.executor.run_remote(
-            self.admin, f"sudo {ceph_bin} osd pool application enable .nfs nfs || true"
+            self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} osd pool application enable .nfs nfs || true"
         )
 
         print("Setting up Ganesha configuration on ganesha nodes...")
@@ -51,7 +51,7 @@ class GaneshaSystemdManager(GaneshaManager):
         env_vars = (
             "export ENABLE_LOCKSTAT=true; "
             "export GSS_USE_HOSTNAME=0; "
-            "export CEPH_CONF=/etc/ceph/ceph.conf; "
+            f"export CEPH_CONF={self.config.ceph_conf_path}; "
         )
 
         for host_name in self.ganeshas:
@@ -69,7 +69,7 @@ class GaneshaSystemdManager(GaneshaManager):
             ceph_bin = self.config.ganesha_ceph_binary_path
             self.executor.run_remote(
                 host_name,
-                f"sudo {ceph_bin} config generate-minimal-conf | sudo tee {ganesha_ceph_conf} > /dev/null",
+                f"sudo {ceph_bin} {self._get_ceph_args()} config generate-minimal-conf | sudo tee {ganesha_ceph_conf} > /dev/null",
             )
 
             client_section = f"\n[client.{self.config.ganesha_user_id}]\n    admin_socket = {asok_path}\n"
@@ -126,7 +126,7 @@ class GaneshaSystemdManager(GaneshaManager):
                     ceph_bin = self.config.ganesha_ceph_binary_path
                     diff_output = self.executor.run_remote(
                         host_name,
-                        f"sudo {ceph_bin} --admin-daemon {asok_path} config diff",
+                        f"sudo {ceph_bin} {self._get_ceph_args()} --admin-daemon {asok_path} config diff",
                     )
                     filename = f"ganesha_config_diff_{host_name}.json"
                     local_temp = f"/tmp/{filename}"

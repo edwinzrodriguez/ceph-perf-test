@@ -99,6 +99,12 @@ mount_manager_type: "MountKernelManager"
 num_filesystems: 1
 mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec
 
+ceph:
+  conf: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  user_id: "admin"
+  fsid: "12345678-1234-1234-1234-123456789012"
+
 ganesha:
   enabled: false
   service_id: "ganesha"

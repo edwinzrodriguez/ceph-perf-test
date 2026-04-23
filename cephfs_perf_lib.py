@@ -372,6 +372,22 @@ class PerformanceTestConfig:
         return self.mons[0] if self.mons else None
 
     @property
+    def ceph_conf_path(self):
+        return self._config.get("ceph", {}).get("conf", "/etc/ceph/ceph.conf")
+
+    @property
+    def ceph_keyring_path(self):
+        return self._config.get("ceph", {}).get("keyring")
+
+    @property
+    def ceph_user_id(self):
+        return self._config.get("ceph", {}).get("user_id", "admin")
+
+    @property
+    def ceph_fsid(self):
+        return self._config.get("ceph", {}).get("fsid")
+
+    @property
     def ganesha_enabled(self):
         return self._config.get("ganesha", {}).get("enabled", False)
 
@@ -415,11 +431,17 @@ class PerformanceTestConfig:
 
     @property
     def ganesha_user_id(self):
-        return self._config.get("ganesha", {}).get("user_id", "admin")
+        user_id = self._config.get("ganesha", {}).get("user_id")
+        if user_id:
+            return user_id
+        return self.ceph_user_id
 
     @property
     def ganesha_keyring_path(self):
-        return self._config.get("ganesha", {}).get("keyring_path")
+        keyring = self._config.get("ganesha", {}).get("keyring_path")
+        if keyring:
+            return keyring
+        return self.ceph_keyring_path
 
     @property
     def ganesha_ceph_binary_path(self):

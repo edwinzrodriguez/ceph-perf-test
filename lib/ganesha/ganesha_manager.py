@@ -51,6 +51,16 @@ class GaneshaManager(abc.ABC):
         """Return list of filesystem names. Delegated to FSManager."""
         return self.fs_manager.get_fs_names()
 
+    def _get_ceph_args(self):
+        args = []
+        if self.config.ceph_conf_path:
+            args.append(f"-c {self.config.ceph_conf_path}")
+        if self.config.ganesha_user_id:
+            args.append(f"--user {self.config.ganesha_user_id}")
+        if self.config.ganesha_keyring_path:
+            args.append(f"--keyring {self.config.ganesha_keyring_path}")
+        return " ".join(args)
+
     def reset_ganesha_perf(self, host_name):
         cmd = (
             "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"
@@ -61,7 +71,7 @@ class GaneshaManager(abc.ABC):
             return
         print(f"[{host_name}] Resetting Ganesha perf counters via {asok_path}...")
         self.executor.run_remote(
-            host_name, f"sudo {self.config.ganesha_ceph_binary_path} --admin-daemon {asok_path} perf reset all"
+            host_name, f"sudo {self.config.ganesha_ceph_binary_path} {self._get_ceph_args()} --admin-daemon {asok_path} perf reset all"
         )
 
     def collect_ganesha_perf_dump(self, host_name):
@@ -74,6 +84,6 @@ class GaneshaManager(abc.ABC):
             return None
         print(f"[{host_name}] Collecting Ganesha perf dump from {asok_path}...")
         dump_raw = self.executor.run_remote(
-            host_name, f"sudo {self.config.ganesha_ceph_binary_path} --admin-daemon {asok_path} perf dump"
+            host_name, f"sudo {self.config.ganesha_ceph_binary_path} {self._get_ceph_args()} --admin-daemon {asok_path} perf dump"
         )
         return self.safe_json_load(dump_raw, default=None)

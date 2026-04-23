@@ -22,10 +22,10 @@ class GaneshaCephadmManager(GaneshaManager):
         ceph_bin = self.config.ganesha_ceph_binary_path
         self.executor.run_remote(
             self.admin,
-            f"sudo {ceph_bin} osd pool create .nfs --yes-i-really-mean-it || true",
+            f"sudo {ceph_bin} {self._get_ceph_args()} osd pool create .nfs --yes-i-really-mean-it || true",
         )
         self.executor.run_remote(
-            self.admin, f"sudo {ceph_bin} osd pool application enable .nfs nfs || true"
+            self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} osd pool application enable .nfs nfs || true"
         )
         if use_custom:
             for host_name in self.ganeshas:
@@ -38,7 +38,7 @@ class GaneshaCephadmManager(GaneshaManager):
                 ceph_bin = self.config.ganesha_ceph_binary_path
                 self.executor.run_remote(
                     host_name,
-                    f"sudo {ceph_bin} config generate-minimal-conf | sudo tee {ganesha_ceph_conf} > /dev/null",
+                    f"sudo {ceph_bin} {self._get_ceph_args()} config generate-minimal-conf | sudo tee {ganesha_ceph_conf} > /dev/null",
                 )
 
                 # In cephadm, the asok name is ganesha-$cluster-$name.asok
@@ -69,7 +69,7 @@ class GaneshaCephadmManager(GaneshaManager):
         self.generate_ganesha_yaml(sid, self.ganeshas, use_custom)
         ypath = self.config.ganesha_yaml_path
         ceph_bin = self.config.ganesha_ceph_binary_path
-        self.executor.run_remote(self.admin, f"sudo {ceph_bin} orch apply -i {ypath}")
+        self.executor.run_remote(self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} orch apply -i {ypath}")
 
         # Wait for the NFS service to be running BEFORE applying exports
         print(f"Waiting for NFS service {sid} to be running...")
@@ -79,7 +79,7 @@ class GaneshaCephadmManager(GaneshaManager):
             svcs = self.safe_json_load(
                 self.executor.run_remote(
                     self.admin,
-                    f"sudo {ceph_bin} orch ls --service_type nfs --format json",
+                    f"sudo {ceph_bin} {self._get_ceph_args()} orch ls --service_type nfs --format json",
                 )
             )
             if any(
@@ -132,7 +132,7 @@ class GaneshaCephadmManager(GaneshaManager):
                     ceph_bin = self.config.ganesha_ceph_binary_path
                     self.executor.run_remote(
                         self.admin,
-                        f"sudo {ceph_bin} nfs export apply {sid} -i /cephfs_perf/sfs2020/export_{fs}.json",
+                        f"sudo {ceph_bin} {self._get_ceph_args()} nfs export apply {sid} -i /cephfs_perf/sfs2020/export_{fs}.json",
                         check=True,
                     )
                     break
@@ -142,7 +142,7 @@ class GaneshaCephadmManager(GaneshaManager):
                     print(f"Retrying export apply for {fs} ({i + 1}/12): {e}")
                     time.sleep(10)
         ceph_bin = self.config.ganesha_ceph_binary_path
-        self.executor.run_remote(self.admin, f"sudo {ceph_bin} orch restart nfs.{sid}")
+        self.executor.run_remote(self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} orch restart nfs.{sid}")
 
         # After ganesha starts, run 'config diff' via the admin socket and store results in the output directory
         print("Waiting for Ganesha nodes to start and admin socket to be available...")
@@ -179,7 +179,7 @@ class GaneshaCephadmManager(GaneshaManager):
             print(f"[{g_host}] Running 'config diff' via {asok_path}...")
             ceph_bin = self.config.ganesha_ceph_binary_path
             diff_output = self.executor.run_remote(
-                g_host, f"sudo {ceph_bin} --admin-daemon {asok_path} config diff"
+                g_host, f"sudo {ceph_bin} {self._get_ceph_args()} --admin-daemon {asok_path} config diff"
             )
 
             filename = f"ganesha_config_diff_{g_host}.json"
@@ -215,16 +215,16 @@ class GaneshaCephadmManager(GaneshaManager):
         ceph_bin = self.config.ganesha_ceph_binary_path
         exps = self.safe_json_load(
             self.executor.run_remote(
-                self.admin, f"sudo {ceph_bin} nfs export ls {sid} --format json"
+                self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} nfs export ls {sid} --format json"
             )
         )
         for e in exps:
             self.executor.run_remote(
                 self.admin,
-                f"sudo {ceph_bin} nfs export rm {sid} {e.get('path') if isinstance(e, dict) else e}",
+                f"sudo {ceph_bin} {self._get_ceph_args()} nfs export rm {sid} {e.get('path') if isinstance(e, dict) else e}",
             )
         self.executor.run_remote(
-            self.admin, f"sudo {ceph_bin} orch rm nfs.{sid} || true"
+            self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} orch rm nfs.{sid} || true"
         )
 
     def setup_ganesha_config(self):
@@ -284,10 +284,10 @@ class GaneshaCephadmManager(GaneshaManager):
             "    nodeid = 0;\n"
             '    pool = ".nfs";\n'
             '    namespace = "ganesha";\n'
-            '    UserId = "admin";\n'
+            f'    UserId = "{self.config.ganesha_user_id}";\n'
             "}\n"
             "RADOS_URLS {\n"
-            '    UserId = "admin";\n'
+            f'    UserId = "{self.config.ganesha_user_id}";\n'
             '    watch_url = "rados://.nfs/ganesha/conf-nfs.ganesha";\n'
             "}\n"
             "# Cephadm will still manage exports via the %url include\n"
@@ -351,7 +351,7 @@ class GaneshaCephadmManager(GaneshaManager):
                         "--env",
                         "GSS_USE_HOSTNAME=0",
                         "--env",
-                        "CEPH_CONF=/etc/ceph/ceph.conf",
+                        f"CEPH_CONF={self.config.ceph_conf_path}",
                         "--entrypoint",
                         "/usr/bin/ganesha.nfsd",
                     ],
