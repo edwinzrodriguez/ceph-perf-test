@@ -121,23 +121,24 @@ class BenchRunner:
             else:
                 ranges.append(parsed_r)
 
-        ganesha_settings_raw = config.get("ganesha", {})
         ganesha_keys = []
         ganesha_ranges = []
-        # Relevant CEPH FSAL options that can be iterated
-        for k in [
-            "worker_threads",
-            "umask",
-            "client_oc",
-            "async",
-            "zerocopy",
-            "client_oc_size",
-        ]:
-            if k in ganesha_settings_raw:
-                val = ganesha_settings_raw[k]
-                if isinstance(val, list):
-                    ganesha_keys.append(k)
-                    ganesha_ranges.append(val)
+        if config.ganesha_enabled:
+            ganesha_settings_raw = config.get("ganesha", {})
+            # Relevant CEPH FSAL options that can be iterated
+            for k in [
+                "worker_threads",
+                "umask",
+                "client_oc",
+                "async",
+                "zerocopy",
+                "client_oc_size",
+            ]:
+                if k in ganesha_settings_raw:
+                    val = ganesha_settings_raw[k]
+                    if isinstance(val, list):
+                        ganesha_keys.append(k)
+                        ganesha_ranges.append(val)
 
         combined_keys = keys + ganesha_keys
         combined_ranges = ranges + ganesha_ranges
