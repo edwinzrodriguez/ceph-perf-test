@@ -79,7 +79,8 @@ class FioWorkloadRunner(WorkloadRunner):
             f"--settings '{settings_json}' "
             f"--mount-points '{mount_points_json}' "
             f"--clients '{clients_json}' "
-            f"--loadpoints '{loadpoints_json}'"
+            f"--loadpoints '{loadpoints_json}' "
+            f"--runner-name '{self.get_name()}'"
         )
         print(f"[{self.admin}] Executing: {full_cmd}")
         ssh_cmd = [
@@ -278,3 +279,6 @@ class FioWorkloadRunner(WorkloadRunner):
                             f"{u}@{h}:{remote_path}",
                         ]
                     )
+
+    def get_name(self):
+        return "fio"

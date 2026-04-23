@@ -29,6 +29,10 @@ class WorkloadRunner(abc.ABC):
     def prepare_storage(self):
         pass
 
+    @abc.abstractmethod
+    def get_name(self):
+        pass
+
     def execute_perf_record(
         self,
         workload_name,

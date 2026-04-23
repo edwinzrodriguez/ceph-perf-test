@@ -53,6 +53,7 @@ def main():
     parser.add_argument(
         "--loadpoints", help="JSON string containing loadpoints configuration"
     )
+    parser.add_argument("--runner-name", help="Name of the workload runner")
 
     args = parser.parse_args()
 
@@ -226,6 +227,8 @@ def main():
                     data["test_parameters"] = CommonUtils.get_human_readable_settings(
                         settings, lp_cfg
                     )
+                    if args.runner_name:
+                        data["test_parameters"]["Workload Runner"] = args.runner_name
 
                     with open(local_path, "w") as f:
                         json.dump(data, f, indent=4)

@@ -16,6 +16,7 @@ def main():
     parser.add_argument(
         "--clients", type=str, required=True, help="JSON list of clients"
     )
+    parser.add_argument("--runner-name", help="Name of the workload runner")
     args = parser.parse_args()
 
     try:
@@ -183,6 +184,8 @@ def main():
                 data["test_parameters"] = CommonUtils.get_human_readable_settings(
                     settings, lp_cfg
                 )
+                if args.runner_name:
+                    data["test_parameters"]["Workload Runner"] = args.runner_name
 
                 with open(local_json, "w") as f:
                     json.dump(data, f, indent=4)

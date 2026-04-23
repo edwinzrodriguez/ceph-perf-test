@@ -64,7 +64,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         settings_json = json.dumps(payload)
         print(f"Running SPECSTORAGE on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
-        full_cmd = f"{cmd} -f {cfg} --settings '{settings_json}'"
+        full_cmd = f"{cmd} -f {cfg} --settings '{settings_json}' --runner-name '{self.get_name()}'"
         print(f"[{self.admin}] Executing: {full_cmd}")
         ssh_cmd = [
             "ssh",
@@ -531,3 +531,6 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                 g_p = "_" + g_str
 
         return os.path.join(base, f"{ts}_{fs_p}_{mds_p}{g_p}")
+
+    def get_name(self):
+        return "sfs2020"

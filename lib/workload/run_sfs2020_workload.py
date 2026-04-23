@@ -15,6 +15,7 @@ def main():
     parser.add_argument(
         "--settings", required=True, help="JSON string containing test settings"
     )
+    parser.add_argument("--runner-name", help="Name of the workload runner")
 
     args = parser.parse_args()
 
@@ -79,6 +80,8 @@ def main():
 
                 # Check if test_parameters already exists
                 test_params = CommonUtils.get_human_readable_settings(settings)
+                if args.runner_name:
+                    test_params["Workload Runner"] = args.runner_name
 
                 tree_root = tree.getroot()
                 if tree_root.tag == "summary":

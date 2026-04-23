@@ -76,7 +76,8 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             f"python3 {run_cmd} "
             f"--settings '{settings_json}' "
             f"--loadpoints '{loadpoints_json}' "
-            f"--clients '{clients_json}'"
+            f"--clients '{clients_json}' "
+            f"--runner-name '{self.get_name()}'"
         )
         print(f"[{self.admin}] Executing: {full_cmd}")
         ssh_cmd = [
@@ -207,6 +208,9 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                 g_p = "_" + g_str
 
         return os.path.join(base, f"{ts}_{fs_p}_{mds_p}{g_p}")
+
+    def get_name(self):
+        return "cephfs_tool"
 
     def prepare_storage(self):
         cfg = self.config.get("cephfs_tool", {})

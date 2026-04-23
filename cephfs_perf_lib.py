@@ -483,6 +483,7 @@ class CommonUtils:
             "Ganesha Keyring Path": "gkp",
             "Ganesha Ceph Binary Path": "gcbp",
             "Ganesha Enabled": "ge",
+            "Workload Runner": "wr",
         }
         return name_map.get(var_name, var_name.replace(" ", "_").replace("/", "_"))
 
