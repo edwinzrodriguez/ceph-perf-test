@@ -60,6 +60,8 @@
         value: '0'
         state: present
         reload: yes
+      ignore_errors: yes
+      when: not (ansible_distribution == 'CentOS' and ansible_distribution_major_version | int == 10)
 
     # controls the maximum number of stack frames that can be recorded for a perf event
     # (useful for debugging and performance analysis)
