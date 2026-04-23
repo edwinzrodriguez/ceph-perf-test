@@ -76,6 +76,17 @@
       become: false
       when: not ceph_repo_stat.stat.exists
 
+    - name: Add ceph-lab-extras repo
+      ansible.builtin.copy:
+        dest: /etc/yum.repos.d/ceph-lab-extras.repo
+        content: |
+          [ceph-lab-extras]
+          name=ceph-lab-extras-$releasever
+          baseurl=https://apt-mirror.sepia.ceph.com/lab-extras/$releasever
+          enabled=1
+          gpgcheck=0
+        mode: '0644'
+
     - name: Run install-deps.sh
       ansible.builtin.command:
         cmd: ./install-deps.sh
