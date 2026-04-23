@@ -167,10 +167,13 @@ def main():
                     f"[{client}] CephFS-Tool failed with return code {proc.returncode}"
                 )
 
-            # Copy result JSON from client to results_dir and inject parameters
+            # Copy result and perf_dump JSON from client to results_dir and inject parameters
             json_filename = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, lp, settings, lp_cfg)}.json"
+            perf_dump_filename = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'perf_dump', client, lp, settings, lp_cfg)}.json"
             remote_json = f"/tmp/{json_filename}"
+            remote_perf_dump = f"/tmp/{perf_dump_filename}"
             local_json = os.path.join(results_dir, json_filename)
+            local_perf_dump = os.path.join(results_dir, perf_dump_filename)
 
             print(f"[{client}] Copying results to {results_dir}...", flush=True)
             subprocess.run(
@@ -181,6 +184,17 @@ def main():
                     f"{client}:{remote_json}",
                     local_json,
                 ]
+            )
+            # Also copy perf_dump if it exists
+            subprocess.run(
+                [
+                    "scp",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    f"{client}:{remote_perf_dump}",
+                    local_perf_dump,
+                ],
+                stderr=subprocess.DEVNULL,
             )
 
             # Inject test parameters

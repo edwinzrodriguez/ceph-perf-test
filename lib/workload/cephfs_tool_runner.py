@@ -133,51 +133,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                     perf_threads.append(t)
                 perf_triggered = True
             if "Finished CephFS-Tool Load Point:" in line:
-                lp_cfg = loadpoints[current_lp - 1]
-                for client in self.config.clients:
-                    # Collect the cephfs-tool performance dump file
-                    perf_dump_name = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'perf_dump', client, current_lp, payload, lp_cfg)}.json"
-                    perf_dump_json = f"/tmp/{perf_dump_name}"
-                    try:
-                        # Check if file exists first
-                        check = self.executor.run_remote(
-                            client,
-                            f"test -f {perf_dump_json} && echo EXISTS || echo MISSING",
-                        ).strip()
-                        if "EXISTS" in check:
-                            au, ah, ap = self.executor.get_ssh_details(self.admin)
-                            remote_path = f"{results_dir}/{perf_dump_name}"
-                            self.executor.run_remote(
-                                client, f"sudo -n chmod 0644 {perf_dump_json}"
-                            )
-                            copy_cmd = f"scp -o StrictHostKeyChecking=no -P {ap} {perf_dump_json} {au}@{ah}:{remote_path}"
-                            self.executor.run_remote(client, copy_cmd)
-                            self.executor.run_remote(client, f"rm -f {perf_dump_json}")
-                    except Exception as e:
-                        print(
-                            f"[{client}] Warning: failed to collect {perf_dump_json}: {e}"
-                        )
-
-                    # Also collect the cephfs-tool JSON output file
-                    tool_result_name = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, current_lp, payload, lp_cfg)}.json"
-                    tool_json = f"/tmp/{tool_result_name}"
-                    try:
-                        # Check if file exists first
-                        check = self.executor.run_remote(
-                            client,
-                            f"test -f {tool_json} && echo EXISTS || echo MISSING",
-                        ).strip()
-                        if "EXISTS" in check:
-                            au, ah, ap = self.executor.get_ssh_details(self.admin)
-                            remote_path = f"{results_dir}/{tool_result_name}"
-                            self.executor.run_remote(
-                                client, f"sudo -n chmod 0644 {tool_json}"
-                            )
-                            copy_cmd = f"scp -o StrictHostKeyChecking=no -P {ap} {tool_json} {au}@{ah}:{remote_path}"
-                            self.executor.run_remote(client, copy_cmd)
-                            self.executor.run_remote(client, f"rm -f {tool_json}")
-                    except Exception as e:
-                        print(f"[{client}] Warning: failed to collect {tool_json}: {e}")
+                pass # Collection is handled by run_cephfs_workload.py
 
         process.wait()
         for t in perf_threads:
