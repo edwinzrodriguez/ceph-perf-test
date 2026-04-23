@@ -633,7 +633,7 @@ def main():
             "-p",
             pid,
             "-F",
-            "99",
+            "999",
             "-g",
             "--call-graph",
             "dwarf,128",
