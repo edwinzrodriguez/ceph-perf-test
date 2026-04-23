@@ -85,7 +85,7 @@ def identify_swept_variables(results):
     
     swept_vars = []
     for key in all_keys:
-        if key in ignore_cols or key.startswith("Ganesha"):
+        if key in ignore_cols:
             continue
         
         values = set()
