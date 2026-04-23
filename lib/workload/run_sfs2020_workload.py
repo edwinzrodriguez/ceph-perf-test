@@ -4,6 +4,14 @@ import argparse
 import subprocess
 import datetime
 import os
+import sys
+
+# Add project root to sys.path to allow importing cephfs_perf_lib
+# when running the script directly
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from cephfs_perf_lib import CommonUtils
 
 
