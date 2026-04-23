@@ -27,3 +27,11 @@ class MountManager(abc.ABC):
     @abc.abstractmethod
     def mount(self):
         pass
+
+
+class StubMountManager(MountManager):
+    def mount(self):
+        pass
+
+    def unmount_clients(self):
+        pass

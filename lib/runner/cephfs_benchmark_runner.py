@@ -9,7 +9,9 @@ from cephfs_perf_lib import (
     PerformanceTestConfig,
     SSHExecutor,
     CommonUtils,
+    StubFSManager,
 )
+from lib.mount.mount_manager import StubMountManager
 from lib.fs.cephfs_manager import CephFSManager
 from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
 from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
@@ -69,7 +71,10 @@ class BenchRunner:
         config = self.load_config(args)
 
         executor = SSHExecutor(config.all_hosts_meta)
-        cephfs_manager = CephFSManager(executor, config)
+        if config.fs_manager_type == "StubFSManager":
+            cephfs_manager = StubFSManager(config)
+        else:
+            cephfs_manager = CephFSManager(executor, config)
         fs_names = cephfs_manager.get_fs_names()
 
         if config.ganesha_enabled:
@@ -84,6 +89,9 @@ class BenchRunner:
             else:
                 raise ValueError(f"Invalid Ganesha type: {config.ganesha_type}")
             mount_manager = MountNfsManager(executor, config, cephfs_manager)
+        elif config.mount_manager_type == "StubMountManager":
+            ganesha_manager = None
+            mount_manager = StubMountManager(executor, config, cephfs_manager)
         else:
             ganesha_manager = None
             mount_manager = MountKernelManager(executor, config, cephfs_manager)

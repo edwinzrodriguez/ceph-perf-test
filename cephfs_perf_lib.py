@@ -81,6 +81,26 @@ class FSManager(abc.ABC):
         """Applies specific MDS settings to the filesystem."""
         pass
 
+    @abc.abstractmethod
+    def start_lockstat(self, fs):
+        """Starts lockstat for the specified filesystem."""
+        pass
+
+    @abc.abstractmethod
+    def stop_lockstat(self, fs):
+        """Stops lockstat for the specified filesystem."""
+        pass
+
+    @abc.abstractmethod
+    def reset_lockstat(self):
+        """Resets lockstat on all MDS nodes."""
+        pass
+
+    @abc.abstractmethod
+    def dump_lockstat(self, loadpoint, results_dir=None):
+        """Dumps lockstat data to results_dir."""
+        pass
+
     def safe_json_load(self, raw, default=None):
         """
         Safely loads a JSON string, returning a default value on failure.
@@ -100,6 +120,54 @@ class FSManager(abc.ABC):
             return json.loads(raw)
         except:
             return default
+
+
+class StubFSManager(FSManager):
+    """
+    A stub implementation of FSManager that does nothing.
+    Useful when runners don't need to rebuild or manage a filesystem.
+    """
+
+    def __init__(self, config=None):
+        self.config = config
+        if config:
+            self.fs_name = config.fs_name
+            self.num_filesystems = config.num_filesystems
+            self.fs_names = (
+                [self.fs_name]
+                + [f"{self.fs_name}_{i:02d}" for i in range(2, self.num_filesystems + 1)]
+                if self.num_filesystems > 1
+                else [self.fs_name]
+            )
+        else:
+            self.fs_names = []
+
+    def start_fs_logging(self, loadpoint):
+        pass
+
+    def stop_fs_logging(self, loadpoint, results_dir=None):
+        pass
+
+    def rebuild_filesystem(self, settings, ganesha_manager=None, results_dir=None):
+        pass
+
+    def get_fs_names(self):
+        return self.fs_names
+
+    def apply_fs_settings(self, settings):
+        pass
+
+    def start_lockstat(self, fs):
+        pass
+
+    def stop_lockstat(self, fs):
+        pass
+
+    def reset_lockstat(self):
+        pass
+
+    def dump_lockstat(self, loadpoint, results_dir=None):
+        pass
 
 
 class AnsibleInventoryProvider(InventoryProvider):
@@ -246,6 +314,18 @@ class PerformanceTestConfig:
 
     def __getitem__(self, key):
         return self._config[key]
+
+    @property
+    def fs_manager_type(self):
+        return self._config.get("fs_manager_type", "CephFSManager")
+
+    @property
+    def mount_manager_type(self):
+        if "mount_manager_type" in self._config:
+            return self._config["mount_manager_type"]
+        if "cephfs_tool" in self._config:
+            return "StubMountManager"
+        return "MountKernelManager"
 
     @property
     def fs_name(self):
