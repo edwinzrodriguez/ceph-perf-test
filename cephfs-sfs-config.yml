@@ -305,20 +305,20 @@
         remote_src: true
         extra_opts: "{{ ['--gzip'] if sfs2020_archive.endswith('.tgz') or sfs2020_archive.endswith('.tar.gz') else [] }}"
 
-    - name: Run SM2020 install
-      ansible.builtin.shell:
-        cmd: cd /cephfs_perf/sfs2020/SPECstorage2020 && python3 SM2020 --install-dir=/SPEC2020
-      ignore_errors: yes
-
     - name: Install pyupgrade
       ansible.builtin.shell:
         cmd: sudo pip3 install pyupgrade
 
     - name: Run pyupgrade on SM2020
       ansible.builtin.shell:
-        cmd: pyupgrade --py3-plus /SPEC2020/SM2020
+        cmd: pyupgrade --py3-plus /cephfs_perf/sfs2020/SPECstorage2020/SM2020
       ignore_errors: yes
       when: not (ansible_distribution == "RedHat" and ansible_distribution_major_version | int >= 9)
+
+    - name: Run SM2020 install
+      ansible.builtin.shell:
+        cmd: cd /cephfs_perf/sfs2020/SPECstorage2020 && python3 SM2020 --install-dir=/SPEC2020
+      ignore_errors: yes
 
 - hosts: mons
   become: true
