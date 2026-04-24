@@ -1,0 +1,157 @@
+inventory:
+  mons:
+    "trial196.front.sepia.ceph.com":
+      ansible_ssh_host: 10.20.193.196
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/erodriguez/.ssh/id_rsa"
+      private_ip: 10.20.193.196
+  ganeshas:
+    "trial196.front.sepia.ceph.com":
+      ansible_ssh_host: 10.20.193.196
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/erodriguez/.ssh/id_rsa"
+      private_ip: 10.20.193.196
+  clients:
+    "trial196.front.sepia.ceph.com":
+      ansible_ssh_host: 10.20.193.196
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/erodriguez/.ssh/id_rsa"
+      private_ip: 10.20.193.196
+
+fs_name: "cephfs-nfs"
+fs_manager_type: "StubFSManager"
+#mount_manager_type: "MountKernelManager"
+num_filesystems: 1
+mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec
+
+ceph:
+  conf: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.cephfs-nfs.keyring"
+  user_id: "cephfs-nfs"
+#  fsid: "b6f4aaad-d45d-11f0-b949-905a08286547"
+
+ganesha:
+  enabled: false
+  service_id: "ganesha"
+  # type = systemd|cephadm
+  type: "systemd"
+  binary_path: "/usr/local/bin/ganesha.nfsd"
+  ceph_binary_path: "/usr/local/bin/ceph"
+  pid_path: "/var/run/ganesha.pid"
+  config_path: "/etc/ganesha/ganesha.conf"
+  user_id: "cephfs-nfs"
+  keyring_path: "/etc/ceph/ceph.client.cephfs-nfs.keyring"
+  worker_threads: 8
+  perf_record: true
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record_executable: "ganesha.nfsd"
+  perf_record_duration: 5
+  # CEPH FSAL options
+  # umask: 0
+  client_oc: [false, true]
+  async: false
+  zerocopy: false
+  client_oc_size: ["200MiB", "1GiB", "16GiB"]
+
+# SpecStorage configuration
+specstorage:
+  output_path: "/cephfs_perf/sfs2020/spec_2020.txt"
+  run_command: "/cephfs_perf/sfs2020/run_sfs2020_workload.py"
+  workload_dir: "/cephfs_perf/sfs2020/SPECstorage2020"
+  results_base_dir: "/cephfs_perf/results"
+  mounts_per_fs: 1
+  perf_record: true
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record_executable: "ceph-mds"
+  perf_record_duration: 5
+  lockstat:
+    enabled: true
+    path: "/usr/local/bin/ceph-lockstat"
+    threshold: 0
+# Official BENCHMARK values are
+#       SWBUILD, VDA, EDA_BLENDED, AI_IMAGE, ENOMICS
+  benchmark: "SWBUILD"
+  # loadpoints are either a starting value, or a sequence of ints
+  loadpoints: [1]
+  # When loadpoints is a starting value, num_runs is how many loadpoints
+  # are run, and increment is added to starting loadpoint between runs
+  increment: 1
+  # Only used if increment is specified
+  num_runs: 1
+  netmist_env: "netmist.env"
+
+# Fio configuration (Uncomment to use FioWorkloadRunner instead of SpecStorageWorkloadRunner)
+fio:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/fio/run_fio_workload.py"
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record: false
+  perf_record_executable: "ganesha.nfsd"
+  perf_record_duration: 30
+  flamegraph_path: "/cephfs_perf/FlameGraph"
+#  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
+  mounts_per_fs: 1
+  gtod_reduce: 1
+  ramp_time: 30
+  loadpoints:
+      duration: 180
+      size: "5GiB"
+      block-size: ["256KiB", "1MiB", "4MiB"]
+      iodepth: [1, 8]
+      readwrite: ["randrw", "randread", "randwrite"]
+      #rwmixread: [75, 50, 25]
+      ioengine: ["libaio"]
+      direct: [0, 1]
+#      buffered: 0
+      create_serialize: 0
+      threads: [1, 8, 16, 32]
+      extra_args: ""
+
+# CephFS-Tool configuration
+cephfs_tool:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record: true
+  perf_record_executable: "cephfs-tool"
+  perf_record_duration: 30
+#  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
+  executable_path: "/usr/local/bin/cephfs-tool"
+#  ceph_args: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
+#  config_path: "/etc/ceph/ceph.conf"
+#  keyring: "/etc/ceph/ceph.client.cephfs-nfs.keyring"
+#  client_id: "cephfs-nfs"
+  root_path: "/bench"
+  duration: 60
+  progress: true
+  progress_interval: 10
+  loadpoints:
+    - files: 1024
+      size: "5GiB"
+      iterations: 3
+      extra_args: ""
+      threads: [1, 8, 16, 32]
+      client-oc: [1, 0]
+      client-oc-size: ["200MiB", "1GiB", "16GiB"]
+      block-size: ["256KiB", "1MiB", "4MiB"]
+
+logging:
+  enabled: false
+  debug_mds: 5
+  debug_ms: 1
+
+# Ranges for MDS settings (start, stop, step)
+mds_settings:
+#  max_mds: [1, 2, 1]
+  mds_cache_memory_limit: [128Gi]
+#  mds_cache_memory_limit: [1Gi, 4Gi, 16Gi, 64Gi, 192Gi]
+#  cpus: [1, 2, 3, 4]
+#  mds_max_caps_per_client: [100k, 200k, 100k]
+#  mds_recall_max_caps: [5k, 10k, 5k]
+#  mds_recall_max_decay_rate: [1, 2, 1]
+#  mds_cache_trim_threshold: [64Ki, 128Ki, 64Ki]
+##  mds_cache_reservation: [5, 10, 5]
+##  mds_log_max_segments: [30, 60, 30]
