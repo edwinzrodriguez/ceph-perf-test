@@ -124,9 +124,9 @@ ganesha:
   # CEPH FSAL options
   # umask: 0
   client_oc: [false, true]
-  # async: false
-  # zerocopy: false
-  client_oc_size: ["250MiB", "1GiB"]
+  async: false
+  zerocopy: false
+  client_oc_size: ["200MiB", "1GiB", "16GiB"]
 
 # SpecStorage configuration
 specstorage:
@@ -167,19 +167,19 @@ fio:
 #  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
   mounts_per_fs: 1
   gtod_reduce: 1
-  ramp_time: 10
+  ramp_time: 30
   loadpoints:
-      duration: 60
+      duration: 180
       size: "5GiB"
-      block-size: ["256KiB","1MiB"]
-      iodepth: [1, 16]
+      block-size: ["256KiB"]
+      iodepth: [1, 8]
       readwrite: ["randrw", "randread", "randwrite"]
       #rwmixread: [75, 50, 25]
       ioengine: ["libaio"]
-      direct: 1
-      buffered: 0
+      direct: [0, 1]
+#      buffered: 0
       create_serialize: 0
-      threads: 8
+      threads: [1, 8]
       extra_args: ""
 
 # CephFS-Tool configuration
@@ -197,7 +197,7 @@ cephfs_tool:
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"
   root_path: "/"
-  duration: 30
+  duration: 60
   progress: true
   progress_interval: 10
   loadpoints:
@@ -205,10 +205,10 @@ cephfs_tool:
       size: "128MiB"
       iterations: 1
       extra_args: ""
-      threads: [16]
+      threads: [1, 8]
       client-oc: [1, 0]
-      client-oc-size: ["64GiB"]
-      block-size: ["1MiB","4MiB"]
+      client-oc-size: ["200MiB", "1GiB", "16GiB"]
+      block-size: ["256KiB"]
 
 logging:
   enabled: false
