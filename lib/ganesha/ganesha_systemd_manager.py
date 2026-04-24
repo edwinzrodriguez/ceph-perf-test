@@ -19,13 +19,13 @@ class GaneshaSystemdManager(GaneshaManager):
         # but the NFS orchestrator often expects it. We'll try to create it,
         # but we'll mainly rely on the orchestrator to handle its own pool if possible.
         ceph_bin = self.config.ganesha_ceph_binary_path
-        self.executor.run_remote(
-            self.admin,
-            f"sudo {ceph_bin} {self._get_ceph_args()} osd pool create .nfs --yes-i-really-mean-it || true",
-        )
-        self.executor.run_remote(
-            self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} osd pool application enable .nfs nfs || true"
-        )
+        # self.executor.run_remote(
+        #     self.admin,
+        #     f"sudo {ceph_bin} {self._get_ceph_args()} osd pool create .nfs --yes-i-really-mean-it || true",
+        # )
+        # self.executor.run_remote(
+        #     self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} osd pool application enable .nfs nfs || true"
+        # )
 
         print("Setting up Ganesha configuration on ganesha nodes...")
         # setup_ganesha_config is called per host in the loop below
