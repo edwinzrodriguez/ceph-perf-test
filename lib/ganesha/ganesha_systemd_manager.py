@@ -63,6 +63,10 @@ class GaneshaSystemdManager(GaneshaManager):
                 host_name, "sudo chmod 0755 /usr/local/var/lib/nfs/ganesha"
             )
 
+            # Ensure /var/run/ceph exists for admin sockets
+            self.executor.run_remote(host_name, "sudo mkdir -p /var/run/ceph")
+            self.executor.run_remote(host_name, "sudo chmod 0755 /var/run/ceph")
+
             # Create a minimal ceph.conf for this ganesha host
             asok_path = f"/var/run/ceph/ganesha-{host_name}.asok"
             ganesha_ceph_conf = f"/etc/ceph/ganesha-ceph-{host_name}.conf"
