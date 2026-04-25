@@ -76,6 +76,35 @@
       become: false
       when: not ceph_repo_stat.stat.exists
 
+    - name: Create temporary patch file
+      ansible.builtin.copy:
+        dest: "/tmp/pathfix.patch"
+        content: |
+          --- ceph.spec.in
+          +++ ceph.spec.in
+          @@ -523,9 +523,6 @@ BuildRequires:  libcryptopp-devel
+           BuildRequires:  libnuma-devel
+           %endif
+           %endif
+          -%if 0%{?rhel} >= 8
+          -BuildRequires:  /usr/bin/pathfix.py
+          -%endif
+           
+           %description
+           Ceph is a massively scalable, open-source, distributed storage system that runs
+        mode: '0644'
+
+    - name: Apply pathfix patch to ceph.spec.in
+      ansible.builtin.patch:
+        src: "/tmp/pathfix.patch"
+        dest: "{{ git_base_dir }}/{{ ceph_dest_name }}/ceph.spec.in"
+        remote_src: yes
+
+    - name: Remove temporary patch file
+      ansible.builtin.file:
+        path: "/tmp/pathfix.patch"
+        state: absent
+
     - name: Add ceph-lab-extras repo
       ansible.builtin.copy:
         dest: /etc/yum.repos.d/ceph-lab-extras.repo
@@ -86,6 +115,11 @@
           enabled=1
           gpgcheck=0
         mode: '0644'
+
+    - name: Ensure python3-setuptools is installed
+      ansible.builtin.dnf:
+        name: python3-setuptools
+        state: present
 
     - name: Run install-deps.sh
       ansible.builtin.command:
