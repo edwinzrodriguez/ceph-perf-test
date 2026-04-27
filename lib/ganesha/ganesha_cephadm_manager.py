@@ -43,6 +43,11 @@ class GaneshaCephadmManager(GaneshaManager):
 
                 # In cephadm, the asok name is ganesha-$cluster-$name.asok
                 client_section = f"\n[client.{self.config.ganesha_user_id}]\n    admin-socket = /var/run/ceph/ganesha-$cluster-$name.asok\n"
+                client_section += f"    log_file = /var/log/ganesha-ceph.log\n"
+                client_section += f"    log_to_file = true\n"
+                client_section += f"    log_to_stderr = false\n"
+                client_section += f"    log_to_syslog = false\n"
+                client_section += f"    debug_client = 1\n"
                 if self.config.ganesha_keyring_path:
                     client_section += (
                         f"    keyring = {self.config.ganesha_keyring_path}\n"
