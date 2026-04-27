@@ -43,7 +43,7 @@ class FioWorkloadRunner(WorkloadRunner):
         payload["results_dir"] = results_dir
 
         # Add global fio settings to payload
-        for key in ["gtod_reduce", "ramp_time"]:
+        for key in ["gtod_reduce", "ramp_time", "threads_fio"]:
             if key in fio_cfg:
                 payload[key] = fio_cfg[key]
 

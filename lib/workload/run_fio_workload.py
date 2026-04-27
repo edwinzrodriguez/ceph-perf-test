@@ -140,6 +140,8 @@ def main():
                     fio_parts.append(f"--create_serialize={lp_cfg['create_serialize']}")
                 if "threads" in lp_cfg:
                     fio_parts.append(f"--numjobs={lp_cfg['threads']}")
+                if lp_cfg.get("threads_fio") is True or settings.get("threads_fio") is True:
+                    fio_parts.append("--thread")
 
                 # Duration to runtime mapping
                 # First check loadpoint duration, then global settings
