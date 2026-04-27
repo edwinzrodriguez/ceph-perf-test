@@ -183,18 +183,33 @@ def main():
 
                 # Regex for Jobs: 8 (f=8): [w(8)][18.8%][w=454MiB/s][w=1858 IOPS][eta 02m:27s]
                 # During ramp: Jobs: 8 (f=0): [/(8)][-.-%][eta 02m:57s]
+                # Note: Fio can sometimes report negative percentages during certain phases or if clocks are skewed.
+                # We use a non-greedy match for the first bracketed group to correctly find the percentage.
                 status_re = re.compile(
-                    r"Jobs: \d+ \(f=\d+\): \[.*\]\[(?P<percent>[\d\.-]+)%\](?:\[.*\])?\[eta (?P<eta>.*)\]"
+                    r"Jobs: \d+ \(f=\d+\): \[.*?\]\[(?P<percent>[\d\.-]+)%\](?:\[.*\])?\[eta (?P<eta>.*)\]"
                 )
 
                 run_phase_started = False
                 for line in process.stdout:
                     line = line.strip()
                     if line.startswith("Jobs:"):
+                        # print(f"[{c}] Fio Status: {line}", flush=True)
                         match = status_re.search(line)
                         if match:
                             percent = match.group("percent")
                             eta = match.group("eta")
+
+                            # Fio can sometimes report very large negative percentages if it gets confused
+                            # about the timing (e.g. during ramp-down or if clocks are slightly out of sync).
+                            # If we see a large negative number, treat it as 0.0 or just skip reporting it
+                            # to avoid confusing the user.
+                            try:
+                                f_percent = float(percent)
+                                if f_percent < 0:
+                                    percent = "0.0"
+                            except ValueError:
+                                # This handles "-.-" case
+                                pass
 
                             if not run_phase_started and percent != "-.-":
                                 print("Starting RUN phase", flush=True)
