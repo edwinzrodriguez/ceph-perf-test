@@ -130,7 +130,7 @@ class GaneshaSystemdManager(GaneshaManager):
                     ceph_bin = self.config.ganesha_ceph_binary_path
                     diff_output = self.executor.run_remote(
                         host_name,
-                        f"sudo {ceph_bin} {self._get_ceph_args()} --admin-daemon {asok_path} config diff",
+                        f"sudo {ceph_bin} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} config diff",
                     )
                     filename = f"ganesha_config_diff_{host_name}.json"
                     local_temp = f"/tmp/{filename}"

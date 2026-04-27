@@ -179,7 +179,7 @@ class GaneshaCephadmManager(GaneshaManager):
             print(f"[{g_host}] Running 'config diff' via {asok_path}...")
             ceph_bin = self.config.ganesha_ceph_binary_path
             diff_output = self.executor.run_remote(
-                g_host, f"sudo {ceph_bin} {self._get_ceph_args()} --admin-daemon {asok_path} config diff"
+                g_host, f"sudo {ceph_bin} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} config diff"
             )
 
             filename = f"ganesha_config_diff_{g_host}.json"
