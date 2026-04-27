@@ -5,6 +5,7 @@ import subprocess
 import datetime
 import os
 import sys
+import threading
 
 # Add project root to sys.path to allow importing cephfs_perf_lib
 # when running the script directly
@@ -73,7 +74,23 @@ def main():
         cmd.extend(["--results-dir", results_dir])
 
     print(f"Executing: {' '.join(cmd)}")
-    subprocess.run(cmd)
+    result = subprocess.run(cmd)
+
+    if result.returncode != 0:
+        print(f"SPECSTORAGE failed with return code {result.returncode}")
+        # For SFS2020, we don't necessarily have a list of clients in the same format
+        # but we might have them in the config. For now, let's at least collect from localhost
+        # and any hosts mentioned in settings if available.
+        hosts = settings.get("clients", ["localhost"])
+        # Use a dummy executor for log collection
+        class SimpleExecutor:
+            def run_remote(self, h, cmd, check=False):
+                if h == "localhost":
+                    return subprocess.check_output(cmd, shell=True, text=True)
+                return subprocess.check_output(["ssh", "-o", "StrictHostKeyChecking=no", h, cmd], text=True)
+
+        CommonUtils.collect_journal_logs(SimpleExecutor(), hosts, results_dir)
+        sys.exit(result.returncode)
 
     if results_dir:
         # Inject test parameters into sfssum_<run_name>.xml

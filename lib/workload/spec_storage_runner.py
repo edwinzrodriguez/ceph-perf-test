@@ -194,7 +194,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         for t in perf_threads:
             t.join()
         if process.returncode != 0:
-            print(f"Error on {self.admin}: process exited with {process.returncode}")
+            raise RuntimeError(f"SPECSTORAGE failed on {self.admin} with return code {process.returncode}")
         return "".join(output)
 
     def save_json_to_results(self, filename, data, results_dir):

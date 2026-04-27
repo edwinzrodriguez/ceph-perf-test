@@ -4,6 +4,7 @@ import subprocess
 import time
 import os
 import sys
+import threading
 
 # Add project root to sys.path to allow importing cephfs_perf_lib
 # when running the script directly
@@ -166,6 +167,13 @@ def main():
                 print(
                     f"[{client}] CephFS-Tool failed with return code {proc.returncode}"
                 )
+                # Use a dummy executor for log collection
+                class SimpleExecutor:
+                    def run_remote(self, h, cmd, check=False):
+                        return subprocess.check_output(["ssh", "-o", "StrictHostKeyChecking=no", h, cmd], text=True)
+
+                CommonUtils.collect_journal_logs(SimpleExecutor(), clients, results_dir)
+                sys.exit(proc.returncode)
 
             # Copy result and perf_dump JSON from client to results_dir and inject parameters
             json_filename = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, lp, settings, lp_cfg)}.json"

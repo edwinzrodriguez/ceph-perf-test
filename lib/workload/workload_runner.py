@@ -136,3 +136,8 @@ class WorkloadRunner(abc.ABC):
                     print(
                         f"[{s_name}] No trace/report files found for Load Point {loadpoint}, skipping copy."
                     )
+
+    def collect_journal_logs(self, results_dir):
+        """Collect journal logs from all hosts."""
+        all_hosts = list(self.config.all_hosts_meta.keys())
+        CommonUtils.collect_journal_logs(self.executor, all_hosts, results_dir)

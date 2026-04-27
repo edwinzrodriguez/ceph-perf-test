@@ -5,6 +5,7 @@ import subprocess
 import datetime
 import os
 import sys
+import threading
 
 # Add project root to sys.path to allow importing cephfs_perf_lib
 # when running the script directly
@@ -215,6 +216,13 @@ def main():
                         f"[{c}] Fio failed with return code {process.returncode}",
                         flush=True,
                     )
+                    # Use a dummy executor for log collection
+                    class SimpleExecutor:
+                        def run_remote(self, host, cmd, check=False):
+                            return subprocess.check_output(["ssh", "-o", "StrictHostKeyChecking=no", host, cmd], text=True)
+
+                    CommonUtils.collect_journal_logs(SimpleExecutor(), clients, results_dir)
+                    sys.exit(process.returncode)
 
                 # Copy results from client to admin (where this script is running)
                 print(f"[{c}] Copying results to {results_dir}...", flush=True)

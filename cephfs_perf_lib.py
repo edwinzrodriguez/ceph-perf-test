@@ -502,6 +502,38 @@ class SSHExecutor:
 
 class CommonUtils:
     @staticmethod
+    def collect_journal_logs(executor, hosts, results_dir):
+        """Collect the last 5 minutes of journal logs from all specified hosts in parallel."""
+        if not results_dir or not os.path.exists(results_dir):
+            print(f"Warning: Results directory {results_dir} does not exist. Skipping log collection.")
+            return
+
+        print(f"Collecting journal logs from {len(hosts)} hosts for the last 5 minutes into {results_dir}...")
+        threads = []
+
+        def collect_host_logs(host):
+            try:
+                log_file = os.path.join(results_dir, f"journalctl_{host}.log")
+                # journalctl --since "5 minutes ago"
+                cmd = 'journalctl --since "5 minutes ago" --no-pager'
+                output = executor.run_remote(host, cmd, check=False)
+                with open(log_file, "w") as f:
+                    f.write(output)
+                print(f"[{host}] Logs collected.")
+            except Exception as ex:
+                print(f"[{host}] Failed to collect logs: {ex}")
+
+        for host in hosts:
+            t = threading.Thread(target=collect_host_logs, args=(host,))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join(timeout=60)  # Wait up to 60 seconds per host (though they run in parallel)
+            if t.is_alive():
+                print(f"Warning: Thread for host log collection still alive after timeout.")
+
+    @staticmethod
     def parse_si_unit(value):
         if not isinstance(value, str):
             return value
@@ -586,6 +618,7 @@ class CommonUtils:
             "Ganesha Ceph Binary Path": "gcbp",
             "Ganesha Enabled": "ge",
             "Workload Runner": "wr",
+            "Fio Threads": "ft",
         }
         return name_map.get(var_name, var_name.replace(" ", "_").replace("/", "_"))
 
@@ -669,6 +702,7 @@ class CommonUtils:
             "ganesha_keyring_path": "Ganesha Keyring Path",
             "ganesha_ceph_binary_path": "Ganesha Ceph Binary Path",
             "ganesha_enabled": "Ganesha Enabled",
+            "threads_fio": "Fio Threads",
         }
 
         # Helper to format values

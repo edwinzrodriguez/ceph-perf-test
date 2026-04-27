@@ -1,7 +1,9 @@
 import argparse
 import datetime
 import itertools
+import os
 import sys
+import threading
 import yaml
 from cephfs_perf_lib import (
     AnsibleInventoryProvider,
@@ -171,13 +173,18 @@ class BenchRunner:
 
             workload_runner.prepare_storage()
 
-            workload_runner.run_workload(
-                current_settings,
-                shared_timestamp,
-                cephfs_manager=cephfs_manager,
-                ganesha_manager=ganesha_manager,
-                results_dir=results_dir,
-            )
+            try:
+                workload_runner.run_workload(
+                    current_settings,
+                    shared_timestamp,
+                    cephfs_manager=cephfs_manager,
+                    ganesha_manager=ganesha_manager,
+                    results_dir=results_dir,
+                )
+            except Exception as e:
+                print(f"Workload execution failed: {e}")
+                mount_manager.unmount_clients()
+                sys.exit(1)
 
             mount_manager.unmount_clients()
 

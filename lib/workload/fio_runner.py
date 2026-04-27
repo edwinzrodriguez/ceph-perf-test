@@ -196,6 +196,9 @@ class FioWorkloadRunner(WorkloadRunner):
         for t in perf_threads:
             t.join()
 
+        if process.returncode != 0:
+            raise RuntimeError(f"Fio failed on {self.admin} with return code {process.returncode}")
+
         return "".join(output)
 
     def get_results_dir(self, settings, shared_ts=None):
