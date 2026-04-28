@@ -57,10 +57,10 @@ class GaneshaSystemdManager(GaneshaManager):
         for host_name in self.ganeshas:
             # Create recovery directory
             self.executor.run_remote(
-                host_name, "sudo mkdir -p /usr/local/var/lib/nfs/ganesha"
+                host_name, "sudo mkdir -p /usr/local/var/lib/nfs/ganesha /var/log/ceph"
             )
             self.executor.run_remote(
-                host_name, "sudo chmod 0755 /usr/local/var/lib/nfs/ganesha"
+                host_name, "sudo chmod 0755 /usr/local/var/lib/nfs/ganesha /var/log/ceph"
             )
 
             # Ensure /var/run/ceph exists for admin sockets
