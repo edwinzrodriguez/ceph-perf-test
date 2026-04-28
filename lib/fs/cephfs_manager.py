@@ -183,10 +183,31 @@ class CephFSManager(FSManager):
                 self.admin,
                 f"sudo ceph osd pool delete {fs}_data {fs}_data --yes-i-really-really-mean-it || true",
             )
+            
+            osd_hosts_count = 0
+            try:
+                osd_tree_raw = self.executor.run_remote(self.admin, "sudo ceph osd tree --format json")
+                osd_tree = self.safe_json_load(osd_tree_raw, {})
+                nodes = osd_tree.get("nodes", [])
+                osd_hosts_count = sum(1 for node in nodes if node.get("type") == "host")
+            except Exception:
+                pass
+
             self.executor.run_remote(
                 self.admin, f"sudo ceph osd pool create {fs}_metadata"
             )
-            self.executor.run_remote(self.admin, f"sudo ceph osd pool create {fs}_data")
+            self.executor.run_remote(
+                self.admin, f"sudo ceph osd pool create {fs}_data"
+            )
+
+            if 0 < osd_hosts_count < 3:
+                for pool in [f"{fs}_metadata", f"{fs}_data"]:
+                    self.executor.run_remote(
+                        self.admin, f"sudo ceph osd pool set {pool} size 2"
+                    )
+                    self.executor.run_remote(
+                        self.admin, f"sudo ceph osd pool set {pool} min_size 1"
+                    )
             self.executor.run_remote(
                 self.admin, f"sudo ceph fs new {fs} {fs}_metadata {fs}_data"
             )
