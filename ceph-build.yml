@@ -60,6 +60,39 @@
         mode: '0755'
       become: false
 
+    - name: Check if libbacktrace directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/libbacktrace"
+      register: libbacktrace_dir_stat
+      become: false
+
+    - name: Clone libbacktrace repository
+      ansible.builtin.git:
+        repo: "https://github.com/ianlancetaylor/libbacktrace.git"
+        dest: "{{ git_base_dir }}/libbacktrace"
+      become: false
+      when: not libbacktrace_dir_stat.stat.exists
+
+    - name: Configure libbacktrace
+      ansible.builtin.command:
+        cmd: ./configure --with-pic
+        chdir: "{{ git_base_dir }}/libbacktrace"
+      become: false
+      when: not libbacktrace_dir_stat.stat.exists
+
+    - name: Build libbacktrace
+      ansible.builtin.command:
+        cmd: make
+        chdir: "{{ git_base_dir }}/libbacktrace"
+      become: false
+      when: not libbacktrace_dir_stat.stat.exists
+
+    - name: Install libbacktrace
+      ansible.builtin.command:
+        cmd: make install
+        chdir: "{{ git_base_dir }}/libbacktrace"
+      when: not libbacktrace_dir_stat.stat.exists
+
     - name: Check if Ceph repository exists
       ansible.builtin.stat:
         path: "{{ git_base_dir }}/{{ ceph_dest_name }}"
@@ -209,7 +242,7 @@
 
     - name: Run do_cmake.sh
       ansible.builtin.command:
-        cmd: "./do_cmake.sh -DCMAKE_INSTALL_PREFIX={{ ceph_install_prefix }} -DCMAKE_BUILD_TYPE=RelWithDebInfo"
+        cmd: "./do_cmake.sh -DUSE_TRACEFLOW=ON -DCMAKE_INSTALL_PREFIX={{ ceph_install_prefix }} -DCMAKE_BUILD_TYPE=RelWithDebInfo"
         chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}"
       become: false
       when: not ceph_build_stat.stat.exists
@@ -285,7 +318,7 @@
 
     - name: Run cmake for NFS-Ganesha
       ansible.builtin.command:
-        cmd: "cmake -GNinja -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
+        cmd: "cmake -GNinja -DUSE_TRACEFLOW=ON -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
         chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
       become: false
       when: not ganesha_build_stat.stat.exists
