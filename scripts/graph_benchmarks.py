@@ -51,6 +51,8 @@ def load_json_results(json_files):
                         total_ios = read_data.get('total_ios', 0) + write_data.get('total_ios', 0)
                         agg_iops = total_ios / (max_runtime_ms / 1000.0)
 
+                    if not agg_bw_mib > 0.0:
+                        print("Woops!")
                     result_entry = {**test_params}
                     result_entry['read_bw_bytes'] = read_bw
                     result_entry['write_bw_bytes'] = write_bw
