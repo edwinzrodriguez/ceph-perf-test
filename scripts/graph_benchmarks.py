@@ -124,7 +124,7 @@ def identify_swept_variables(results):
         'results_dir', 'file_path', 'extra_args', 'Filesystem Name', 
         'read_bw_bytes', 'write_bw_bytes', 'read_iops', 'write_iops',
         'agg_bw_mib', 'agg_iops', 'Workload Runner',
-        'Duration', 'Ramp Time' # These might be constant but sometimes vary
+        'Duration', 'Ramp Time', 'Fio Threads' # These might be constant but sometimes vary
     }
     
     swept_vars = []
