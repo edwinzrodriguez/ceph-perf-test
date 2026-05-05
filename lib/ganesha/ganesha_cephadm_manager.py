@@ -76,6 +76,10 @@ class GaneshaCephadmManager(GaneshaManager):
         ceph_bin = self.config.ganesha_ceph_binary_path
         self.executor.run_remote(self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} orch apply -i {ypath}")
 
+        # Enable lockstat on all Ganesha hosts after applying orchestrator spec
+        for host_name in self.ganeshas:
+            self.start_lockstat(host_name)
+
         # Wait for the NFS service to be running BEFORE applying exports
         print(f"Waiting for NFS service {sid} to be running...")
         fs_names = self.get_fs_names()

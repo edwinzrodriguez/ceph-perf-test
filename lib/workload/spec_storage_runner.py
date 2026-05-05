@@ -123,6 +123,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                     )
                     for g_host in self.config.ganeshas:
                         ganesha_manager.reset_ganesha_perf(g_host)
+                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
+                            ganesha_manager.reset_lockstat(g_host)
             if "Tests finished" in line:
                 r_dir = payload.get("results_dir")
                 if (
@@ -147,6 +149,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                             self.save_json_to_results(
                                 f"{g_host}_lp{lp_tag}_ganesha_perf.json", dump, r_dir
                             )
+                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
+                            ganesha_manager.dump_lockstat(g_host, current_lp, r_dir)
             if run_phase_started:
                 if perf_record_enabled and not perf_triggered:
                     if "Run " in line and " percent complete" in line:

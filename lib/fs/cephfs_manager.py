@@ -78,7 +78,7 @@ class CephFSManager(FSManager):
 
     def start_lockstat(self, fs):
         lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
-        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/lockstat.py")
+        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         threshold = lockstat_cfg.get("threshold", 0)
         for server_name in self.mdss:
             if server_name not in self.lockstat_exists:
@@ -89,7 +89,7 @@ class CephFSManager(FSManager):
                 self.lockstat_exists[server_name] = "EXISTS" in check
             if self.lockstat_exists[server_name]:
                 print(
-                    f"[{server_name}] Starting lockstat for mds.{fs} with threshold {threshold}"
+                    f"[{server_name}] Starting lockstat for mds.{fs} via {lockstat_path} with threshold {threshold}"
                 )
                 self.executor.run_remote(
                     server_name,
@@ -98,17 +98,17 @@ class CephFSManager(FSManager):
 
     def stop_lockstat(self, fs):
         lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
-        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/lockstat.py")
+        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         for server_name in self.mdss:
             if self.lockstat_exists.get(server_name):
-                print(f"[{server_name}] Stopping lockstat for mds.{fs}")
+                print(f"[{server_name}] Stopping lockstat for mds.{fs} via {lockstat_path}")
                 self.executor.run_remote(
                     server_name, f"sudo python3 {lockstat_path} mds.{fs} stop"
                 )
 
     def reset_lockstat(self):
         lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
-        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/lockstat.py")
+        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         for fs in self.get_fs_names():
             for server_name in self.mdss:
                 if self.lockstat_exists.get(server_name):
@@ -119,33 +119,24 @@ class CephFSManager(FSManager):
 
     def dump_lockstat(self, loadpoint, results_dir=None):
         lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
-        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/lockstat.py")
+        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         for fs in self.get_fs_names():
             for server_name in self.mdss:
                 if self.lockstat_exists.get(server_name):
-                    lp_tag = f"{int(loadpoint):02d}"
                     print(
                         f"[{server_name}] Dumping lockstat for mds.{fs} (Load Point {loadpoint})"
                     )
                     if results_dir:
-                        dest_file = (
-                            f"{server_name}_lp{lp_tag}_mds.{fs}_lockstat_dump.txt"
-                        )
-                        temp_file = f"/tmp/{dest_file}"
-                        self.executor.run_remote(
+                        dump_cmd = f"python3 {lockstat_path} mds.{fs} dump --detail"
+                        CommonUtils.dump_lockstat_common(
+                            self.executor,
                             server_name,
-                            f"sudo python3 {lockstat_path} mds.{fs} dump --detail | sudo tee {temp_file} > /dev/null",
+                            loadpoint,
+                            results_dir,
+                            f"mds.{fs}",
+                            dump_cmd,
+                            self.admin,
                         )
-                        user, _, _ = self.executor.get_ssh_details(server_name)
-                        self.executor.run_remote(
-                            server_name, f"sudo chown {user}:{user} {temp_file}"
-                        )
-                        admin_user, admin_host, admin_port = (
-                            self.executor.get_ssh_details(self.admin)
-                        )
-                        copy_cmd = f"scp -o StrictHostKeyChecking=no -P {admin_port} {temp_file} {admin_user}@{admin_host}:{results_dir}/"
-                        self.executor.run_remote(server_name, copy_cmd)
-                        self.executor.run_remote(server_name, f"rm -f {temp_file}")
 
     def rebuild_filesystem(self, settings, ganesha_manager=None, results_dir=None):
         self.executor.run_remote(

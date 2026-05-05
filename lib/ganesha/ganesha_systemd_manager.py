@@ -107,6 +107,9 @@ class GaneshaSystemdManager(GaneshaManager):
             self.executor.run_remote(host_name, cmd, check=True)
             print(f"[{host_name}] Ganesha started with PID file {pid_path}")
 
+            # Enable lockstat immediately after start
+            self.start_lockstat(host_name)
+
             # Wait for the admin socket to appear, indicating Ganesha has started
             asok_path = f"/var/run/ceph/ganesha-{host_name}.asok"
             print(f"[{host_name}] Waiting for Ganesha admin socket {asok_path}...")

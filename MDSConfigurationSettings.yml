@@ -123,10 +123,14 @@ ganesha:
   perf_record_duration: 5
   # CEPH FSAL options
   # umask: 0
-  client_oc: [false, true]
+  client_oc: [true, false]
   async: false
   zerocopy: false
-  client_oc_size: ["200MiB", "1GiB", "16GiB"]
+  client_oc_size: [ "16GiB", "1GiB", "200MiB" ]
+  lockstat:
+    enabled: true
+    path: "/usr/local/bin/ceph-lockstat"
+    threshold: 0
 
 # SpecStorage configuration
 specstorage:
@@ -171,15 +175,15 @@ fio:
   loadpoints:
       duration: 180
       size: "5GiB"
-      block-size: ["256KiB"]
+      block-size: ["4MiB", "1MiB", "256KiB"]
       iodepth: [1, 8]
       readwrite: ["randrw", "randread", "randwrite"]
       #rwmixread: [75, 50, 25]
       ioengine: ["libaio"]
-      direct: [0, 1]
+      direct: [1, 0]
 #      buffered: 0
       create_serialize: 0
-      threads: [1, 8]
+      threads: [32, 16, 8, 1]
       extra_args: ""
 
 # CephFS-Tool configuration
@@ -202,13 +206,13 @@ cephfs_tool:
   progress_interval: 10
   loadpoints:
     - files: 1024
-      size: "128MiB"
-      iterations: 1
+      size: "5GiB"
+      iterations: 3
       extra_args: ""
-      threads: [1, 8]
-      client-oc: [1, 0]
-      client-oc-size: ["200MiB", "1GiB", "16GiB"]
-      block-size: ["256KiB"]
+      threads: [32, 16, 8, 1]
+      client-oc: [8, 1]
+      client-oc-size: ["16GiB", "1GiB", "200MiB"]
+      block-size: ["4MiB", "1MiB", "256KiB"]
 
 logging:
   enabled: false

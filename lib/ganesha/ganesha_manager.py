@@ -61,29 +61,95 @@ class GaneshaManager(abc.ABC):
             args.append(f"--keyring {self.config.ganesha_keyring_path}")
         return " ".join(args)
 
-    def reset_ganesha_perf(self, host_name):
+    def _get_asok_path(self, host_name):
         cmd = (
             "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"
         )
         asok_path = self.executor.run_remote(host_name, cmd).strip()
         if not asok_path or "No such file" in asok_path:
+            return None
+        return asok_path
+
+    def reset_ganesha_perf(self, host_name):
+        asok_path = self._get_asok_path(host_name)
+        if not asok_path:
             print(f"[{host_name}] Warning: Ganesha admin socket not found for reset.")
             return
         print(f"[{host_name}] Resetting Ganesha perf counters via {asok_path}...")
         self.executor.run_remote(
-            host_name, f"sudo {self.config.ganesha_ceph_binary_path} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} perf reset all"
+            host_name,
+            f"sudo {self.config.ganesha_ceph_binary_path} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} perf reset all",
         )
 
     def collect_ganesha_perf_dump(self, host_name):
-        cmd = (
-            "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"
-        )
-        asok_path = self.executor.run_remote(host_name, cmd).strip()
-        if not asok_path or "No such file" in asok_path:
+        asok_path = self._get_asok_path(host_name)
+        if not asok_path:
             print(f"[{host_name}] Warning: Ganesha admin socket not found.")
             return None
         print(f"[{host_name}] Collecting Ganesha perf dump from {asok_path}...")
         dump_raw = self.executor.run_remote(
-            host_name, f"sudo {self.config.ganesha_ceph_binary_path} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} perf dump"
+            host_name,
+            f"sudo {self.config.ganesha_ceph_binary_path} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} perf dump",
         )
         return self.safe_json_load(dump_raw, default=None)
+
+    def start_lockstat(self, host_name):
+        asok_path = self._get_asok_path(host_name)
+        if not asok_path:
+            print(
+                f"[{host_name}] Warning: Ganesha admin socket not found for lockstat start."
+            )
+            return
+        print(f"[{host_name}] Starting Ganesha lockstat via {asok_path}...")
+        self.executor.run_remote(
+            host_name,
+            f"{self.config.ganesha_lockstat_path} {asok_path} start",
+        )
+
+    def stop_lockstat(self, host_name):
+        asok_path = self._get_asok_path(host_name)
+        if not asok_path:
+            print(
+                f"[{host_name}] Warning: Ganesha admin socket not found for lockstat stop."
+            )
+            return
+        print(f"[{host_name}] Stopping Ganesha lockstat via {asok_path}...")
+        self.executor.run_remote(
+            host_name,
+            f"{self.config.ganesha_lockstat_path} {asok_path} stop",
+        )
+
+    def reset_lockstat(self, host_name):
+        asok_path = self._get_asok_path(host_name)
+        if not asok_path:
+            print(
+                f"[{host_name}] Warning: Ganesha admin socket not found for lockstat reset."
+            )
+            return
+        print(f"[{host_name}] Resetting Ganesha lockstat via {asok_path}...")
+        self.executor.run_remote(
+            host_name,
+            f"{self.config.ganesha_lockstat_path} {asok_path} reset",
+        )
+
+    def dump_lockstat(self, host_name, loadpoint, results_dir):
+        from cephfs_perf_lib import CommonUtils
+
+        asok_path = self._get_asok_path(host_name)
+        if not asok_path:
+            print(
+                f"[{host_name}] Warning: Ganesha admin socket not found for lockstat dump."
+            )
+            return
+
+        print(f"[{host_name}] Dumping Ganesha lockstat via {asok_path}...")
+        dump_cmd = f"{self.config.ganesha_lockstat_path} {asok_path} dump --detail"
+        CommonUtils.dump_lockstat_common(
+            self.executor,
+            host_name,
+            loadpoint,
+            results_dir,
+            "ganesha",
+            dump_cmd,
+            self.admin,
+        )

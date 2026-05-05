@@ -448,6 +448,14 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("ceph_binary_path", "/usr/bin/ceph")
 
     @property
+    def ganesha_lockstat_path(self):
+        return (
+            self._config.get("ganesha", {}).get("lockstat", {}).get("path")
+            or self._config.get("specstorage", {}).get("lockstat", {}).get("path")
+            or "ceph-lockstat"
+        )
+
+    @property
     def ganesha_perf_record(self):
         return self._config.get("ganesha", {}).get("perf_record", False)
 
@@ -501,6 +509,37 @@ class SSHExecutor:
 
 
 class CommonUtils:
+    @staticmethod
+    def dump_lockstat_common(executor, host_name, loadpoint, results_dir, target_name, dump_cmd, admin_host):
+        """
+        Common logic to dump and collect lockstat files.
+        """
+        lp_tag = f"{int(loadpoint):02d}"
+        dest_file = f"{host_name}_lp{lp_tag}_{target_name}_lockstat_dump.txt"
+        temp_file = f"/tmp/{dest_file}"
+
+        # Execute the dump command and save to temp file
+        executor.run_remote(
+            host_name,
+            f"{dump_cmd} | sudo tee {temp_file} > /dev/null",
+        )
+
+        # Change ownership to the current user to allow scp
+        user, _, _ = executor.get_ssh_details(host_name)
+        executor.run_remote(
+            host_name, f"sudo chown {user}:{user} {temp_file}"
+        )
+
+        # Get admin host details for scp
+        admin_user, admin_host_addr, admin_port = executor.get_ssh_details(admin_host)
+
+        # Copy to results directory on admin host
+        copy_cmd = f"scp -o StrictHostKeyChecking=no -P {admin_port} {temp_file} {admin_user}@{admin_host_addr}:{results_dir}/"
+        executor.run_remote(host_name, copy_cmd)
+
+        # Cleanup temp file
+        executor.run_remote(host_name, f"rm -f {temp_file}")
+
     @staticmethod
     def collect_journal_logs(executor, hosts, results_dir):
         """Collect the last 5 minutes of journal logs from all specified hosts in parallel."""

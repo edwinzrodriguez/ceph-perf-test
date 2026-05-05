@@ -125,6 +125,8 @@ class FioWorkloadRunner(WorkloadRunner):
                     )
                     for g_host in ganesha_manager.ganeshas:
                         ganesha_manager.reset_ganesha_perf(g_host)
+                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
+                            ganesha_manager.reset_lockstat(g_host)
             if run_phase_started and not perf_triggered:
                 if perf_record_enabled:
                     print(f"Triggering perf recording for Load Point {current_lp}...")
@@ -191,6 +193,8 @@ class FioWorkloadRunner(WorkloadRunner):
                                 ]
                             )
                             os.remove(local_temp)
+                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
+                            ganesha_manager.dump_lockstat(g_host, current_lp, results_dir)
 
         process.wait()
         for t in perf_threads:

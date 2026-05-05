@@ -123,6 +123,14 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
                 run_phase_started = True
+                if ganesha_perf_enabled:
+                    print(
+                        f"Resetting Ganesha perf counters for Load Point {current_lp}..."
+                    )
+                    for g_host in ganesha_manager.ganeshas:
+                        ganesha_manager.reset_ganesha_perf(g_host)
+                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
+                            ganesha_manager.reset_lockstat(g_host)
             if run_phase_started and not perf_triggered:
                 if perf_record_enabled:
                     print(f"Triggering perf recording for Load Point {current_lp}...")
@@ -142,7 +150,36 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                     perf_threads.append(t)
                 perf_triggered = True
             if "Finished CephFS-Tool Load Point:" in line:
-                pass # Collection is handled by run_cephfs_workload.py
+                if ganesha_perf_enabled:
+                    print(
+                        f"Dumping Ganesha perf counters for Load Point {current_lp}..."
+                    )
+                    for g_host in ganesha_manager.ganeshas:
+                        perf_dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
+                        if perf_dump:
+                            filename = (
+                                f"ganesha_perf_dump_{g_host}_lp{current_lp:02d}.json"
+                            )
+                            local_temp = f"/tmp/{filename}"
+                            with open(local_temp, "w") as f:
+                                json.dump(perf_dump, f)
+                            u, h, p = self.executor.get_ssh_details(self.admin)
+                            p = str(p)
+                            remote_path = f"{results_dir}/{filename}"
+                            subprocess.run(
+                                [
+                                    "scp",
+                                    "-o",
+                                    "StrictHostKeyChecking=no",
+                                    "-P",
+                                    p,
+                                    local_temp,
+                                    f"{u}@{h}:{remote_path}",
+                                ]
+                            )
+                            os.remove(local_temp)
+                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
+                            ganesha_manager.dump_lockstat(g_host, current_lp, results_dir)
 
         process.wait()
         for t in perf_threads:
