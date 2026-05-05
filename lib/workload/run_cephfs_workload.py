@@ -69,7 +69,7 @@ def main():
             if keyring:
                 cmd_parts.extend(["-k", keyring])
             if client_id:
-                cmd_parts.extend(["-i", client_id])
+                cmd_parts.extend(["--id", client_id])
 
             cmd_parts.extend(["--filesystem", fs_name])
             cmd_parts.extend(["--root-path", root_path])
