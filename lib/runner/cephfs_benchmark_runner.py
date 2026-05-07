@@ -135,6 +135,7 @@ class BenchRunner:
                 "async",
                 "zerocopy",
                 "client_oc_size",
+                "msgr_workers",
             ]:
                 if k in ganesha_settings_raw:
                     val = ganesha_settings_raw[k]

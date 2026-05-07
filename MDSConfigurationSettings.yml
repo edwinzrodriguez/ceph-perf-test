@@ -126,7 +126,8 @@ ganesha:
   client_oc: [true, false]
   async: false
   zerocopy: false
-  client_oc_size: [ "16GiB", "1GiB", "200MiB" ]
+  client_oc_size: [ "16GiB" ]
+  msgr_workers: [3, 8, 12]
   lockstat:
     enabled: true
     path: "/usr/local/bin/ceph-lockstat"

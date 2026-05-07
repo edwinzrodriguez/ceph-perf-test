@@ -57,6 +57,8 @@ class GaneshaCephadmManager(GaneshaManager):
                         self.config.ganesha_client_oc_size
                     )
                     client_section += f"    client_oc_size = {oc_size}\n"
+                if self.config.ganesha_msgr_workers:
+                    client_section += f"    ms_async_op_threads = {self.config.ganesha_msgr_workers}\n"
 
                 escaped_client_section = client_section.replace("'", "'\\''")
                 # We use sudo bash to allow variable expansion if needed, but here we want literal $cluster and $name
