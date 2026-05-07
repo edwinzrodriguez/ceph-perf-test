@@ -9,7 +9,7 @@
     ceph_install_prefix: "/usr/local"
     ganesha_repo_url: "https://github.com/edwinzrodriguez/nfs-ganesha.git"
     ganesha_dest_name: "nfs-ganesha"
-    ganesha_version: "V9.7"
+    ganesha_version: "traceflow"
     ganesha_build_dir: "ganesha-build"
     ganesha_install_prefix: "/usr/local"
   tasks:
