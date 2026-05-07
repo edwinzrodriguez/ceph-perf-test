@@ -658,6 +658,7 @@ class CommonUtils:
             "Ganesha Enabled": "ge",
             "Workload Runner": "wr",
             "Fio Threads": "ft",
+            "Msgr Workers": "mw",
         }
         return name_map.get(var_name, var_name.replace(" ", "_").replace("/", "_"))
 
@@ -742,6 +743,7 @@ class CommonUtils:
             "ganesha_ceph_binary_path": "Ganesha Ceph Binary Path",
             "ganesha_enabled": "Ganesha Enabled",
             "threads_fio": "Fio Threads",
+            "msgr_workers": "Msgr Workers",
         }
 
         # Helper to format values
@@ -878,6 +880,8 @@ class CommonUtils:
                 parts.append(f"{CommonUtils.get_short_name('Buffered I/O')}{lp_cfg['buffered']}")
             if "create_serialize" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('Create Serialize')}{lp_cfg['create_serialize']}")
+            if "msgr_workers" in lp_cfg:
+                parts.append(f"{CommonUtils.get_short_name('Msgr Workers')}{lp_cfg['msgr_workers']}")
             # if "gtod_reduce" in lp_cfg:
             #     parts.append(f"gr{lp_cfg['gtod_reduce']}")
             # elif "gtod_reduce" in settings:

@@ -44,6 +44,7 @@ def main():
     client_id = settings.get("client_id")
     root_path = settings.get("root_path", "/")
     duration = settings.get("duration", 0)
+    msgr_workers = settings.get("msgr_workers")
     progress = settings.get("progress", True)
     progress_interval = settings.get("progress_interval", 10)
 
@@ -76,6 +77,13 @@ def main():
             if duration:
                 cmd_parts.extend(["--duration", str(duration)])
 
+            lp_msgr_workers = lp_cfg.get("msgr_workers", msgr_workers)
+            if lp_msgr_workers is not None:
+                if not (1 <= int(lp_msgr_workers) <= 24):
+                    print(f"Error: msgr_workers must be between 1 and 24, got {lp_msgr_workers}")
+                    sys.exit(1)
+                cmd_parts.extend(["--msgr-workers", str(lp_msgr_workers)])
+
             if progress:
                 cmd_parts.append("--progress")
                 if progress_interval:
@@ -88,7 +96,7 @@ def main():
 
             cmd_parts.extend(["--files", str(lp_cfg.get("files", 1024))])
 
-            size = lp_cfg.get("size", "$(( 128 * 2 ** 20 ))")
+            size = lp_cfg.get("size", "128MiB")
             size = str(CommonUtils.parse_si_unit(size))
 
             cmd_parts.extend(["--size", str(size)])
@@ -202,6 +210,13 @@ def main():
                     f"{client}:{remote_perf_dump}",
                     local_perf_dump,
                 ],
+                stderr=subprocess.DEVNULL,
+            )
+
+            # Clean up temp files on client
+            subprocess.run(
+                ["ssh", "-o", "StrictHostKeyChecking=no", client,
+                 f"rm -f {remote_json} {remote_perf_dump}"],
                 stderr=subprocess.DEVNULL,
             )
 

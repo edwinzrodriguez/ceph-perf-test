@@ -56,6 +56,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             "client_id",
             "root_path",
             "duration",
+            "msgr_workers",
         ]:
             if key in cfg:
                 payload[key] = cfg[key]
