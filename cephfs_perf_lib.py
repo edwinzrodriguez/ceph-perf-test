@@ -514,12 +514,15 @@ class SSHExecutor:
 
 class CommonUtils:
     @staticmethod
-    def dump_lockstat_common(executor, host_name, loadpoint, results_dir, target_name, dump_cmd, admin_host):
+    def dump_lockstat_common(executor, host_name, loadpoint, results_dir, target_name, dump_cmd, admin_host, settings=None, lp_cfg=None):
         """
         Common logic to dump and collect lockstat files.
         """
-        lp_tag = f"{int(loadpoint):02d}"
-        dest_file = f"{host_name}_lp{lp_tag}_{target_name}_lockstat_dump.txt"
+        if settings is not None:
+            dest_file = f"{CommonUtils.get_workload_base_name(target_name, 'lockstat', host_name, loadpoint, settings, lp_cfg)}.txt"
+        else:
+            lp_tag = f"{int(loadpoint):02d}"
+            dest_file = f"{target_name}_lockstat_{host_name}_lp{lp_tag}.txt"
         temp_file = f"/tmp/{dest_file}"
 
         # Execute the dump command and save to temp file

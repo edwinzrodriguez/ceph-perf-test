@@ -194,7 +194,7 @@ class FioWorkloadRunner(WorkloadRunner):
                             )
                             os.remove(local_temp)
                         if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
-                            ganesha_manager.dump_lockstat(g_host, current_lp, results_dir)
+                            ganesha_manager.dump_lockstat(g_host, current_lp, results_dir, settings=payload, lp_cfg=expanded_loadpoints[current_lp - 1])
 
         process.wait()
         for t in perf_threads:

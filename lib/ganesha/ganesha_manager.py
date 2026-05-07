@@ -134,7 +134,7 @@ class GaneshaManager(abc.ABC):
             f"{self.config.ganesha_lockstat_path} {asok_path} reset",
         )
 
-    def dump_lockstat(self, host_name, loadpoint, results_dir):
+    def dump_lockstat(self, host_name, loadpoint, results_dir, settings=None, lp_cfg=None):
         from cephfs_perf_lib import CommonUtils
 
         asok_path = self._get_asok_path(host_name)
@@ -154,4 +154,6 @@ class GaneshaManager(abc.ABC):
             "ganesha",
             dump_cmd,
             self.admin,
+            settings=settings,
+            lp_cfg=lp_cfg,
         )
