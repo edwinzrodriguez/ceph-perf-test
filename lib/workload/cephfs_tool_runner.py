@@ -70,6 +70,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
+            "ganesha_msgr_workers",
         ]
         for k in ganesha_keys:
             val = getattr(self.config, k, None)
