@@ -872,6 +872,26 @@ class CommonUtils:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Msgr Workers')}{config.ganesha_msgr_workers}")
             if g_parts:
                 g_p = "-" + "-".join(g_parts)
+        elif settings.get("ganesha_enabled"):
+            g_parts = []
+            if settings.get("ganesha_worker_threads"):
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Worker Threads')}{settings['ganesha_worker_threads']}")
+            if settings.get("ganesha_umask"):
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{settings['ganesha_umask']}")
+            if settings.get("ganesha_client_oc") is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(settings['ganesha_client_oc'])}")
+            if settings.get("ganesha_async") is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(settings['ganesha_async'])}")
+            if settings.get("ganesha_zerocopy") is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Zero Copy')}{CommonUtils.format_config_value(settings['ganesha_zerocopy'])}")
+            if settings.get("ganesha_client_oc_size"):
+                g_parts.append(
+                    f"{CommonUtils.get_short_name('Ganesha Client Object Cache Size')}{CommonUtils.format_si_units(settings['ganesha_client_oc_size'])}"
+                )
+            if settings.get("ganesha_msgr_workers"):
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Msgr Workers')}{settings['ganesha_msgr_workers']}")
+            if g_parts:
+                g_p = "-" + "-".join(g_parts)
 
         lp_str = f"lp{int(lp):02d}" if lp is not None else "lp00"
 
