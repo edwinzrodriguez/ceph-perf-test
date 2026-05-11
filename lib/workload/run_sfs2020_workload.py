@@ -179,6 +179,8 @@ def main():
                         run_data["metrics"][name] = {"value": f_value, "units": units}
                     summary_json["runs"].append(run_data)
 
+                summary_json["Summary"] = CommonUtils.get_summary(summary_json)
+
                 json_file = xml_file.replace(".xml", ".json")
                 with open(json_file, "w") as f:
                     json.dump(summary_json, f, indent=2)

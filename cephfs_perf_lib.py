@@ -937,3 +937,72 @@ class CommonUtils:
             options += f"_{'_'.join(parts)}"
 
         return f"{workload}_{output_type}_{client}_{lp_str}_{options}"
+
+    @staticmethod
+    def get_summary(data):
+        """Compute a Summary section for a workload result JSON.
+
+        The shape of the returned dict depends on ``test_parameters['Workload Runner']``:
+          * fio:         {read_bw_bytes, write_bw_bytes, read_iops, write_iops,
+                          agg_bw_mib, agg_iops}
+          * cephfs_tool: {read:  {agg_bw_mib, agg_iops},
+                          write: {agg_bw_mib, agg_iops}}
+          * sfs2020:     {agg_bw_mib, agg_iops}
+        """
+        test_params = data.get("test_parameters", {}) or {}
+        runner = test_params.get("Workload Runner", "fio")
+
+        if runner == "fio":
+            job = (data.get("jobs") or [{}])[0]
+            read = job.get("read", {}) or {}
+            write = job.get("write", {}) or {}
+
+            read_runtime = read.get("runtime", 0)
+            write_runtime = write.get("runtime", 0)
+            max_runtime_ms = max(read_runtime, write_runtime)
+
+            agg_bw_mib = 0.0
+            agg_iops = 0.0
+            if max_runtime_ms > 0:
+                total_bytes = read.get("io_bytes", 0) + write.get("io_bytes", 0)
+                agg_bw_mib = (total_bytes / (max_runtime_ms / 1000.0)) / (1024 * 1024)
+                total_ios = read.get("total_ios", 0) + write.get("total_ios", 0)
+                agg_iops = total_ios / (max_runtime_ms / 1000.0)
+
+            return {
+                "read_bw_bytes": read.get("bw_bytes", 0),
+                "write_bw_bytes": write.get("bw_bytes", 0),
+                "read_iops": read.get("iops", 0),
+                "write_iops": write.get("iops", 0),
+                "agg_bw_mib": agg_bw_mib,
+                "agg_iops": agg_iops,
+            }
+
+        if runner == "cephfs_tool":
+            summary = data.get("summary", {}) or {}
+            return {
+                "read": {
+                    "agg_bw_mib": summary.get("Read Throughput", {}).get("mean", 0),
+                    "agg_iops": summary.get("File Reads (Opens)", {}).get("mean", 0),
+                },
+                "write": {
+                    "agg_bw_mib": summary.get("Write Throughput", {}).get("mean", 0),
+                    "agg_iops": summary.get("File Creates", {}).get("mean", 0),
+                },
+            }
+
+        if runner == "sfs2020":
+            runs = data.get("runs", []) or []
+            if not runs:
+                return {"agg_bw_mib": 0, "agg_iops": 0}
+            metrics = runs[-1].get("metrics", {}) or {}
+            throughput = metrics.get("throughput", {}).get("value", 0) or 0
+            units = (metrics.get("throughput", {}).get("units") or "").lower()
+            if "kib/s" in units:
+                throughput /= 1024.0
+            iops = metrics.get("ops/s", {}).get("value", 0) or 0
+            if not iops:
+                iops = metrics.get("iops", {}).get("value", 0) or 0
+            return {"agg_bw_mib": throughput, "agg_iops": iops}
+
+        return {}

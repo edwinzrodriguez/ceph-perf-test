@@ -263,6 +263,8 @@ def main():
                     if args.runner_name:
                         data["test_parameters"]["Workload Runner"] = args.runner_name
 
+                    data["Summary"] = CommonUtils.get_summary(data)
+
                     with open(local_path, "w") as f:
                         json.dump(data, f, indent=4)
                     print(

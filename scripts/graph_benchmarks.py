@@ -24,94 +24,39 @@ def load_json_results(json_files):
         try:
             with open(file_path, 'r') as f:
                 data = json.load(f)
-                test_params = data.get('test_parameters', {})
-                runner = test_params.get('Workload Runner', 'fio')
-
-                if runner == 'fio':
-                    job = data.get('jobs', [{}])[0]
-                    read_data = job.get('read', {})
-                    write_data = job.get('write', {})
-                    
-                    read_bw = read_data.get('bw_bytes', 0)
-                    write_bw = write_data.get('bw_bytes', 0)
-                    read_iops = read_data.get('iops', 0)
-                    write_iops = write_data.get('iops', 0)
-                    
-                    read_bytes = read_data.get('io_bytes', 0)
-                    write_bytes = write_data.get('io_bytes', 0)
-                    read_runtime = read_data.get('runtime', 0)
-                    write_runtime = write_data.get('runtime', 0)
-                    max_runtime_ms = max(read_runtime, write_runtime)
-                    
-                    agg_bw_mib = 0.0
-                    agg_iops = 0.0
-                    if max_runtime_ms > 0:
-                        total_bytes = read_bytes + write_bytes
-                        agg_bw_mib = (total_bytes / (max_runtime_ms / 1000.0)) / (1024 * 1024)
-                        total_ios = read_data.get('total_ios', 0) + write_data.get('total_ios', 0)
-                        agg_iops = total_ios / (max_runtime_ms / 1000.0)
-
-                    if not agg_bw_mib > 0.0:
-                        print("Woops!")
-                    result_entry = {**test_params}
-                    result_entry['read_bw_bytes'] = read_bw
-                    result_entry['write_bw_bytes'] = write_bw
-                    result_entry['read_iops'] = read_iops
-                    result_entry['write_iops'] = write_iops
-                    result_entry['agg_bw_mib'] = agg_bw_mib
-                    result_entry['agg_iops'] = agg_iops
-                    result_entry['file_path'] = file_path
-                    results.append(result_entry)
-
-                elif runner == 'cephfs_tool':
-                    summary = data.get('summary', {})
-                    
-                    # Read record
-                    read_entry = {**test_params}
-                    read_entry['Direction'] = 'Read'
-                    read_entry['agg_bw_mib'] = summary.get('Read Throughput', {}).get('mean', 0)
-                    read_entry['agg_iops'] = summary.get('File Reads (Opens)', {}).get('mean', 0)
-                    read_entry['file_path'] = file_path
-                    results.append(read_entry)
-                    
-                    # Write record
-                    write_entry = {**test_params}
-                    write_entry['Direction'] = 'Write'
-                    write_entry['agg_bw_mib'] = summary.get('Write Throughput', {}).get('mean', 0)
-                    write_entry['agg_iops'] = summary.get('File Creates', {}).get('mean', 0)
-                    write_entry['file_path'] = file_path
-                    results.append(write_entry)
-
-                elif runner == 'sfs2020':
-                    runs = data.get('runs', [])
-                    if not runs:
-                        continue
-                    
-                    # Usually we want the last run (highest load point or final result)
-                    last_run = runs[-1]
-                    metrics = last_run.get('metrics', {})
-                    
-                    # SFS2020 metrics names can vary, but throughput and iops are common
-                    # Let's try to find them. 
-                    # throughput is usually in MiB/s or KiB/s
-                    # iops is usually 'ops/s'
-                    throughput = metrics.get('throughput', {}).get('value', 0)
-                    units = metrics.get('throughput', {}).get('units', '').lower()
-                    if 'kib/s' in units:
-                        throughput /= 1024.0
-                    
-                    iops = metrics.get('ops/s', {}).get('value', 0)
-                    if iops == 0:
-                        iops = metrics.get('iops', {}).get('value', 0)
-
-                    result_entry = {**test_params}
-                    result_entry['agg_bw_mib'] = throughput
-                    result_entry['agg_iops'] = iops
-                    result_entry['file_path'] = file_path
-                    results.append(result_entry)
-
         except (json.JSONDecodeError, IOError) as e:
             print(f"Error reading {file_path}: {e}")
+            continue
+
+        test_params = data.get('test_parameters', {})
+        runner = test_params.get('Workload Runner', 'fio')
+        summary = data.get('Summary') or CommonUtils.get_summary(data)
+
+        if runner == 'cephfs_tool':
+            read = summary.get('read', {}) if isinstance(summary, dict) else {}
+            write = summary.get('write', {}) if isinstance(summary, dict) else {}
+
+            read_entry = {**test_params}
+            read_entry['Direction'] = 'Read'
+            read_entry['agg_bw_mib'] = read.get('agg_bw_mib', 0)
+            read_entry['agg_iops'] = read.get('agg_iops', 0)
+            read_entry['file_path'] = file_path
+            results.append(read_entry)
+
+            write_entry = {**test_params}
+            write_entry['Direction'] = 'Write'
+            write_entry['agg_bw_mib'] = write.get('agg_bw_mib', 0)
+            write_entry['agg_iops'] = write.get('agg_iops', 0)
+            write_entry['file_path'] = file_path
+            results.append(write_entry)
+            continue
+
+        if runner == 'fio' and not summary.get('agg_bw_mib', 0) > 0.0:
+            print("Woops!")
+
+        result_entry = {**test_params, **summary}
+        result_entry['file_path'] = file_path
+        results.append(result_entry)
     return results
 
 def identify_swept_variables(results):
