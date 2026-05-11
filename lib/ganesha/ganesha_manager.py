@@ -29,14 +29,11 @@ class GaneshaManager(abc.ABC):
         if "umask" in settings:
             parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{settings['umask']}")
         if "client_oc" in settings:
-            val = 1 if settings["client_oc"] else 0
-            parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{val}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(settings['client_oc'])}")
         if "async" in settings:
-            val = 1 if settings["async"] else 0
-            parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{val}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(settings['async'])}")
         if "zerocopy" in settings:
-            val = 1 if settings["zerocopy"] else 0
-            parts.append(f"{CommonUtils.get_short_name('Ganesha Zero Copy')}{val}")
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Zero Copy')}{CommonUtils.format_config_value(settings['zerocopy'])}")
         if "client_oc_size" in settings:
             size_str = CommonUtils.format_si_units(
                 CommonUtils.parse_si_unit(settings["client_oc_size"])

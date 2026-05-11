@@ -631,6 +631,14 @@ class CommonUtils:
         return "".join(word.capitalize() for word in snake_str.split("_"))
 
     @staticmethod
+    def format_config_value(value):
+        """Convert a config value to its string representation.
+        Booleans are converted to 0/1; all other values are returned unchanged."""
+        if isinstance(value, bool):
+            return 1 if value else 0
+        return value
+
+    @staticmethod
     def get_short_name(var_name):
         """Map a human-readable parameter name to its short abbreviation."""
         name_map = {
@@ -851,11 +859,11 @@ class CommonUtils:
             if config.ganesha_umask:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{config.ganesha_umask}")
             if config.ganesha_client_oc is not None:
-                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{1 if config.ganesha_client_oc else 0}")
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(config.ganesha_client_oc)}")
             if config.ganesha_async is not None:
-                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{1 if config.ganesha_async else 0}")
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(config.ganesha_async)}")
             if config.ganesha_zerocopy is not None:
-                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Zero Copy')}{1 if config.ganesha_zerocopy else 0}")
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Zero Copy')}{CommonUtils.format_config_value(config.ganesha_zerocopy)}")
             if config.ganesha_client_oc_size:
                 g_parts.append(
                     f"{CommonUtils.get_short_name('Ganesha Client Object Cache Size')}{CommonUtils.format_si_units(config.ganesha_client_oc_size)}"
@@ -874,7 +882,7 @@ class CommonUtils:
             if "threads" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('Threads')}{lp_cfg['threads']}")
             if "client-oc" in lp_cfg:
-                parts.append(f"{CommonUtils.get_short_name('Client Object Cache')}{lp_cfg['client-oc']}")
+                parts.append(f"{CommonUtils.get_short_name('Client Object Cache')}{CommonUtils.format_config_value(lp_cfg['client-oc'])}")
             if "client-oc-size" in lp_cfg:
                 parts.append(
                     f"{CommonUtils.get_short_name('Client Object Cache Size')}{CommonUtils.format_si_units(lp_cfg['client-oc-size'])}"
@@ -888,11 +896,11 @@ class CommonUtils:
             if "ioengine" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('I/O Engine')}{lp_cfg['ioengine']}")
             if "direct" in lp_cfg:
-                parts.append(f"{CommonUtils.get_short_name('Direct I/O')}{lp_cfg['direct']}")
+                parts.append(f"{CommonUtils.get_short_name('Direct I/O')}{CommonUtils.format_config_value(lp_cfg['direct'])}")
             if "buffered" in lp_cfg:
-                parts.append(f"{CommonUtils.get_short_name('Buffered I/O')}{lp_cfg['buffered']}")
+                parts.append(f"{CommonUtils.get_short_name('Buffered I/O')}{CommonUtils.format_config_value(lp_cfg['buffered'])}")
             if "create_serialize" in lp_cfg:
-                parts.append(f"{CommonUtils.get_short_name('Create Serialize')}{lp_cfg['create_serialize']}")
+                parts.append(f"{CommonUtils.get_short_name('Create Serialize')}{CommonUtils.format_config_value(lp_cfg['create_serialize'])}")
             if "msgr_workers" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('Msgr Workers')}{lp_cfg['msgr_workers']}")
             # if "gtod_reduce" in lp_cfg:
