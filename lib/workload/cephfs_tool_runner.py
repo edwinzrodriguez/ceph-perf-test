@@ -31,9 +31,6 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         # Create results directory on admin host
         self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
 
-        if self.config.ganesha_enabled and ganesha_manager:
-            ganesha_manager.provision_ganesha(results_dir=results_dir)
-
         payload = settings.copy()
         payload["fs_name"] = self.config.fs_name
         payload["results_dir"] = results_dir
@@ -61,21 +58,15 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             if key in cfg:
                 payload[key] = cfg[key]
 
-        # Add Ganesha settings to payload
-        ganesha_keys = [
-            "ganesha_enabled",
-            "ganesha_worker_threads",
-            "ganesha_umask",
-            "ganesha_client_oc",
-            "ganesha_async",
-            "ganesha_zerocopy",
-            "ganesha_client_oc_size",
-            "ganesha_msgr_workers",
-        ]
-        for k in ganesha_keys:
-            val = getattr(self.config, k, None)
-            if val is not None:
-                payload[k] = val
+        lockstat_cfg = cfg.get("lockstat", {})
+        if lockstat_cfg.get("enabled", False):
+            payload["cephfs_tool_lockstat_enabled"] = True
+            payload["cephfs_tool_lockstat_asok"] = lockstat_cfg.get(
+                "asok", "/var/run/ceph/cephfs-tool.asok"
+            )
+            payload["cephfs_tool_lockstat_path"] = lockstat_cfg.get(
+                "path", "/usr/local/bin/ceph-lockstat"
+            )
 
         settings_json = json.dumps(payload)
         loadpoints_json = json.dumps(loadpoints)
@@ -103,7 +94,14 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
 
         current_lp, run_phase_started = 0, False
         perf_triggered = False
-        ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
+        lockstat_cfg = self.config.get("cephfs_tool", {}).get("lockstat", {})
+        cephfs_lockstat_enabled = lockstat_cfg.get("enabled", False)
+        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
+        lockstat_asok = lockstat_cfg.get("asok", "/var/run/ceph/cephfs-tool.asok")
+        lockstat_started = False
+        write_lockstat_dumped = False
+        read_lockstat_dumped = False
+        current_phase = None
         perf_threads = []
 
         process = subprocess.Popen(
@@ -122,17 +120,17 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             if "Starting tests..." in line:
                 current_lp += 1
                 run_phase_started, perf_triggered = False, False
+                current_phase = None
+                write_lockstat_dumped = False
+                read_lockstat_dumped = False
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
                 run_phase_started = True
-                if ganesha_perf_enabled:
-                    print(
-                        f"Resetting Ganesha perf counters for Load Point {current_lp}..."
-                    )
-                    for g_host in ganesha_manager.ganeshas:
-                        ganesha_manager.reset_ganesha_perf(g_host)
-                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
-                            ganesha_manager.reset_lockstat(g_host)
+                if cephfs_lockstat_enabled and not lockstat_started:
+                    print(f"Starting cephfs-tool lockstat for Load Point {current_lp}...")
+                    self._start_client_lockstat(self.config.clients, lockstat_path, lockstat_asok)
+                    lockstat_started = True
+
             if run_phase_started and not perf_triggered:
                 if perf_record_enabled:
                     print(f"Triggering perf recording for Load Point {current_lp}...")
@@ -151,37 +149,56 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                     t.start()
                     perf_threads.append(t)
                 perf_triggered = True
+
+            if "Starting WRITE phase" in line:
+                if cephfs_lockstat_enabled:
+                    if not lockstat_started:
+                        print(
+                            f"Starting cephfs-tool lockstat for Load Point {current_lp}..."
+                        )
+                        self._start_client_lockstat(
+                            self.config.clients, lockstat_path, lockstat_asok
+                        )
+                        lockstat_started = True
+                    else:
+                        print(
+                            f"Resetting lockstat for Write Phase, Load Point {current_lp}..."
+                        )
+                        self._reset_client_lockstat(self.config.clients, lockstat_path, lockstat_asok)
+                current_phase = "write"
+            if "Starting READ phase" in line:
+                if cephfs_lockstat_enabled:
+                    if not lockstat_started:
+                        print(
+                            f"Starting cephfs-tool lockstat for Load Point {current_lp}..."
+                        )
+                        self._start_client_lockstat(
+                            self.config.clients, lockstat_path, lockstat_asok
+                        )
+                        lockstat_started = True
+                    else:
+                        print(f"Resetting lockstat for Read Phase, Load Point {current_lp}...")
+                        self._reset_client_lockstat(self.config.clients, lockstat_path, lockstat_asok)
+                current_phase = "read"
+            if cephfs_lockstat_enabled and not write_lockstat_dumped and "Write:" in line and "MiB/s" in line:
+                print(f"Dumping lockstat for Write Phase, Load Point {current_lp}...")
+                self._dump_client_lockstat(
+                    self.config.clients, lockstat_path, lockstat_asok,
+                    current_lp, results_dir, "write",
+                    payload, loadpoints[current_lp - 1],
+                )
+                write_lockstat_dumped = True
+            if cephfs_lockstat_enabled and not read_lockstat_dumped and "Read:" in line and "MiB/s" in line:
+                print(f"Dumping lockstat for Read Phase, Load Point {current_lp}...")
+                self._dump_client_lockstat(
+                    self.config.clients, lockstat_path, lockstat_asok,
+                    current_lp, results_dir, "read",
+                    payload, loadpoints[current_lp - 1],
+                )
+                read_lockstat_dumped = True
             if "Finished CephFS-Tool Load Point:" in line:
-                if ganesha_perf_enabled:
-                    print(
-                        f"Dumping Ganesha perf counters for Load Point {current_lp}..."
-                    )
-                    for g_host in ganesha_manager.ganeshas:
-                        perf_dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
-                        if perf_dump:
-                            filename = (
-                                f"ganesha_perf_dump_{g_host}_lp{current_lp:02d}.json"
-                            )
-                            local_temp = f"/tmp/{filename}"
-                            with open(local_temp, "w") as f:
-                                json.dump(perf_dump, f)
-                            u, h, p = self.executor.get_ssh_details(self.admin)
-                            p = str(p)
-                            remote_path = f"{results_dir}/{filename}"
-                            subprocess.run(
-                                [
-                                    "scp",
-                                    "-o",
-                                    "StrictHostKeyChecking=no",
-                                    "-P",
-                                    p,
-                                    local_temp,
-                                    f"{u}@{h}:{remote_path}",
-                                ]
-                            )
-                            os.remove(local_temp)
-                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
-                            ganesha_manager.dump_lockstat(g_host, current_lp, results_dir, settings=payload, lp_cfg=loadpoints[current_lp - 1])
+                run_phase_started = False
+                lockstat_started = False
 
         process.wait()
         for t in perf_threads:
@@ -191,6 +208,38 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             raise RuntimeError(f"CephFS-Tool failed on {self.admin} with return code {process.returncode}")
 
         return "".join(output)
+
+    def _start_client_lockstat(self, clients, lockstat_path, asok_path):
+        for client in clients:
+            print(f"[{client}] Starting cephfs-tool lockstat via {asok_path}...")
+            self.executor.run_remote(
+                client, f"{lockstat_path} {asok_path} start"
+            )
+
+    def _reset_client_lockstat(self, clients, lockstat_path, asok_path):
+        for client in clients:
+            print(f"[{client}] Resetting cephfs-tool lockstat via {asok_path}...")
+            self.executor.run_remote(
+                client, f"{lockstat_path} {asok_path} reset"
+            )
+
+    def _dump_client_lockstat(self, clients, lockstat_path, asok_path, loadpoint, results_dir, phase, settings, lp_cfg):
+        from cephfs_perf_lib import CommonUtils
+        for client in clients:
+            print(f"[{client}] Dumping cephfs-tool lockstat ({phase} phase) via {asok_path}...")
+            dump_cmd = f"{lockstat_path} {asok_path} dump --detail"
+            CommonUtils.dump_lockstat_common(
+                self.executor,
+                client,
+                loadpoint,
+                results_dir,
+                "cephfs_tool",
+                dump_cmd,
+                self.admin,
+                settings=settings,
+                lp_cfg=lp_cfg,
+                phase=phase,
+            )
 
     def get_results_dir(self, settings, shared_ts=None):
         cfg = self.config.cephfs_tool
@@ -205,14 +254,6 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             f"{k}{CommonUtils.format_si_units(v)}" for k, v in settings.items()
         )
         g_p = ""
-        if self.config.ganesha_enabled:
-            from lib.ganesha.ganesha_manager import GaneshaManager
-
-            g_str = GaneshaManager.get_ganesha_config_str(
-                self.config.get("ganesha", {})
-            )
-            if g_str:
-                g_p = "_" + g_str
 
         return os.path.join(base, f"{ts}_{fs_p}_{mds_p}{g_p}")
 
@@ -250,18 +291,6 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                 ("perf_record.py", perf_script),
                 ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
             ]
-
-            # Also copy ganesha perf record script if different
-            g_cfg = self.config.get("ganesha", {})
-            g_perf_script = g_cfg.get("perf_record_script")
-            if g_perf_script and g_perf_script != perf_script:
-                # Ensure the directory exists on each target
-                g_remote_dir = os.path.dirname(g_perf_script)
-                self.executor.run_remote(
-                    target,
-                    f"sudo mkdir -p {g_remote_dir} && sudo chown {u}:{u} {g_remote_dir}",
-                )
-                files_to_copy.append(("perf_record.py", g_perf_script))
 
             if stap_script and os.path.exists(os.path.basename(stap_script)):
                 files_to_copy.append((os.path.basename(stap_script), stap_script))

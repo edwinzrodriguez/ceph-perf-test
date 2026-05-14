@@ -205,6 +205,11 @@ cephfs_tool:
   duration: 60
   progress: true
   progress_interval: 10
+  lockstat:
+    enabled: true
+    path: "/usr/local/bin/ceph-lockstat"
+    asok: "/var/run/ceph/cephfs-tool.asok"
+    threshold: 0
   loadpoints:
     - files: 1024
       size: "5GiB"

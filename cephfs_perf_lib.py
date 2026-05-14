@@ -514,15 +514,17 @@ class SSHExecutor:
 
 class CommonUtils:
     @staticmethod
-    def dump_lockstat_common(executor, host_name, loadpoint, results_dir, target_name, dump_cmd, admin_host, settings=None, lp_cfg=None):
+    def dump_lockstat_common(executor, host_name, loadpoint, results_dir, target_name, dump_cmd, admin_host, settings=None, lp_cfg=None, phase=None):
         """
         Common logic to dump and collect lockstat files.
         """
+        output_type = f"lockstat_{phase}" if phase else "lockstat"
         if settings is not None:
-            dest_file = f"{CommonUtils.get_workload_base_name(target_name, 'lockstat', host_name, loadpoint, settings, lp_cfg)}.txt"
+            dest_file = f"{CommonUtils.get_workload_base_name(target_name, output_type, host_name, loadpoint, settings, lp_cfg)}.txt"
         else:
             lp_tag = f"{int(loadpoint):02d}"
-            dest_file = f"{target_name}_lockstat_{host_name}_lp{lp_tag}.txt"
+            phase_suffix = f"_{phase}" if phase else ""
+            dest_file = f"{target_name}_lockstat{phase_suffix}_{host_name}_lp{lp_tag}.txt"
         temp_file = f"/tmp/{dest_file}"
 
         # Execute the dump command and save to temp file
@@ -844,6 +846,10 @@ class CommonUtils:
             "perf_record_executable",
             "perf_record_duration",
             "lockstat",
+            "threads_fio",
+            "cephfs_tool_lockstat_enabled",
+            "cephfs_tool_lockstat_asok",
+            "cephfs_tool_lockstat_path",
         }
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}"

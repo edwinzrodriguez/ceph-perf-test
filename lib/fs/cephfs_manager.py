@@ -106,25 +106,37 @@ class CephFSManager(FSManager):
                     server_name, f"sudo python3 {lockstat_path} mds.{fs} stop"
                 )
 
-    def reset_lockstat(self):
-        lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
+    def _check_lockstat_exists(self, server_name, lockstat_path):
+        """Populate lockstat_exists for server_name if not yet checked."""
+        if server_name not in self.lockstat_exists:
+            check = self.executor.run_remote(
+                server_name,
+                f"test -f {lockstat_path} && echo EXISTS || echo MISSING",
+            ).strip()
+            self.lockstat_exists[server_name] = "EXISTS" in check
+
+    def reset_lockstat(self, config_section="specstorage"):
+        lockstat_cfg = self.config.get(config_section, {}).get("lockstat", {})
         lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         for fs in self.get_fs_names():
             for server_name in self.mdss:
+                self._check_lockstat_exists(server_name, lockstat_path)
                 if self.lockstat_exists.get(server_name):
                     print(f"[{server_name}] Resetting lockstat for mds.{fs}")
                     self.executor.run_remote(
                         server_name, f"sudo python3 {lockstat_path} mds.{fs} reset"
                     )
 
-    def dump_lockstat(self, loadpoint, results_dir=None):
-        lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
+    def dump_lockstat(self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None, config_section="specstorage"):
+        lockstat_cfg = self.config.get(config_section, {}).get("lockstat", {})
         lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         for fs in self.get_fs_names():
             for server_name in self.mdss:
+                self._check_lockstat_exists(server_name, lockstat_path)
                 if self.lockstat_exists.get(server_name):
+                    phase_label = f" ({phase} phase)" if phase else ""
                     print(
-                        f"[{server_name}] Dumping lockstat for mds.{fs} (Load Point {loadpoint})"
+                        f"[{server_name}] Dumping lockstat for mds.{fs} (Load Point {loadpoint}{phase_label})"
                     )
                     if results_dir:
                         dump_cmd = f"python3 {lockstat_path} mds.{fs} dump --detail"
@@ -136,6 +148,9 @@ class CephFSManager(FSManager):
                             f"mds.{fs}",
                             dump_cmd,
                             self.admin,
+                            settings=settings,
+                            lp_cfg=lp_cfg,
+                            phase=phase,
                         )
 
     def rebuild_filesystem(self, settings, ganesha_manager=None, results_dir=None):

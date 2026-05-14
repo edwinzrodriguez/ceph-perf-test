@@ -39,6 +39,10 @@ def main():
 
     executable = settings.get("executable_path", "/usr/local/bin/cephfs-tool")
     ceph_args = settings.get("ceph_args", "")
+    lockstat_asok = settings.get("cephfs_tool_lockstat_asok")
+    if lockstat_asok:
+        asok_arg = f"--admin-socket={lockstat_asok}"
+        ceph_args = f"{ceph_args} {asok_arg}".strip() if ceph_args else asok_arg
     config_path = settings.get("config_path")
     keyring = settings.get("keyring")
     client_id = settings.get("client_id")
@@ -59,8 +63,14 @@ def main():
             # env CEPH_ARGS="..." /path/to/cephfs-tool bench -c ... -k ... -i ... --filesystem ... --root-path ... --files ... --size ... --threads ... --iterations ... [extra_args]
 
             cmd_parts = []
+            env_vars = {}
             if ceph_args:
-                cmd_parts.append(f'env CEPH_ARGS="{ceph_args}"')
+                env_vars["CEPH_ARGS"] = ceph_args
+            if settings.get("cephfs_tool_lockstat_enabled"):
+                env_vars["ENABLE_LOCKSTAT"] = "true"
+            if env_vars:
+                env_str = " ".join(f'{k}="{v}"' for k, v in env_vars.items())
+                cmd_parts.append(f"env {env_str}")
 
             cmd_parts.append(executable)
             cmd_parts.append("bench")
@@ -145,12 +155,31 @@ def main():
         import re
 
         status_re = re.compile(r"\[(?P<percent>\d+)%\](?:\[.*\])*\[eta (?P<eta>.*)\]")
+        iter1_re = re.compile(r"--- Iteration 1 of")
+        iter_gt1_re = re.compile(r"--- Iteration [2-9]")
+
+        write_phase_emitted = False
+        read_phase_emitted = False
 
         for client, proc in processes:
             run_phase_started = False
+            in_first_iteration = False
             full_stdout = []
             for line in proc.stdout:
                 line_clean = line.strip()
+
+                if iter1_re.search(line_clean):
+                    in_first_iteration = True
+                elif iter_gt1_re.search(line_clean):
+                    in_first_iteration = False
+
+                if in_first_iteration and not write_phase_emitted and "Starting Write Phase" in line_clean:
+                    print("Starting WRITE phase", flush=True)
+                    write_phase_emitted = True
+                if in_first_iteration and not read_phase_emitted and "Starting Read Phase" in line_clean:
+                    print("Starting READ phase", flush=True)
+                    read_phase_emitted = True
+
                 match = status_re.search(line_clean)
                 if match:
                     percent = int(match.group("percent"))
