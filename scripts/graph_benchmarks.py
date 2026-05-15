@@ -4,6 +4,7 @@ import argparse
 import glob
 import sys
 from collections import defaultdict
+from itertools import product
 
 # Add project root to sys.path to allow importing cephfs_perf_lib
 # when running the script directly from the scripts directory or elsewhere
@@ -17,6 +18,13 @@ try:
     HAS_MATPLOTLIB = True
 except ImportError:
     HAS_MATPLOTLIB = False
+
+try:
+    import seaborn as sns
+    import pandas as pd
+    HAS_PANDAS = True
+except ImportError:
+    HAS_PANDAS = False
 
 def load_json_results(json_files):
     results = []
@@ -158,13 +166,116 @@ def get_sort_key(val):
     """
     if val is None:
         return (0, "")
-    
+
     val_str = str(val)
     parsed = parse_si_unit(val_str)
     if isinstance(parsed, (int, float)):
         return (1, parsed)
-    
+
     return (2, val_str)
+
+
+def create_key_charts(results, output_prefix="cephfs"):
+    if not HAS_PANDAS:
+        print("Pandas is required for key charts. Skipping.")
+        return
+
+    df = pd.DataFrame(results)
+    if df.empty:
+        print("No data to plot")
+        return
+
+    # Ensure proper types
+    df["Threads"] = pd.to_numeric(df["Threads"], errors="coerce")
+    df["Msgr Workers"] = pd.to_numeric(
+        df.get("Msgr Workers", df.get("Ganesha Msgr Workers")), errors="coerce"
+    )
+    df["Client Object Cache"] = (
+        df["Client Object Cache"]
+        .astype(str)
+        .str.lower()
+        .map({"true": True, "1": True, "false": False, "0": False})
+    )
+
+    # 1. Main Chart: Throughput by Threads + Msgr Workers, faceted by Direction + OC
+    for oc in [False, True]:
+        subset = df[df["Client Object Cache"] == oc]
+        if subset.empty:
+            continue
+
+        g = sns.catplot(
+            data=subset,
+            x="Threads",
+            y="agg_bw_mib",
+            hue="Msgr Workers",
+            col="Direction",
+            kind="bar",
+            height=5,
+            aspect=1.1,
+            palette="tab10",
+            errorbar=None,
+        )
+        g.set_axis_labels("Client Threads", "Throughput (MiB/s)")
+        g.set_titles(f"Object Cache = {oc} | {{col_name}}")
+        g.figure.suptitle(
+            f"CephFS Performance - Object Cache = {oc}", y=1.05, fontsize=14
+        )
+        plt.tight_layout()
+        g.savefig(
+            f"{output_prefix}_throughput_oc_{oc}.png", dpi=200, bbox_inches="tight"
+        )
+        plt.close()
+
+    # 2. High-concurrency focus (best configs)
+    high = df[df["Threads"].isin([16, 32])]
+    if not high.empty:
+        plt.figure(figsize=(12, 6))
+        sns.barplot(data=high, x="Threads", y="agg_bw_mib", hue="Msgr Workers", errorbar=None)
+        plt.title("High Concurrency Performance (16 & 32 threads)")
+        plt.ylabel("Throughput (MiB/s)")
+        plt.grid(axis="y", alpha=0.3)
+        plt.savefig(
+            f"{output_prefix}_high_concurrency.png", dpi=200, bbox_inches="tight"
+        )
+        plt.close()
+
+    # 3. Performance by Block Size
+    if "Block Size" in df.columns:
+        block_size_data = df.dropna(subset=["Block Size"])
+        if not block_size_data.empty:
+            # Parse block sizes for proper sorting
+            block_size_data = block_size_data.copy()
+            block_size_data["Block Size Parsed"] = block_size_data["Block Size"].apply(parse_si_unit)
+            block_size_data = block_size_data.sort_values("Block Size Parsed")
+            
+            # Create faceted plot by Direction and Object Cache
+            g = sns.catplot(
+                data=block_size_data,
+                x="Block Size",
+                y="agg_bw_mib",
+                hue="Threads",
+                col="Direction",
+                row="Client Object Cache",
+                kind="bar",
+                height=4,
+                aspect=1.2,
+                palette="viridis",
+                errorbar=None,
+            )
+            g.set_axis_labels("Block Size", "Throughput (MiB/s)")
+            g.set_titles("OC = {row_name} | {col_name}")
+            g.figure.suptitle(
+                "CephFS Performance by Block Size", y=1.02, fontsize=14
+            )
+            plt.tight_layout()
+            g.savefig(
+                f"{output_prefix}_by_block_size.png", dpi=200, bbox_inches="tight"
+            )
+            plt.close()
+            print(f"✅ Block Size chart saved: {output_prefix}_by_block_size.png")
+
+    print(f"✅ Charts saved with prefix: {output_prefix}")
+
 
 def plot_results(results, swept_vars, metric, output_file):
     if not HAS_MATPLOTLIB:
@@ -276,14 +387,16 @@ def main():
     parser = argparse.ArgumentParser(description='Graph benchmark results from FIO JSON output files.')
     parser.add_argument('files', nargs='+', help='JSON result files')
     parser.add_argument('--metric', help='Metric to use (e.g., write_bw_bytes, read_iops)')
-    parser.add_argument('--output', default='benchmark_results.png', help='Output plot file name')
+    parser.add_argument('--output', default='benchmark_results.png', help='Output plot file name (base name used for key charts prefix)')
+    parser.add_argument('--key-charts', action='store_true', help='Generate key charts (throughput by threads, block size, etc.)')
+    parser.add_argument('--swept-charts', action='store_true', help='Generate swept variable charts using plot_results')
     args = parser.parse_args()
 
     # Expand wildcards in file list
     expanded_files = []
     for f in args.files:
         expanded_files.extend(glob.glob(f))
-    
+
     if not expanded_files:
         print(f"No files found matching: {args.files}")
         return
@@ -292,34 +405,51 @@ def main():
     if not results:
         print("No results loaded.")
         return
-    
+
     swept_vars = identify_swept_variables(results)
     print(f"Swept variables identified: {swept_vars}")
-    
+
     metric = args.metric
     if not metric:
         # Default to the new aggregate bandwidth metric
         metric = 'agg_bw_mib'
-        
+
     print(f"Using metric: {metric}")
-    
+
     if not swept_vars:
         print("No variables were swept across the provided files.")
         for r in results:
-             print(f"File: {os.path.basename(r['file_path'])} - {metric}: {r.get(metric, 0)}")
+            print(f"File: {os.path.basename(r['file_path'])} - {metric}: {r.get(metric, 0)}")
     else:
         # Create the n-dimensional representation
         # Sort variables to ensure consistent order, but put the one with most values last for better printing
         swept_vars = sorted(swept_vars, key=lambda v: len(set(str(r.get(v)) for r in results)))
-        
+
         # Sort results by swept variables to ensure they are added in order if possible
         # though build_n_dimensional_representation doesn't strictly need it as print_representation sorts
-        
+
         rep = build_n_dimensional_representation(results, swept_vars, metric)
         print("\nN-dimensional representation:")
         print_representation(rep, swept_vars)
+
+        # Generate charts based on command-line options
+        # If no options specified, generate both by default
+        generate_key = args.key_charts
+        generate_swept = args.swept_charts
         
-        plot_results(results, swept_vars, metric, args.output)
+        if not generate_key and not generate_swept:
+            # Default: generate both
+            generate_key = True
+            generate_swept = True
+        
+        # Extract base filename from output path for key charts prefix
+        output_base = os.path.splitext(args.output)[0]
+        
+        if generate_key:
+            create_key_charts(results, output_prefix=output_base)
+        
+        if generate_swept:
+            plot_results(results, swept_vars, metric, args.output)
 
 if __name__ == "__main__":
     main()
