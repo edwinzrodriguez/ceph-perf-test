@@ -949,10 +949,13 @@ class CommonUtils:
         """Compute a Summary section for a workload result JSON.
 
         The shape of the returned dict depends on ``test_parameters['Workload Runner']``:
-          * fio:         {read_bw_bytes, write_bw_bytes, read_iops, write_iops,
-                          agg_bw_mib, agg_iops}
+          * fio:         {read:  {agg_bw_mib, agg_iops},
+                          write: {agg_bw_mib, agg_iops},
+                          agg_bw_mib, agg_iops,
+                          read_bw_bytes, write_bw_bytes, read_iops, write_iops}
           * cephfs_tool: {read:  {agg_bw_mib, agg_iops},
-                          write: {agg_bw_mib, agg_iops}}
+                          write: {agg_bw_mib, agg_iops},
+                          agg_bw_mib, agg_iops}
           * sfs2020:     {agg_bw_mib, agg_iops}
         """
         test_params = data.get("test_parameters", {}) or {}
@@ -967,6 +970,20 @@ class CommonUtils:
             write_runtime = write.get("runtime", 0)
             max_runtime_ms = max(read_runtime, write_runtime)
 
+            # Calculate per-direction metrics
+            read_bw_mib = 0.0
+            read_iops_val = 0.0
+            if read_runtime > 0:
+                read_bw_mib = (read.get("io_bytes", 0) / (read_runtime / 1000.0)) / (1024 * 1024)
+                read_iops_val = read.get("total_ios", 0) / (read_runtime / 1000.0)
+
+            write_bw_mib = 0.0
+            write_iops_val = 0.0
+            if write_runtime > 0:
+                write_bw_mib = (write.get("io_bytes", 0) / (write_runtime / 1000.0)) / (1024 * 1024)
+                write_iops_val = write.get("total_ios", 0) / (write_runtime / 1000.0)
+
+            # Calculate aggregate metrics
             agg_bw_mib = 0.0
             agg_iops = 0.0
             if max_runtime_ms > 0:
@@ -976,25 +993,41 @@ class CommonUtils:
                 agg_iops = total_ios / (max_runtime_ms / 1000.0)
 
             return {
+                "read": {
+                    "agg_bw_mib": read_bw_mib,
+                    "agg_iops": read_iops_val,
+                },
+                "write": {
+                    "agg_bw_mib": write_bw_mib,
+                    "agg_iops": write_iops_val,
+                },
+                "agg_bw_mib": agg_bw_mib,
+                "agg_iops": agg_iops,
+                # Keep legacy fields for backward compatibility
                 "read_bw_bytes": read.get("bw_bytes", 0),
                 "write_bw_bytes": write.get("bw_bytes", 0),
                 "read_iops": read.get("iops", 0),
                 "write_iops": write.get("iops", 0),
-                "agg_bw_mib": agg_bw_mib,
-                "agg_iops": agg_iops,
             }
 
         if runner == "cephfs_tool":
             summary = data.get("summary", {}) or {}
+            read_bw = summary.get("Read Throughput", {}).get("mean", 0)
+            read_iops = summary.get("File Reads (Opens)", {}).get("mean", 0)
+            write_bw = summary.get("Write Throughput", {}).get("mean", 0)
+            write_iops = summary.get("File Creates", {}).get("mean", 0)
+            
             return {
                 "read": {
-                    "agg_bw_mib": summary.get("Read Throughput", {}).get("mean", 0),
-                    "agg_iops": summary.get("File Reads (Opens)", {}).get("mean", 0),
+                    "agg_bw_mib": read_bw,
+                    "agg_iops": read_iops,
                 },
                 "write": {
-                    "agg_bw_mib": summary.get("Write Throughput", {}).get("mean", 0),
-                    "agg_iops": summary.get("File Creates", {}).get("mean", 0),
+                    "agg_bw_mib": write_bw,
+                    "agg_iops": write_iops,
                 },
+                "agg_bw_mib": read_bw + write_bw,
+                "agg_iops": read_iops + write_iops,
             }
 
         if runner == "sfs2020":

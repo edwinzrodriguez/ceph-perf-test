@@ -70,8 +70,8 @@ def merge_results(input_files, output_file):
             )
             continue
 
-        if "Summary" not in data:
-            data["Summary"] = CommonUtils.get_summary(data)
+        if "test_results_summary" not in data:
+            data["test_results_summary"] = CommonUtils.get_summary(data)
 
         section = get_section_name(test_params)
         if section in merged:

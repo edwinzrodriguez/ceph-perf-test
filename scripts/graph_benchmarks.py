@@ -38,12 +38,23 @@ def load_json_results(json_files):
 
         test_params = data.get('test_parameters', {})
         runner = test_params.get('Workload Runner', 'fio')
-        summary = data.get('Summary') or CommonUtils.get_summary(data)
+        summary = data.get('test_results_summary') or CommonUtils.get_summary(data)
 
-        if runner == 'cephfs_tool':
+        # For fio runner, map Ganesha Client Object Cache fields to Client Object Cache fields
+        # and remove the Ganesha-specific fields
+        if runner == 'fio':
+            if 'Ganesha Client Object Cache' in test_params:
+                test_params['Client Object Cache'] = test_params['Ganesha Client Object Cache']
+                del test_params['Ganesha Client Object Cache']
+            if 'Ganesha Client Object Cache Size' in test_params:
+                test_params['Client Object Cache Size'] = test_params['Ganesha Client Object Cache Size']
+                del test_params['Ganesha Client Object Cache Size']
+            if "Ganesha Msgr Workers" in test_params:
+                test_params["Msgr Workers"] = test_params["Ganesha Msgr Workers"]
+                del test_params["Ganesha Msgr Workers"]
+
+        if 'read' in summary:
             read = summary.get('read', {}) if isinstance(summary, dict) else {}
-            write = summary.get('write', {}) if isinstance(summary, dict) else {}
-
             read_entry = {**test_params}
             read_entry['Direction'] = 'Read'
             read_entry['agg_bw_mib'] = read.get('agg_bw_mib', 0)
@@ -51,13 +62,14 @@ def load_json_results(json_files):
             read_entry['file_path'] = file_path
             results.append(read_entry)
 
+        if 'write' in summary:
+            write = summary.get('write', {}) if isinstance(summary, dict) else {}
             write_entry = {**test_params}
             write_entry['Direction'] = 'Write'
             write_entry['agg_bw_mib'] = write.get('agg_bw_mib', 0)
             write_entry['agg_iops'] = write.get('agg_iops', 0)
             write_entry['file_path'] = file_path
             results.append(write_entry)
-            continue
 
         if runner == 'fio' and not summary.get('agg_bw_mib', 0) > 0.0:
             print("Woops!")
