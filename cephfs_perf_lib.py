@@ -434,6 +434,14 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("msgr_workers")
 
     @property
+    def ganesha_rpc_ioq_thrdmin(self):
+        return self._config.get("ganesha", {}).get("rpc_ioq_thrdmin")
+
+    @property
+    def ganesha_rpc_ioq_thrdmax(self):
+        return self._config.get("ganesha", {}).get("rpc_ioq_thrdmax")
+
+    @property
     def ganesha_user_id(self):
         user_id = self._config.get("ganesha", {}).get("user_id")
         if user_id:
@@ -670,6 +678,8 @@ class CommonUtils:
             "Ganesha Zero Copy": "gzc",
             "Ganesha Client Object Cache Size": "gocs",
             "Ganesha Msgr Workers": "gmw",
+            "Ganesha RPC IOQ Thread Min": "grpcmin",
+            "Ganesha RPC IOQ Thread Max": "grpcmax",
             "Ganesha User ID": "guid",
             "Ganesha Keyring Path": "gkp",
             "Ganesha Ceph Binary Path": "gcbp",
@@ -757,6 +767,8 @@ class CommonUtils:
             "ganesha_zerocopy": "Ganesha Zero Copy",
             "ganesha_client_oc_size": "Ganesha Client Object Cache Size",
             "ganesha_msgr_workers": "Ganesha Msgr Workers",
+            "ganesha_rpc_ioq_thrdmin": "Ganesha RPC IOQ Thread Min",
+            "ganesha_rpc_ioq_thrdmax": "Ganesha RPC IOQ Thread Max",
             "ganesha_user_id": "Ganesha User ID",
             "ganesha_keyring_path": "Ganesha Keyring Path",
             "ganesha_ceph_binary_path": "Ganesha Ceph Binary Path",
@@ -786,6 +798,8 @@ class CommonUtils:
             "ganesha_zerocopy",
             "ganesha_msgr_workers",
             "ganesha_client_oc_size",
+            "ganesha_rpc_ioq_thrdmin",
+            "ganesha_rpc_ioq_thrdmax",
             "ganesha_user_id",
             "ganesha_keyring_path",
             "ganesha_ceph_binary_path",
@@ -834,6 +848,8 @@ class CommonUtils:
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
             "ganesha_msgr_workers",
+            "ganesha_rpc_ioq_thrdmin",
+            "ganesha_rpc_ioq_thrdmax",
             "ganesha_user_id",
             "ganesha_keyring_path",
             "ganesha_ceph_binary_path",

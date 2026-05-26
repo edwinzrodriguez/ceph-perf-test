@@ -136,6 +136,8 @@ class BenchRunner:
                 "zerocopy",
                 "client_oc_size",
                 "msgr_workers",
+                "rpc_ioq_thrdmin",
+                "rpc_ioq_thrdmax"
             ]:
                 if k in ganesha_settings_raw:
                     val = ganesha_settings_raw[k]

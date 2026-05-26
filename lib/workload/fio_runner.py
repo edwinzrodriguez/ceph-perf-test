@@ -57,6 +57,8 @@ class FioWorkloadRunner(WorkloadRunner):
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
             "ganesha_msgr_workers",
+            "ganesha_rpc_ioq_thrdmin",
+            "ganesha_rpc_ioq_thrdmax",
         ]
         for k in ganesha_keys:
             val = getattr(self.config, k, None)

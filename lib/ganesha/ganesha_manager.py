@@ -41,6 +41,10 @@ class GaneshaManager(abc.ABC):
             parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache Size')}{size_str}")
         if "msgr_workers" in settings:
             parts.append(f"{CommonUtils.get_short_name('Ganesha Msgr Workers')}{settings['msgr_workers']}")
+        if "rpc_ioq_thrdmin" in settings:
+            parts.append(f"{CommonUtils.get_short_name('Ganesha RPC IOQ Thread Min')}{settings['rpc_ioq_thrdmin']}")
+        if "rpc_ioq_thrdmax" in settings:
+            parts.append(f"{CommonUtils.get_short_name('Ganesha RPC IOQ Thread Max')}{settings['rpc_ioq_thrdmax']}")
         return "_".join(parts)
 
     def safe_json_load(self, raw, default=None):

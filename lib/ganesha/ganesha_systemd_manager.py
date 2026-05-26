@@ -211,14 +211,24 @@ class GaneshaSystemdManager(GaneshaManager):
         if ceph_options:
             ceph_block = f"CEPH {{\n{ceph_options}}}\n"
 
-        config_content = (
-            "NFS_Core_Param {\n"
+        # Build NFS_Core_Param block with optional rpc_ioq settings
+        nfs_core_params = (
             "    Protocols = 4;\n"
             "    Enable_NLM = false;\n"
             "    Enable_RQUOTA = false;\n"
             "    NFS_Port = 2049;\n"
             "    allow_set_io_flusher_fail = true;\n"
-            "}\n"
+        )
+        
+        if self.config.ganesha_rpc_ioq_thrdmin is not None:
+            nfs_core_params += f"    rpc_ioq_thrdmin = {self.config.ganesha_rpc_ioq_thrdmin};\n"
+        if self.config.ganesha_rpc_ioq_thrdmax is not None:
+            nfs_core_params += f"    rpc_ioq_thrdmax = {self.config.ganesha_rpc_ioq_thrdmax};\n"
+
+        config_content = (
+            f"NFS_Core_Param {{\n"
+            f"{nfs_core_params}"
+            f"}}\n"
             f"{worker_threads_block}"
             "NFSv4 {\n"
             '    RecoveryBackend = "fs";\n'
