@@ -1,4 +1,5 @@
 import abc
+import json
 from cephfs_perf_lib import FSManager
 
 
@@ -135,26 +136,22 @@ class GaneshaManager(abc.ABC):
             f"{self.config.ganesha_lockstat_path} {asok_path} reset",
         )
 
-    def dump_lockstat(self, host_name, loadpoint, results_dir, settings=None, lp_cfg=None):
-        from cephfs_perf_lib import CommonUtils
-
+    def dump_lockstat(self, host_name):
         asok_path = self._get_asok_path(host_name)
         if not asok_path:
             print(
                 f"[{host_name}] Warning: Ganesha admin socket not found for lockstat dump."
             )
-            return
+            return None
 
         print(f"[{host_name}] Dumping Ganesha lockstat via {asok_path}...")
-        dump_cmd = f"{self.config.ganesha_lockstat_path} {asok_path} dump --detail"
-        CommonUtils.dump_lockstat_common(
-            self.executor,
+        output = self.executor.run_remote(
             host_name,
-            loadpoint,
-            results_dir,
-            "ganesha",
-            dump_cmd,
-            self.admin,
-            settings=settings,
-            lp_cfg=lp_cfg,
+            f"ceph --admin-daemon {asok_path} lockstat dump 2>&1",
         )
+        try:
+            return json.loads(output)
+        except json.JSONDecodeError as e:
+            print(f"[{host_name}] Failed to parse lockstat JSON: {e}")
+            print(f"[{host_name}] lockstat dump output: {repr(output)}")
+            return {"raw": output, "parse_error": str(e)}

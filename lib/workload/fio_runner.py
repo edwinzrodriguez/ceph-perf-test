@@ -1,3 +1,4 @@
+import base64
 import datetime
 import json
 import os
@@ -172,6 +173,8 @@ class FioWorkloadRunner(WorkloadRunner):
                     print(
                         f"Dumping Ganesha perf counters for Load Point {current_lp}..."
                     )
+                    ganesha_lockstat_enabled = self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False)
+                    lockstat_results = {}
                     for g_host in ganesha_manager.ganeshas:
                         perf_dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
                         if perf_dump:
@@ -196,8 +199,25 @@ class FioWorkloadRunner(WorkloadRunner):
                                 ]
                             )
                             os.remove(local_temp)
-                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
-                            ganesha_manager.dump_lockstat(g_host, current_lp, results_dir, settings=payload, lp_cfg=expanded_loadpoints[current_lp - 1])
+                        if ganesha_lockstat_enabled:
+                            lockstat_json = ganesha_manager.dump_lockstat(g_host)
+                            if lockstat_json:
+                                lockstat_results[g_host] = lockstat_json
+                    if lockstat_results:
+                        lp_cfg = expanded_loadpoints[current_lp - 1]
+                        lockstat_b64 = base64.b64encode(json.dumps(lockstat_results).encode()).decode()
+                        for client in self.config.clients:
+                            json_filename = f"{CommonUtils.get_workload_base_name('fio', 'result', client, current_lp, payload, lp_cfg)}.json"
+                            results_path = f"{results_dir}/{json_filename}"
+                            inject_cmd = (
+                                f"python3 -c \""
+                                f"import json, base64; "
+                                f"f=open('{results_path}'); data=json.load(f); f.close(); "
+                                f"data['lockstat_results']=json.loads(base64.b64decode('{lockstat_b64}')); "
+                                f"f=open('{results_path}','w'); json.dump(data,f,indent=4); f.close()\""
+                            )
+                            print(f"[{client}] Injecting lockstat results into {results_path}...")
+                            self.executor.run_remote(self.admin, inject_cmd)
 
         process.wait()
         for t in perf_threads:

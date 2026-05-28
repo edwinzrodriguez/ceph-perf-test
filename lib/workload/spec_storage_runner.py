@@ -143,14 +143,19 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                         f"Collecting Ganesha perf dumps for Load Point {current_lp}..."
                     )
                     lp_tag = f"{int(current_lp):02d}"
+                    ganesha_lockstat_enabled = self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False)
                     for g_host in self.config.ganeshas:
                         dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
+                        if ganesha_lockstat_enabled:
+                            lockstat_json = ganesha_manager.dump_lockstat(g_host)
+                            if lockstat_json:
+                                if dump is None:
+                                    dump = {}
+                                dump["lockstat_results"] = lockstat_json
                         if dump:
                             self.save_json_to_results(
                                 f"{g_host}_lp{lp_tag}_ganesha_perf.json", dump, r_dir
                             )
-                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
-                            ganesha_manager.dump_lockstat(g_host, current_lp, r_dir, settings=payload)
             if run_phase_started:
                 if perf_record_enabled and not perf_triggered:
                     if "Run " in line and " percent complete" in line:
