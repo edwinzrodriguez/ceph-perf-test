@@ -219,6 +219,8 @@ cephfs_tool:
       extra_args: ""
       threads: [32, 16, 8, 1]
       msgr_workers: [3, 8, 12]
+      async: [false, true]
+      queue-depth: [1, 2, 4]
       client-oc: [1, 0]
       client-oc-size: ["16GiB", "1GiB", "200MiB"]
       block-size: ["4MiB", "1MiB", "256KiB"]

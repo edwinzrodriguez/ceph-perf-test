@@ -127,6 +127,12 @@ def main():
                 block_size = str(CommonUtils.parse_si_unit(block_size))
                 cmd_parts.extend(["--block-size", block_size])
 
+            if lp_cfg.get("async"):
+                cmd_parts.append("--async")
+                queue_depth = lp_cfg.get("queue-depth")
+                if queue_depth is not None:
+                    cmd_parts.extend(["--queue-depth", str(queue_depth)])
+
             extra = lp_cfg.get("extra_args")
             if extra:
                 cmd_parts.append(str(extra))
