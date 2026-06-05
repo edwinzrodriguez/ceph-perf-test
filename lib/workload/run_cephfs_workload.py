@@ -17,22 +17,31 @@ from cephfs_perf_lib import CommonUtils
 
 def main():
     parser = argparse.ArgumentParser(description="CephFS-Tool Workload Driver")
-    parser.add_argument("--settings", type=str, required=True, help="JSON settings")
+    parser.add_argument("--settings", type=str, required=True, help="JSON settings or path to JSON file (prefix with @)")
     parser.add_argument(
-        "--loadpoints", type=str, required=True, help="JSON list of loadpoints"
+        "--loadpoints", type=str, required=True, help="JSON list of loadpoints or path to JSON file (prefix with @)"
     )
     parser.add_argument(
-        "--clients", type=str, required=True, help="JSON list of clients"
+        "--clients", type=str, required=True, help="JSON list of clients or path to JSON file (prefix with @)"
     )
     parser.add_argument("--runner-name", help="Name of the workload runner")
     args = parser.parse_args()
 
+    def load_json_arg(arg_value):
+        """Load JSON from string or file (if prefixed with @)"""
+        if arg_value.startswith('@'):
+            file_path = arg_value[1:]
+            with open(file_path, 'r') as f:
+                return json.load(f)
+        else:
+            return json.loads(arg_value)
+
     try:
-        settings = json.loads(args.settings)
-        loadpoints = json.loads(args.loadpoints)
-        clients = json.loads(args.clients)
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
+        settings = load_json_arg(args.settings)
+        loadpoints = load_json_arg(args.loadpoints)
+        clients = load_json_arg(args.clients)
+    except (json.JSONDecodeError, FileNotFoundError, IOError) as e:
+        print(f"Error loading JSON: {e}")
         sys.exit(1)
     results_dir = settings.get("results_dir")
     fs_name = settings.get("fs_name")
@@ -142,19 +151,27 @@ def main():
             # However, subprocess.Popen(ssh_cmd, ...) where ssh_cmd is a list
             # will result in 'ssh client "env CEPH_ARGS=... /path/to/cephfs-tool ..."'
             # which might need to be carefully handled.
+            #
+            # To avoid "Argument list too long" errors when CEPH_ARGS is very long,
+            # we pass the command via stdin instead of as an argument.
 
             cmd = " ".join(cmd_parts)
 
             print(f"[{client}] Executing CephFS-Tool: {cmd}", flush=True)
             # We run it via ssh from the admin node where this script is running
-            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", client, cmd]
+            # Pass command via stdin to avoid ARG_MAX limits
+            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", client, "bash -s"]
             proc = subprocess.Popen(
                 ssh_cmd,
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
             )
+            # Send the command to stdin and close it
+            proc.stdin.write(cmd + "\n")
+            proc.stdin.close()
             processes.append((client, proc))
 
         # Wait for all clients to finish this load point
@@ -213,7 +230,14 @@ def main():
                 # Use a dummy executor for log collection
                 class SimpleExecutor:
                     def run_remote(self, h, cmd, check=False):
-                        return subprocess.check_output(["ssh", "-o", "StrictHostKeyChecking=no", h, cmd], text=True)
+                        # Pass command via stdin to avoid "Argument list too long" errors
+                        result = subprocess.run(
+                            ["ssh", "-o", "StrictHostKeyChecking=no", h, "bash -s"],
+                            input=cmd + "\n",
+                            capture_output=True,
+                            text=True
+                        )
+                        return result.stdout
 
                 CommonUtils.collect_journal_logs(SimpleExecutor(), clients, results_dir)
                 sys.exit(proc.returncode)

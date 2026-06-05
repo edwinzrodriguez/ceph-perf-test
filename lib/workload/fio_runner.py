@@ -78,15 +78,44 @@ class FioWorkloadRunner(WorkloadRunner):
 
         print(f"Running Fio Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
+        
+        # To avoid "Argument list too long" errors when loadpoints JSON is very large,
+        # we write JSON data to temporary files and pass file paths with @ prefix
+        
+        # Create temporary file paths on remote host
+        tmp_settings = f"/tmp/fio_settings_{os.getpid()}.json"
+        tmp_mount_points = f"/tmp/fio_mount_points_{os.getpid()}.json"
+        tmp_clients = f"/tmp/fio_clients_{os.getpid()}.json"
+        tmp_loadpoints = f"/tmp/fio_loadpoints_{os.getpid()}.json"
+        
+        # Write JSON files to remote host using base64 encoding to avoid shell escaping issues
+        settings_b64 = base64.b64encode(settings_json.encode()).decode()
+        mount_points_b64 = base64.b64encode(mount_points_json.encode()).decode()
+        clients_b64 = base64.b64encode(clients_json.encode()).decode()
+        loadpoints_b64 = base64.b64encode(loadpoints_json.encode()).decode()
+        
+        setup_cmd = (
+            f"echo '{settings_b64}' | base64 -d > {tmp_settings} && "
+            f"echo '{mount_points_b64}' | base64 -d > {tmp_mount_points} && "
+            f"echo '{clients_b64}' | base64 -d > {tmp_clients} && "
+            f"echo '{loadpoints_b64}' | base64 -d > {tmp_loadpoints}"
+        )
+        
+        # Execute setup command to create temp files
+        self.executor.run_remote(self.admin, setup_cmd)
+        
+        # Now run the workload with file paths (@ prefix tells script to read from file)
         full_cmd = (
             f"python3 {run_cmd} "
-            f"--settings '{settings_json}' "
-            f"--mount-points '{mount_points_json}' "
-            f"--clients '{clients_json}' "
-            f"--loadpoints '{loadpoints_json}' "
-            f"--runner-name '{self.get_name()}'"
+            f"--settings '@{tmp_settings}' "
+            f"--mount-points '@{tmp_mount_points}' "
+            f"--clients '@{tmp_clients}' "
+            f"--loadpoints '@{tmp_loadpoints}' "
+            f"--runner-name '{self.get_name()}'; "
+            f"rm -f {tmp_settings} {tmp_mount_points} {tmp_clients} {tmp_loadpoints}"
         )
-        print(f"[{self.admin}] Executing: {full_cmd}")
+        
+        print(f"[{self.admin}] Executing workload with temp files...")
         ssh_cmd = [
             "ssh",
             "-o",
@@ -94,7 +123,7 @@ class FioWorkloadRunner(WorkloadRunner):
             "-p",
             port,
             f"{user}@{host}",
-            full_cmd,
+            "bash -s",
         ]
 
         processes = []
@@ -107,11 +136,14 @@ class FioWorkloadRunner(WorkloadRunner):
 
         process = subprocess.Popen(
             ssh_cmd,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            stdin=subprocess.DEVNULL,
         )
+        # Send the command to stdin and close it
+        process.stdin.write(full_cmd + "\n")
+        process.stdin.close()
 
         output = []
         for line in process.stdout:

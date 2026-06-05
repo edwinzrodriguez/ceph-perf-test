@@ -500,11 +500,16 @@ class SSHExecutor:
         user, host, port = self.get_ssh_details(host_name)
         ssh_target = f"{user}@{host}"
         print(f"[{host_name}] Executing: {cmd}")
-        ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", port, ssh_target, cmd]
+        # Pass command via stdin to avoid "Argument list too long" errors
+        # when cmd contains very long arguments (e.g., long CEPH_ARGS)
+        ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", port, ssh_target, "bash -s"]
         if stream:
             process = subprocess.Popen(
-                ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+                ssh_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
             )
+            # Send command to stdin and close it
+            process.stdin.write(cmd + "\n")
+            process.stdin.close()
             output = []
             for line in process.stdout:
                 print(f"[{host_name}] {line}", end="")
@@ -514,7 +519,7 @@ class SSHExecutor:
                 raise Exception(f"Error on {host_name}: {process.returncode}")
             return "".join(output)
         else:
-            result = subprocess.run(ssh_cmd, capture_output=True, text=True)
+            result = subprocess.run(ssh_cmd, input=cmd + "\n", capture_output=True, text=True)
             if result.returncode != 0 and check:
                 raise Exception(f"Error on {host_name}: {result.stderr}")
             return result.stdout

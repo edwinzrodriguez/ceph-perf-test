@@ -51,28 +51,37 @@ def format_si_units(value):
 def main():
     parser = argparse.ArgumentParser(description="Run Fio workload")
     parser.add_argument(
-        "--settings", required=True, help="JSON string containing test settings"
+        "--settings", required=True, help="JSON string containing test settings or path to JSON file (prefix with @)"
     )
     parser.add_argument(
-        "--mount-points", required=True, help="JSON string containing mount points"
+        "--mount-points", required=True, help="JSON string containing mount points or path to JSON file (prefix with @)"
     )
     parser.add_argument(
-        "--clients", required=True, help="JSON string containing client list"
+        "--clients", required=True, help="JSON string containing client list or path to JSON file (prefix with @)"
     )
     parser.add_argument(
-        "--loadpoints", help="JSON string containing loadpoints configuration"
+        "--loadpoints", help="JSON string containing loadpoints configuration or path to JSON file (prefix with @)"
     )
     parser.add_argument("--runner-name", help="Name of the workload runner")
 
     args = parser.parse_args()
 
+    def load_json_arg(arg_value):
+        """Load JSON from string or file (if prefixed with @)"""
+        if arg_value and arg_value.startswith('@'):
+            file_path = arg_value[1:]
+            with open(file_path, 'r') as f:
+                return json.load(f)
+        else:
+            return json.loads(arg_value) if arg_value else None
+
     try:
-        settings = json.loads(args.settings)
-        mount_points = json.loads(args.mount_points)
-        clients = json.loads(args.clients)
-        loadpoints = json.loads(args.loadpoints) if args.loadpoints else []
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
+        settings = load_json_arg(args.settings)
+        mount_points = load_json_arg(args.mount_points)
+        clients = load_json_arg(args.clients)
+        loadpoints = load_json_arg(args.loadpoints) if args.loadpoints else []
+    except (json.JSONDecodeError, FileNotFoundError, IOError) as e:
+        print(f"Error loading JSON: {e}")
         return
 
     fs_name = settings.get("fs_name", "perf_test_fs")
@@ -170,14 +179,19 @@ def main():
                 print(f"[{c}] Executing Fio: {cmd}", flush=True)
 
                 # Use Popen to read output in real-time
-                ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", c, cmd]
+                # Pass command via stdin to avoid "Argument list too long" errors
+                ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", c, "bash -s"]
                 process = subprocess.Popen(
                     ssh_cmd,
+                    stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
                     bufsize=1,
                 )
+                # Send the command to stdin and close it
+                process.stdin.write(cmd + "\n")
+                process.stdin.close()
 
                 import re
 
@@ -234,7 +248,14 @@ def main():
                     # Use a dummy executor for log collection
                     class SimpleExecutor:
                         def run_remote(self, host, cmd, check=False):
-                            return subprocess.check_output(["ssh", "-o", "StrictHostKeyChecking=no", host, cmd], text=True)
+                            # Pass command via stdin to avoid "Argument list too long" errors
+                            result = subprocess.run(
+                                ["ssh", "-o", "StrictHostKeyChecking=no", host, "bash -s"],
+                                input=cmd + "\n",
+                                capture_output=True,
+                                text=True
+                            )
+                            return result.stdout
 
                     CommonUtils.collect_journal_logs(SimpleExecutor(), clients, results_dir)
                     sys.exit(process.returncode)

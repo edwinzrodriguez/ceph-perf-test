@@ -74,14 +74,41 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
 
         print(f"Running CephFS-Tool Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
+        
+        # To avoid "Argument list too long" errors when loadpoints JSON is very large,
+        # we write JSON data to temporary files and pass file paths with @ prefix
+        import base64
+        
+        # Create temporary file paths on remote host
+        tmp_settings = f"/tmp/cephfs_settings_{os.getpid()}.json"
+        tmp_loadpoints = f"/tmp/cephfs_loadpoints_{os.getpid()}.json"
+        tmp_clients = f"/tmp/cephfs_clients_{os.getpid()}.json"
+        
+        # Write JSON files to remote host using base64 encoding to avoid shell escaping issues
+        settings_b64 = base64.b64encode(settings_json.encode()).decode()
+        loadpoints_b64 = base64.b64encode(loadpoints_json.encode()).decode()
+        clients_b64 = base64.b64encode(clients_json.encode()).decode()
+        
+        setup_cmd = (
+            f"echo '{settings_b64}' | base64 -d > {tmp_settings} && "
+            f"echo '{loadpoints_b64}' | base64 -d > {tmp_loadpoints} && "
+            f"echo '{clients_b64}' | base64 -d > {tmp_clients}"
+        )
+        
+        # Execute setup command to create temp files
+        self.executor.run_remote(self.admin, setup_cmd)
+        
+        # Now run the workload with file paths (@ prefix tells script to read from file)
         full_cmd = (
             f"python3 {run_cmd} "
-            f"--settings '{settings_json}' "
-            f"--loadpoints '{loadpoints_json}' "
-            f"--clients '{clients_json}' "
-            f"--runner-name '{self.get_name()}'"
+            f"--settings '@{tmp_settings}' "
+            f"--loadpoints '@{tmp_loadpoints}' "
+            f"--clients '@{tmp_clients}' "
+            f"--runner-name '{self.get_name()}'; "
+            f"rm -f {tmp_settings} {tmp_loadpoints} {tmp_clients}"
         )
-        print(f"[{self.admin}] Executing: {full_cmd}")
+        
+        print(f"[{self.admin}] Executing workload with temp files...")
         ssh_cmd = [
             "ssh",
             "-o",
@@ -89,7 +116,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             "-p",
             port,
             f"{user}@{host}",
-            full_cmd,
+            "bash -s",
         ]
 
         current_lp, run_phase_started = 0, False
@@ -107,12 +134,15 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
 
         process = subprocess.Popen(
             ssh_cmd,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            stdin=subprocess.DEVNULL,
             bufsize=1,
         )
+        # Send the command to stdin and close it
+        process.stdin.write(full_cmd + "\n")
+        process.stdin.close()
 
         output = []
         for line in process.stdout:

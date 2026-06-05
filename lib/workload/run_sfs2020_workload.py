@@ -87,7 +87,14 @@ def main():
             def run_remote(self, h, cmd, check=False):
                 if h == "localhost":
                     return subprocess.check_output(cmd, shell=True, text=True)
-                return subprocess.check_output(["ssh", "-o", "StrictHostKeyChecking=no", h, cmd], text=True)
+                # Pass command via stdin to avoid "Argument list too long" errors
+                result = subprocess.run(
+                    ["ssh", "-o", "StrictHostKeyChecking=no", h, "bash -s"],
+                    input=cmd + "\n",
+                    capture_output=True,
+                    text=True
+                )
+                return result.stdout
 
         CommonUtils.collect_journal_logs(SimpleExecutor(), hosts, results_dir)
         sys.exit(result.returncode)
