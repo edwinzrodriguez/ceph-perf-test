@@ -47,11 +47,12 @@ def main():
     fs_name = settings.get("fs_name")
 
     executable = settings.get("executable_path", "/usr/local/bin/cephfs-tool")
-    ceph_args = settings.get("ceph_args", "")
+    base_env_vars = dict(settings.get("env_vars", {}))
     lockstat_asok = settings.get("cephfs_tool_lockstat_asok")
     if lockstat_asok:
         asok_arg = f"--admin-socket={lockstat_asok}"
-        ceph_args = f"{ceph_args} {asok_arg}".strip() if ceph_args else asok_arg
+        existing_ceph_args = base_env_vars.get("CEPH_ARGS", "")
+        base_env_vars["CEPH_ARGS"] = f"{existing_ceph_args} {asok_arg}".strip() if existing_ceph_args else asok_arg
     config_path = settings.get("config_path")
     keyring = settings.get("keyring")
     client_id = settings.get("client_id")
@@ -72,9 +73,7 @@ def main():
             # env CEPH_ARGS="..." /path/to/cephfs-tool bench -c ... -k ... -i ... --filesystem ... --root-path ... --files ... --size ... --threads ... --iterations ... [extra_args]
 
             cmd_parts = []
-            env_vars = {}
-            if ceph_args:
-                env_vars["CEPH_ARGS"] = ceph_args
+            env_vars = dict(base_env_vars)
             if settings.get("cephfs_tool_lockstat_enabled"):
                 env_vars["ENABLE_LOCKSTAT"] = "true"
             if env_vars:

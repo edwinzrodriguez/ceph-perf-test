@@ -106,7 +106,7 @@ ceph:
   fsid: "12345678-1234-1234-1234-123456789012"
 
 ganesha:
-  enabled: false
+  enabled: true
   service_id: "ganesha"
   # type = systemd|cephadm
   type: "systemd"
@@ -116,7 +116,9 @@ ganesha:
   config_path: "/etc/ganesha/ganesha.conf"
   user_id: "admin"
   keyring_path: "/etc/ceph/ceph.client.admin.keyring"
-  worker_threads: 8
+  env_vars:
+    LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
+#  worker_threads: 8
   perf_record: true
   perf_record_script: "/cephfs_perf/perf_record.py"
   perf_record_executable: "ganesha.nfsd"
@@ -199,7 +201,9 @@ cephfs_tool:
   perf_record_duration: 30
 #  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
   executable_path: "/usr/local/bin/cephfs-tool"
-  ceph_args: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
+  env_vars:
+    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
+    LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
   config_path: "/etc/ceph/ceph.conf"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"
@@ -219,7 +223,17 @@ cephfs_tool:
       extra_args: ""
       threads: [32, 16, 8, 1]
       msgr_workers: [3, 8, 12]
-      async: [false, true]
+      async: false
+      client-oc: [1, 0]
+      client-oc-size: ["16GiB", "1GiB", "200MiB"]
+      block-size: ["4MiB", "1MiB", "256KiB"]
+    - files: 1024
+      size: "5GiB"
+      iterations: 3
+      extra_args: ""
+      threads: [32, 16, 8, 1]
+      msgr_workers: [3, 8, 12]
+      async: true
       queue-depth: [1, 2, 4]
       client-oc: [1, 0]
       client-oc-size: ["16GiB", "1GiB", "200MiB"]

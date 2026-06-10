@@ -456,6 +456,10 @@ class PerformanceTestConfig:
         return self.ceph_keyring_path
 
     @property
+    def ganesha_env_vars(self):
+        return self._config.get("ganesha", {}).get("env_vars", {})
+
+    @property
     def ganesha_ceph_binary_path(self):
         return self._config.get("ganesha", {}).get("ceph_binary_path", "/usr/bin/ceph")
 
@@ -844,7 +848,7 @@ class CommonUtils:
             "results_dir",
             "fs_name",
             "executable_path",
-            "ceph_args",
+            "env_vars",
             "config_path",
             "keyring",
             "client_id",

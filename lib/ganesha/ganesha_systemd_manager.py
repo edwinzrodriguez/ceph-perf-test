@@ -48,11 +48,13 @@ class GaneshaSystemdManager(GaneshaManager):
             pid_path,
         ]
 
-        env_vars = (
-            "export ENABLE_LOCKSTAT=true; "
-            "export GSS_USE_HOSTNAME=0; "
-            f"export CEPH_CONF={self.config.ceph_conf_path}; "
-        )
+        default_env = {
+            "ENABLE_LOCKSTAT": "true",
+            "GSS_USE_HOSTNAME": "0",
+            "CEPH_CONF": self.config.ceph_conf_path,
+        }
+        merged_env = {**default_env, **self.config.ganesha_env_vars}
+        env_vars = "".join(f'export {k}="{v}"; ' for k, v in merged_env.items())
 
         for host_name in self.ganeshas:
             # Create recovery directory

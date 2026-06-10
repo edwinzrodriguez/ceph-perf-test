@@ -47,7 +47,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         # Add global cephfs_tool config options to payload, overriding with tool-specific if present
         for key in [
             "executable_path",
-            "ceph_args",
+            "env_vars",
             "config_path",
             "keyring",
             "client_id",
