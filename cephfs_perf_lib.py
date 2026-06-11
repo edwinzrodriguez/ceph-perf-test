@@ -460,6 +460,10 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("env_vars", {})
 
     @property
+    def ganesha_client_log_level(self):
+        return self._config.get("ganesha", {}).get("client_log_level", 1)
+
+    @property
     def ganesha_ceph_binary_path(self):
         return self._config.get("ganesha", {}).get("ceph_binary_path", "/usr/bin/ceph")
 
@@ -852,6 +856,7 @@ class CommonUtils:
             "config_path",
             "keyring",
             "client_id",
+            "client_log_level",
             "root_path",
             "ganesha_enabled",
             "ganesha_worker_threads",

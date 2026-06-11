@@ -47,7 +47,7 @@ class GaneshaCephadmManager(GaneshaManager):
                 client_section += f"    log_to_file = true\n"
                 client_section += f"    log_to_stderr = false\n"
                 client_section += f"    log_to_syslog = false\n"
-                client_section += f"    debug_client = 1\n"
+                client_section += f"    debug_client = {self.config.ganesha_client_log_level}\n"
                 if self.config.ganesha_keyring_path:
                     client_section += (
                         f"    keyring = {self.config.ganesha_keyring_path}\n"
