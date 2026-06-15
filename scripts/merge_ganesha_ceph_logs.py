@@ -116,13 +116,21 @@ def merge_logs(
     files: Iterable[tuple[str, Path]],
     ganesha_utc: bool,
     carry_continuations: bool,
-) -> list[LogEntry]:
-    entries: list[LogEntry] = []
+) -> Iterator[LogEntry]:
+    import heapq
+
+    handles = []
+    iterators = []
     for source, path in files:
-        with open_text(path) as fh:
-            entries.extend(iter_entries(fh, source, ganesha_utc, carry_continuations))
-    entries.sort()
-    return entries
+        fh = open_text(path)
+        handles.append(fh)
+        iterators.append(iter_entries(fh, source, ganesha_utc, carry_continuations))
+
+    try:
+        yield from heapq.merge(*iterators)
+    finally:
+        for fh in handles:
+            fh.close()
 
 
 def format_entry(entry: LogEntry, prefix_source: bool) -> str:
@@ -188,8 +196,6 @@ def main() -> int:
             print(f"error: {path} does not exist", file=sys.stderr)
             return 1
 
-    entries = merge_logs(files, args.ganesha_utc, not args.no_continuations)
-
     out: TextIO | BinaryIO
     if args.output == Path("-"):
         out = sys.stdout
@@ -197,12 +203,14 @@ def main() -> int:
         out = args.output.open("w", encoding="utf-8")
 
     prefix = not args.no_prefix
-    for entry in entries:
+    count = 0
+    for entry in merge_logs(files, args.ganesha_utc, not args.no_continuations):
         print(format_entry(entry, prefix), file=out)
+        count += 1
 
     if args.output != Path("-"):
         out.close()
-        print(f"merged {len(entries)} entries -> {args.output}", file=sys.stderr)
+        print(f"merged {count} entries -> {args.output}", file=sys.stderr)
 
     return 0
 
