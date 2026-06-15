@@ -35,18 +35,11 @@ class GaneshaSystemdManager(GaneshaManager):
         pid_path = self.config.ganesha_pid_path
 
         # Arguments for environment and parameters
-        args = [
-            binary,
-            "-F",
-            "-L",
-            "STDOUT",
-            "-N",
-            "NIV_EVENT",
-            "-f",
-            "/etc/ganesha/ganesha.conf",
-            "-p",
-            pid_path,
-        ]
+        if self.config.ganesha_log_level:
+            args = [binary, "-f", "/etc/ganesha/ganesha.conf", "-p", pid_path]
+        else:
+            args = [binary, "-F", "-L", "STDOUT", "-N", "NIV_EVENT",
+                    "-f", "/etc/ganesha/ganesha.conf", "-p", pid_path]
 
         default_env = {
             "ENABLE_LOCKSTAT": "true",
@@ -107,7 +100,8 @@ class GaneshaSystemdManager(GaneshaManager):
 
             # Start as a background process with nohup.
             # We use sudo bash to execute the string with environment variables and background it.
-            cmd = f"sudo bash -c '{env_vars} nohup {' '.join(args)} > /var/log/ganesha.log 2>&1 &'"
+            redirect = "> /dev/null 2>&1" if self.config.ganesha_log_level else "> /var/log/ganesha.log 2>&1"
+            cmd = f"sudo bash -c '{env_vars} nohup {' '.join(args)} {redirect} &'"
             self.executor.run_remote(host_name, cmd, check=True)
             print(f"[{host_name}] Ganesha started with PID file {pid_path}")
 
@@ -221,11 +215,69 @@ class GaneshaSystemdManager(GaneshaManager):
             "    NFS_Port = 2049;\n"
             "    allow_set_io_flusher_fail = true;\n"
         )
-        
+
         if self.config.ganesha_rpc_ioq_thrdmin is not None:
             nfs_core_params += f"    rpc_ioq_thrdmin = {self.config.ganesha_rpc_ioq_thrdmin};\n"
         if self.config.ganesha_rpc_ioq_thrdmax is not None:
             nfs_core_params += f"    rpc_ioq_thrdmax = {self.config.ganesha_rpc_ioq_thrdmax};\n"
+
+        log_block = ""
+        if self.config.ganesha_log_level:
+            lvl = self.config.ganesha_log_level
+            log_block = (
+                f"LOG {{\n"
+                f"    Default_log_level = INFO;\n"
+                f"\n"
+                f"    FACILITY {{\n"
+                f"        name = FILE;\n"
+                f"        destination = /var/log/ganesha.log;\n"
+                f"        max_level = FULL_DEBUG;\n"
+                f"        enable = active;\n"
+                f"    }}\n"
+                f"\n"
+                f"    COMPONENTS {{\n"
+                f"        NFS_V4 = {lvl};\n"
+                f"        FSAL = {lvl};\n"
+                f"        DISPATCH = DEBUG;\n"
+                f"\n"
+                f"        # Useful for slot/session diagnosis without full noise:\n"
+                f"        SESSIONS = DEBUG;\n"
+                f"        CLIENTID = DEBUG;\n"
+                f"        STATE = DEBUG;\n"
+                f"\n"
+                f"        # Keep these quiet (main sources of log flood):\n"
+                f"        TIRPC = INFO;\n"
+                f"        RW_LOCK = EVENT;\n"
+                f"        HASHTABLE = EVENT;\n"
+                f"        HASHTABLE_CACHE = EVENT;\n"
+                f"        HT_CACHE = EVENT;\n"
+                f"        MDCACHE = INFO;\n"
+                f"        MDCACHE_LRU = EVENT;\n"
+                f"        DUPREQ = INFO;\n"
+                f"        XPRT = INFO;\n"
+                f"        EXPORT = INFO;\n"
+                f"        FILEHANDLE = EVENT;\n"
+                f"    }}\n"
+                f"\n"
+                f"    Display_UTC_Timestamp = true;\n"
+                f"\n"
+                f"    FORMAT {{\n"
+                f"        date_format = syslog_usec;\n"
+                f"        time_format = syslog_usec;\n"
+                f"\n"
+                f"        EPOCH = true;\n"
+                f"        HOSTNAME = true;\n"
+                f"        PROGNAME = true;\n"
+                f"        PID = false;\n"
+                f"        THREAD_NAME = true;\n"
+                f"        FILE_NAME = false;\n"
+                f"        LINE_NUM = false;\n"
+                f"        FUNCTION_NAME = true;\n"
+                f"        COMPONENT = true;\n"
+                f"        LEVEL = true;\n"
+                f"    }}\n"
+                f"}}\n"
+            )
 
         config_content = (
             f"NFS_Core_Param {{\n"
@@ -237,6 +289,7 @@ class GaneshaSystemdManager(GaneshaManager):
             "    Minor_Versions = 1, 2;\n"
             "}\n"
             f"{ceph_block}"
+            f"{log_block}"
         )
 
         # Add EXPORT blocks for each filesystem manually
