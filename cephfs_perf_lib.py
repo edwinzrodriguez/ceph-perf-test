@@ -863,6 +863,7 @@ class CommonUtils:
             "client_log_level",
             "log_level",
             "root_path",
+            "duration",
             "ganesha_enabled",
             "ganesha_worker_threads",
             "ganesha_umask",
