@@ -101,7 +101,7 @@ class GaneshaSystemdManager(GaneshaManager):
             # Start as a background process with nohup.
             # We use sudo bash to execute the string with environment variables and background it.
             redirect = "> /dev/null 2>&1" if self.config.ganesha_log_level else "> /var/log/ganesha.log 2>&1"
-            cmd = f"sudo bash -c '{env_vars} nohup {' '.join(args)} {redirect} &'"
+            cmd = f"sudo bash -c 'ulimit -c unlimited; {env_vars} nohup {' '.join(args)} {redirect} &'"
             self.executor.run_remote(host_name, cmd, check=True)
             print(f"[{host_name}] Ganesha started with PID file {pid_path}")
 
