@@ -86,6 +86,7 @@ def main():
 
     fs_name = settings.get("fs_name", "perf_test_fs")
     results_dir = settings.get("results_dir")
+    timestamp_progress = settings.get("timestamp_progress", False)
 
     if not results_dir:
         print("Error: results_dir is required in settings")
@@ -230,8 +231,11 @@ def main():
                                 run_phase_started = True
 
                             # Report percentage and status back to caller
+                            ts_prefix = ""
+                            if timestamp_progress:
+                                ts_prefix = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+0000") + " "
                             print(
-                                f"[{c}] Fio Status: {percent}% complete, ETA: {eta}",
+                                f"{ts_prefix}[{c}] Fio Status: {percent}% complete, ETA: {eta}",
                                 flush=True,
                             )
                     else:

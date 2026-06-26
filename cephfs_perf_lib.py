@@ -890,6 +890,7 @@ class CommonUtils:
             "cephfs_tool_lockstat_enabled",
             "cephfs_tool_lockstat_asok",
             "cephfs_tool_lockstat_path",
+            "timestamp_progress",
         }
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}"
