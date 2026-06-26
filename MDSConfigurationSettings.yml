@@ -119,7 +119,8 @@ ganesha:
   env_vars:
     LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
 #  client_log_level: 1
-#  log_level: EVENT # DO NOT USE NIV_* here, those only apply on the command line
+#  finisher_log_level: 1
+  #  log_level: EVENT # DO NOT USE NIV_* here, those only apply on the command line
 #  worker_threads: 8
   perf_record: true
   perf_record_script: "/cephfs_perf/perf_record.py"

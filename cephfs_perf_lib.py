@@ -464,6 +464,10 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("client_log_level", 1)
 
     @property
+    def ganesha_finisher_log_level(self):
+        return self._config.get("ganesha", {}).get("finisher_log_level")
+
+    @property
     def ganesha_log_level(self):
         return self._config.get("ganesha", {}).get("log_level")
 
@@ -861,6 +865,7 @@ class CommonUtils:
             "keyring",
             "client_id",
             "client_log_level",
+            "finisher_log_level",
             "log_level",
             "root_path",
             "duration",
