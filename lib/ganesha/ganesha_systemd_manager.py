@@ -97,8 +97,14 @@ class GaneshaSystemdManager(GaneshaManager):
             self.setup_ganesha_config(host_name=host_name)
 
             # If pid_path exists, kill that process then remove the pid file
-            cleanup_cmd = f"if [ -f {pid_path} ]; then sudo kill $(cat {pid_path}) || true; sudo rm -f {pid_path}; fi"
+            cleanup_cmd = f"if [ -f {pid_path} ]; then sudo kill -9 $(cat {pid_path}) || true; sudo rm -f {pid_path}; fi"
             self.executor.run_remote(host_name, cleanup_cmd)
+
+            # Kill any remaining ganesha.nfsd processes not tracked by the pid file
+            self.executor.run_remote(
+                host_name,
+                "pids=$(pgrep -f ganesha.nfsd 2>/dev/null); if [ -n \"$pids\" ]; then sudo kill -9 $pids || true; fi",
+            )
 
             # Start as a background process with nohup.
             # We use sudo bash to execute the string with environment variables and background it.
