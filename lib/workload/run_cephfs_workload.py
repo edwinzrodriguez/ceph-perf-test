@@ -136,7 +136,7 @@ def main():
                 cmd_parts.extend(["--block-size", block_size])
 
             if lp_cfg.get("async"):
-                cmd_parts.append("--async")
+                cmd_parts.append("--async-io")
                 queue_depth = lp_cfg.get("queue-depth")
                 if queue_depth is not None:
                     cmd_parts.extend(["--queue-depth", str(queue_depth)])
