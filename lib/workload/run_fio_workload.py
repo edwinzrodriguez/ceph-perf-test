@@ -6,6 +6,7 @@ import datetime
 import os
 import sys
 import threading
+import time
 
 # Add project root to sys.path to allow importing cephfs_perf_lib
 # when running the script directly
@@ -205,6 +206,7 @@ def main():
                 )
 
                 run_phase_started = False
+                last_status_time = 0.0
                 for line in process.stdout:
                     line = line.strip()
                     if line.startswith("Jobs:"):
@@ -230,14 +232,17 @@ def main():
                                 print("Starting RUN phase", flush=True)
                                 run_phase_started = True
 
-                            # Report percentage and status back to caller
-                            ts_prefix = ""
-                            if timestamp_progress:
-                                ts_prefix = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+0000") + " "
-                            print(
-                                f"{ts_prefix}[{c}] Fio Status: {percent}% complete, ETA: {eta}",
-                                flush=True,
-                            )
+                            # Report percentage and status back to caller, at most once per second
+                            now = time.monotonic()
+                            if now - last_status_time >= 1.0:
+                                last_status_time = now
+                                ts_prefix = ""
+                                if timestamp_progress:
+                                    ts_prefix = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+0000") + " "
+                                print(
+                                    f"{ts_prefix}[{c}] Fio Status: {percent}% complete, ETA: {eta}",
+                                    flush=True,
+                                )
                     else:
                         # Print other output as is
                         print(f"[{c}] {line}", flush=True)
