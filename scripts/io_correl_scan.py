@@ -669,9 +669,10 @@ def scan_log(lines: List[str], stall_threshold: float = 5.0) -> ScanResult:
             thd = ganesha_thread(line)
             if thd and thd in thread_pending_alloc:
                 k = thread_pending_alloc.pop(thd)
-                op = registry.ops[k]
-                op.submitted = True
-                op.touch(line_no, "legacy_submit")
+                op = registry.ops.get(k)
+                if op:
+                    op.submitted = True
+                    op.touch(line_no, "legacy_submit")
                 thread_pending_submit[thd] = k
             continue
 
@@ -680,9 +681,11 @@ def scan_log(lines: List[str], stall_threshold: float = 5.0) -> ScanResult:
             result = int(m.group(1))
             thd = ganesha_thread(line)
             if result == 0 and thd and thd in thread_pending_submit:
-                op = registry.ops[thread_pending_submit.pop(thd)]
-                op.async_accepted = True
-                op.touch(line_no, "legacy_accept")
+                k = thread_pending_submit.pop(thd)
+                op = registry.ops.get(k)
+                if op:
+                    op.async_accepted = True
+                    op.touch(line_no, "legacy_accept")
             continue
 
         m = RE_LEGACY_CWF_TRY.search(line)
