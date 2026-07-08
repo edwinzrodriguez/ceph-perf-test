@@ -133,10 +133,20 @@ def merge_logs(
             fh.close()
 
 
+def strip_leading_ts(line: str) -> str:
+    m = CEPH_TS.match(line)  # same pattern as GANESHA_ISO_TS
+    if m:
+        return line[m.end():]
+    m = GANESHA_LEGACY_TS.match(line)
+    if m:
+        return line[m.end():]
+    return line
+
+
 def format_entry(entry: LogEntry, prefix_source: bool) -> str:
     ts = entry.ts.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "+0000"
     if prefix_source:
-        return f"{ts} [{entry.source:7}] {entry.line}"
+        return f"{ts} [{entry.source:7}] {strip_leading_ts(entry.line)}"
     return entry.line
 
 
