@@ -8,6 +8,7 @@ class MountNfsManager(MountManager):
     def mount(self):
         gs = self.config.ganeshas
         mpfs = self.config.get("specstorage", {}).get("mounts_per_fs", 1)
+        nfs_opts = self.config.get("mount_nfs", {}).get("mount_options", "nfsvers=4.1,proto=tcp")
         for fs in self.fs_names:
             for idx, c in enumerate(self.clients):
                 gh = gs[idx % len(gs)]
@@ -19,7 +20,7 @@ class MountNfsManager(MountManager):
                     p = f"/mnt/cephfs_{fs}" + (f"_{i:02d}" if mpfs > 1 else "")
                     self.executor.run_remote(
                         c,
-                        f"sudo mkdir -p {p} && sudo mount -t nfs -o nfsvers=4.1,proto=tcp {gt}:/{fs}-export {p}",
+                        f"sudo mkdir -p {p} && sudo mount -t nfs -o {nfs_opts} {gt}:/{fs}-export {p}",
                         check=True,
                     )
                     u, _, _ = self.executor.get_ssh_details(c)

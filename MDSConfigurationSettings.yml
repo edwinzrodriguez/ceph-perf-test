@@ -96,6 +96,9 @@ inventory:
 fs_name: "perf_test_fs"
 fs_manager_type: "CephFSManager"
 mount_manager_type: "MountKernelManager"
+
+mount_nfs:
+  mount_options: "nfsvers=4.1,proto=tcp,sec=sys"
 num_filesystems: 1
 mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec
 

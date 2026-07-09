@@ -886,6 +886,7 @@ class CommonUtils:
             "run_name",
             "num_filesystems",
             "mounts_per_fs",
+            "mount_options",
             "perf_record",
             "perf_record_script",
             "perf_record_executable",
