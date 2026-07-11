@@ -308,6 +308,99 @@ rados_bench:
 
 ---
 
+### `rbd`
+
+Configuration for the RBD workload runner, which uses fio's `rbd` ioengine (librbd) to benchmark a RADOS block device pool directly. Like `rados_bench`, this targets the OSD layer without CephFS/MDS involvement.
+
+Set `mount_manager_type: StubMountManager` — no filesystem mounts are needed.
+
+RBD images are created once per client before any loadpoints run and reused across all loadpoints unless `recreate_images: true`.
+
+#### Global Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `results_base_dir` | string | `/cephfs_perf/results` | Base directory for result files |
+| `run_command` | string | `/cephfs_perf/rbd/run_rbd_workload.py` | Remote driver script path |
+| `executable_path` | string | `/usr/local/bin/fio` | Path to the `fio` binary |
+| `rbd_executable_path` | string | `/usr/local/bin/rbd` | Path to the `rbd` binary (used for image management) |
+| `config_path` | string | | Path to `ceph.conf` |
+| `keyring` | string | | Path to Ceph keyring file |
+| `client_id` | string | `admin` | Ceph client user ID (passed as `--clientname`) |
+| `pool` | string | required | RBD pool name. Created and initialized by `CephPoolManager` if it does not exist. |
+| `pool_pg_num` | int | | PG count for the pool (optional) |
+| `pool_size` | int | | Replication size (optional) |
+| `pool_min_size` | int | | Minimum replication size (optional) |
+| `pool_recreate` | bool | `false` | Wipe and recreate the pool before each iteration |
+| `image_size` | string | `10GiB` | Size of each RBD image (SI units supported) |
+| `images_per_client` | int | `1` | Number of RBD images created per client. fio runs one job per image. |
+| `recreate_images` | bool | `false` | Delete and recreate images before each iteration |
+| `gtod_reduce` | int | `1` | Enable fio `gtod_reduce` to reduce `gettimeofday` overhead |
+| `ramp_time` | int | `5` | Warmup time in seconds before measuring |
+| `randrepeat` | int | | fio `randrepeat` setting |
+| `timestamp_progress` | bool | `false` | Prefix each progress line with an ISO 8601 UTC timestamp |
+| `env_vars` | dict | `{}` | Environment variables passed to `fio`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. Common use: `LD_LIBRARY_PATH`. |
+
+#### Profiling
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `perf_record` | bool | `false` | Enable `perf record` profiling |
+| `perf_record_script` | string | | Path to perf recording script |
+| `perf_record_executable` | string | `fio` | Executable to profile |
+| `perf_record_duration` | int | `30` | Profiling duration in seconds |
+| `flamegraph_path` | string | | Path to FlameGraph tools for SVG generation |
+
+#### Loadpoint Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `readwrite` | string or list | | Access pattern (`randread`, `randwrite`, `randrw`, `read`, `write`) |
+| `block-size` | string or list | | I/O block size (e.g., `4MiB`, `256KiB`) |
+| `iodepth` | int or list | | I/O queue depth |
+| `direct` | int or list | | Direct I/O (`1`=on, `0`=off) |
+| `rwmixread` | int or list | | Read percentage for `randrw` mode |
+| `threads` | int or list | | Number of fio jobs (maps to `--numjobs`) |
+| `size` | string | | Total I/O size per job |
+| `duration` | int | global `duration` | Per-loadpoint runtime in seconds |
+| `gtod_reduce` | int | global value | Per-loadpoint override |
+| `ramp_time` | int | global value | Per-loadpoint ramp time override |
+| `randrepeat` | int | global value | Per-loadpoint override |
+| `extra_args` | string | | Additional fio arguments appended verbatim |
+
+> **Note**: Do not set `create_serialize: 0` for RBD loadpoints. fio's `rbd` ioengine can race on concurrent connect when `numjobs > 1` and setup runs inside each thread. Leave it at fio's default (`1`).
+
+#### Example Configuration
+
+```yaml
+mount_manager_type: "StubMountManager"
+
+rbd:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/rbd/run_rbd_workload.py"
+  executable_path: "/usr/local/bin/fio"
+  rbd_executable_path: "/usr/local/bin/rbd"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  pool: "rbd_bench_pool"
+  image_size: "10GiB"
+  images_per_client: 1
+  recreate_images: false
+  gtod_reduce: 1
+  ramp_time: 5
+  loadpoints:
+      duration: 60
+      block-size: ["4MiB", "256KiB"]
+      iodepth: [8]
+      readwrite: ["randwrite", "randread"]
+      direct: [1]
+      threads: [32, 8]
+      extra_args: ""
+```
+
+---
+
 ### `specstorage`
 
 Configuration for the SPECstorage 2020 workload runner.
