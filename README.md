@@ -232,6 +232,82 @@ Configuration for the fio workload runner.
 
 ---
 
+### `rados_bench`
+
+Configuration for the `rados bench` workload runner. This workload targets a RADOS pool directly (not CephFS), making it useful for isolating OSD-level performance from MDS overhead.
+
+Set `mount_manager_type: StubMountManager` when running rados bench only — no filesystem mounts are needed.
+
+#### Global Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `results_base_dir` | string | `/cephfs_perf/results` | Base directory for result files |
+| `run_command` | string | `/cephfs_perf/rados_bench/run_rados_workload.py` | Remote driver script path |
+| `executable_path` | string | `/usr/local/bin/rados` | Path to the `rados` binary |
+| `config_path` | string | `/etc/ceph/ceph.conf` | Path to `ceph.conf` |
+| `keyring` | string | | Path to Ceph keyring file |
+| `client_id` | string | `admin` | Ceph client user ID |
+| `pool` | string | required | RADOS pool to benchmark. Created automatically by `CephPoolManager` if it does not exist. |
+| `pool_pg_num` | int | | PG count for the pool (optional) |
+| `pool_size` | int | | Replication size (optional) |
+| `pool_min_size` | int | | Minimum replication size (optional) |
+| `pool_recreate` | bool | `false` | Wipe and recreate the pool before each iteration |
+| `no_cleanup` | bool | `true` | Keep bench objects after write phase so subsequent read loadpoints can find them |
+| `duration` | int | `30` | Default bench duration in seconds (overridable per loadpoint) |
+| `env_vars` | dict | `{}` | Environment variables passed to `rados`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
+
+#### Profiling
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `perf_record` | bool | `false` | Enable `perf record` profiling |
+| `perf_record_script` | string | | Path to perf recording script |
+| `perf_record_executable` | string | `rados` | Executable to profile |
+| `perf_record_duration` | int | `30` | Profiling duration in seconds |
+
+#### Loadpoint Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `readwrite` | string or list | `seqwrite` | Access pattern: `seqwrite`, `randwrite`, `seqread`, `randread` |
+| `threads` | int or list | `16` | Number of concurrent I/O streams (`--concurrent-ios`) |
+| `duration` | int | global `duration` | Per-loadpoint bench duration in seconds |
+| `min-object-size` | string | | Minimum object size for write loadpoints (e.g., `4KiB`). SI units supported. |
+| `max-object-size` | string | | Maximum object size for write loadpoints (e.g., `4MiB`). SI units supported. |
+| `read-percent` | int | | Read percentage (passed as `--read-percent`; for mixed workloads) |
+| `no_cleanup` | bool | global `no_cleanup` | Per-loadpoint override for `--no-cleanup` |
+| `run_name` | string | `<fs_name>_<client>` | Override the `--run-name` prefix. Useful when chaining write and read loadpoints across separate runs. |
+| `extra_args` | string | | Additional arguments appended verbatim to the `rados bench` command |
+
+> **Note on read loadpoints**: `seqread` and `randread` require objects from a prior `seqwrite`/`randwrite` run with the same `--run-name`. Set `no_cleanup: true` on the write loadpoint so objects persist for subsequent reads.
+
+#### Example Configuration
+
+```yaml
+mount_manager_type: "StubMountManager"
+
+rados_bench:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/rados_bench/run_rados_workload.py"
+  executable_path: "/usr/local/bin/rados"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  pool: "rados_bench_pool"
+  no_cleanup: true
+  duration: 30
+  loadpoints:
+    - readwrite: ["seqwrite", "randwrite", "seqread", "randread"]
+      threads: [16, 32]
+      duration: 30
+      min-object-size: "4KiB"
+      max-object-size: "4MiB"
+      extra_args: ""
+```
+
+---
+
 ### `specstorage`
 
 Configuration for the SPECstorage 2020 workload runner.
