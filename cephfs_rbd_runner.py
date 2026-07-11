@@ -11,27 +11,24 @@ if project_root not in sys.path:
 from lib.runner.cephfs_benchmark_runner import BenchRunner
 from lib.fs.ceph_pool_manager import CephPoolManager
 from lib.mount.mount_manager import StubMountManager
-from lib.workload.rados_tool_runner import RadosToolWorkloadRunner
+from lib.workload.rbd_runner import RbdWorkloadRunner
 
 
-class RadosBenchRunner(BenchRunner):
+class RbdBenchRunner(BenchRunner):
     def get_workload_runner(self, executor, config, fs_names):
-        return RadosToolWorkloadRunner(executor, config, fs_names)
+        return RbdWorkloadRunner(executor, config, fs_names)
 
     def get_fs_manager(self, executor, config):
-        # Rados bench doesn't need a CephFS — just a pool. Force the pool
-        # manager regardless of the yaml's fs_manager_type setting so a
-        # shared config file used by multiple runners still Does The Right
-        # Thing when invoked as the rados runner.
-        return CephPoolManager(executor, config, section="rados_bench")
+        # RBD uses librbd directly — no CephFS, just a pool.
+        return CephPoolManager(executor, config, section="rbd")
 
     def get_mount_and_ganesha(self, executor, config, cephfs_manager):
-        # No mount, no NFS. Rados bench talks to OSDs directly.
+        # No mount, no ganesha. fio's rbd ioengine talks to OSDs directly.
         return StubMountManager(executor, config, cephfs_manager), None
 
 
 def main():
-    runner = RadosBenchRunner(description="Rados Bench Performance Runner")
+    runner = RbdBenchRunner(description="RBD (fio --ioengine=rbd) Performance Runner")
     runner.run()
 
 

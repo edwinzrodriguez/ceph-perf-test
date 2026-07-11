@@ -281,6 +281,51 @@ rados_bench:
       read-percent: 0
       extra_args: ""
 
+# RBD (fio --ioengine=rbd) configuration
+rbd:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/rbd/run_rbd_workload.py"
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record: false
+  perf_record_executable: "fio"
+  perf_record_duration: 30
+  flamegraph_path: "/cephfs_perf/FlameGraph"
+  executable_path: "/usr/local/bin/fio"
+  rbd_executable_path: "/usr/local/bin/rbd"
+  env_vars:
+    LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  # Pool to hold the RBD images. CephPoolManager creates it and runs
+  # 'rbd pool init' when application defaults to 'rbd'.
+  pool: "rbd_bench_pool"
+  # pool_pg_num: 128
+  # pool_size: 3
+  # pool_min_size: 2
+  # pool_recreate: false
+  # RBD image size and per-client image count. One image per client is the
+  # common case; set images_per_client > 1 to stripe fio across multiple images.
+  image_size: "10GiB"
+  images_per_client: 1
+  # If true, delete existing images before creating new ones each iteration.
+  recreate_images: false
+  gtod_reduce: 1
+  ramp_time: 5
+  threads_fio: true
+  loadpoints:
+      duration: 60
+      size: "5GiB"
+      block-size: ["4MiB", "256KiB"]
+      iodepth: [8]
+      readwrite: ["randwrite", "randread"]
+      direct: [1]
+      # Do NOT set create_serialize: 0 for rbd. fio's rbd ioengine races on
+      # concurrent connect when numjobs > 1 and setup runs inside each thread
+      # instead of sequentially in the main thread. Leave at fio's default (1).
+      threads: [32, 8]
+      extra_args: ""
+
 logging:
   enabled: false
   debug_mds: 5

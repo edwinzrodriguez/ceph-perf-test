@@ -3,29 +3,40 @@ from cephfs_perf_lib import FSManager
 
 
 class CephPoolManager(FSManager):
-    """Manages a single Rados pool for object-store benchmarks (e.g. rados bench).
+    """Manages a single Rados pool for benchmarks that don't need a CephFS
+    (e.g. `rados bench`, `fio --ioengine=rbd`).
 
-    Unlike CephFSManager, no CephFS filesystem is created — only the pool that
-    the benchmark writes/reads objects against. All MDS-specific hooks
-    (logging, lockstat, mds_settings) are no-ops.
+    The config section that carries `pool` / `pool_pg_num` / etc. is passed
+    via ``section`` (defaults to auto-detect: "rbd" if present, else
+    "rados_bench"). All MDS-specific hooks are no-ops.
     """
 
-    def __init__(self, executor, config):
+    def __init__(self, executor, config, section=None):
         self.executor = executor
         self.config = config
         self.admin = config.admin_host
 
-        cfg = config.rados_bench or {}
+        if section is None:
+            if config.get("rbd"):
+                section = "rbd"
+            else:
+                section = "rados_bench"
+        self.section = section
+
+        cfg = config.get(section) or {}
         self.pool_name = cfg.get("pool")
         if not self.pool_name:
             raise ValueError(
-                "rados_bench.pool must be set when using CephPoolManager"
+                f"{section}.pool must be set when using CephPoolManager"
             )
         self.pg_num = cfg.get("pool_pg_num")
         self.pool_size = cfg.get("pool_size")
         self.pool_min_size = cfg.get("pool_min_size")
         self.recreate = cfg.get("pool_recreate", False)
-        self.application = cfg.get("pool_application", "rados")
+        # Default application: 'rbd' for RBD pools (triggers `rbd pool init`),
+        # 'rados' for object-store benchmarks like `rados bench`.
+        default_app = "rbd" if section == "rbd" else "rados"
+        self.application = cfg.get("pool_application", default_app)
 
     def get_fs_names(self):
         return [self.pool_name]
@@ -97,7 +108,13 @@ class CephPoolManager(FSManager):
             if self.pg_num is not None:
                 create_cmd += f" {self.pg_num}"
             self.executor.run_remote(self.admin, create_cmd)
-            if self.application:
+            if self.application == "rbd":
+                # `rbd pool init` both enables the rbd application and does
+                # the RBD-specific pool init (writes the rbd_directory object).
+                self.executor.run_remote(
+                    self.admin, f"sudo rbd pool init {self.pool_name} || true"
+                )
+            elif self.application:
                 self.executor.run_remote(
                     self.admin,
                     f"sudo ceph osd pool application enable {self.pool_name} "
@@ -106,8 +123,6 @@ class CephPoolManager(FSManager):
 
             osd_hosts = self._osd_hosts_count()
             if 0 < osd_hosts < 3 and self.pool_size is None:
-                # Fall back to size=2/min_size=1 for small clusters so the pool
-                # can go active with fewer OSD hosts.
                 self.executor.run_remote(
                     self.admin,
                     f"sudo ceph osd pool set {self.pool_name} size 2",

@@ -506,6 +506,10 @@ class PerformanceTestConfig:
         return self._config.get("rados_bench")
 
     @property
+    def rbd(self):
+        return self._config.get("rbd")
+
+    @property
     def specstorage(self):
         return self._config.get("specstorage")
 
@@ -907,7 +911,11 @@ class CommonUtils:
             "cephfs_tool_lockstat_asok",
             "cephfs_tool_lockstat_path",
             "timestamp_progress",
-            "no_cleanup"
+            "no_cleanup",
+            "rbd_executable_path",
+            "ramp_time",
+            "pool",
+            "recreate_images",
         }
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}"
@@ -1023,7 +1031,8 @@ class CommonUtils:
         test_params = data.get("test_parameters", {}) or {}
         runner = test_params.get("Workload Runner", "fio")
 
-        if runner == "fio":
+        if runner in ("fio", "rbd"):
+            # fio --ioengine=rbd emits the same JSON shape as regular fio.
             job = (data.get("jobs") or [{}])[0]
             read = job.get("read", {}) or {}
             write = job.get("write", {}) or {}
