@@ -317,13 +317,19 @@ class PerformanceTestConfig:
 
     @property
     def fs_manager_type(self):
-        return self._config.get("fs_manager_type", "CephFSManager")
+        if "fs_manager_type" in self._config:
+            return self._config["fs_manager_type"]
+        if "rados_bench" in self._config:
+            return "CephPoolManager"
+        return "CephFSManager"
 
     @property
     def mount_manager_type(self):
         if "mount_manager_type" in self._config:
             return self._config["mount_manager_type"]
         if "cephfs_tool" in self._config:
+            return "StubMountManager"
+        if "rados_bench" in self._config:
             return "StubMountManager"
         return "MountKernelManager"
 
@@ -494,6 +500,10 @@ class PerformanceTestConfig:
     @property
     def cephfs_tool(self):
         return self._config.get("cephfs_tool")
+
+    @property
+    def rados_bench(self):
+        return self._config.get("rados_bench")
 
     @property
     def specstorage(self):
@@ -897,6 +907,7 @@ class CommonUtils:
             "cephfs_tool_lockstat_asok",
             "cephfs_tool_lockstat_path",
             "timestamp_progress",
+            "no_cleanup"
         }
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}"
@@ -1094,5 +1105,35 @@ class CommonUtils:
             if not iops:
                 iops = metrics.get("iops", {}).get("value", 0) or 0
             return {"agg_bw_mib": throughput, "agg_iops": iops}
+
+        if runner == "rados_bench":
+            def _to_float(v):
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    return 0.0
+
+            bw_mib = _to_float(data.get("bandwidth"))
+            iops = _to_float(data.get("average_iops"))
+            pattern = str(test_params.get("Read/Write Pattern", "")).lower()
+
+            read_bw, read_iops, write_bw, write_iops = 0.0, 0.0, 0.0, 0.0
+            if "read" in pattern:
+                read_bw, read_iops = bw_mib, iops
+            elif "write" in pattern:
+                write_bw, write_iops = bw_mib, iops
+
+            return {
+                "read": {
+                    "agg_bw_mib": read_bw,
+                    "agg_iops": read_iops,
+                },
+                "write": {
+                    "agg_bw_mib": write_bw,
+                    "agg_iops": write_iops,
+                },
+                "agg_bw_mib": read_bw + write_bw,
+                "agg_iops": read_iops + write_iops,
+            }
 
         return {}

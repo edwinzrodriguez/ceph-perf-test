@@ -15,6 +15,7 @@ from cephfs_perf_lib import (
 )
 from lib.mount.mount_manager import StubMountManager
 from lib.fs.cephfs_manager import CephFSManager
+from lib.fs.ceph_pool_manager import CephPoolManager
 from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
 from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
 from lib.mount.mount_kernel_manager import MountKernelManager
@@ -68,17 +69,18 @@ class BenchRunner:
         """Must be implemented by subclasses to return a WorkloadRunner instance."""
         raise NotImplementedError("Subclasses must implement get_workload_runner")
 
-    def run(self):
-        args = self.parser.parse_args()
-        config = self.load_config(args)
-
-        executor = SSHExecutor(config.all_hosts_meta)
+    def get_fs_manager(self, executor, config):
+        """Return the FSManager. Subclasses may override to force a specific
+        manager regardless of the yaml's fs_manager_type setting."""
         if config.fs_manager_type == "StubFSManager":
-            cephfs_manager = StubFSManager(config)
-        else:
-            cephfs_manager = CephFSManager(executor, config)
-        fs_names = cephfs_manager.get_fs_names()
+            return StubFSManager(config)
+        if config.fs_manager_type == "CephPoolManager":
+            return CephPoolManager(executor, config)
+        return CephFSManager(executor, config)
 
+    def get_mount_and_ganesha(self, executor, config, cephfs_manager):
+        """Return (mount_manager, ganesha_manager). Subclasses may override to
+        force a specific mount manager (e.g. StubMountManager for rados bench)."""
         if config.ganesha_enabled:
             if config.ganesha_type == "systemd":
                 ganesha_manager = GaneshaSystemdManager(
@@ -90,13 +92,22 @@ class BenchRunner:
                 )
             else:
                 raise ValueError(f"Invalid Ganesha type: {config.ganesha_type}")
-            mount_manager = MountNfsManager(executor, config, cephfs_manager)
-        elif config.mount_manager_type == "StubMountManager":
-            ganesha_manager = None
-            mount_manager = StubMountManager(executor, config, cephfs_manager)
-        else:
-            ganesha_manager = None
-            mount_manager = MountKernelManager(executor, config, cephfs_manager)
+            return MountNfsManager(executor, config, cephfs_manager), ganesha_manager
+        if config.mount_manager_type == "StubMountManager":
+            return StubMountManager(executor, config, cephfs_manager), None
+        return MountKernelManager(executor, config, cephfs_manager), None
+
+    def run(self):
+        args = self.parser.parse_args()
+        config = self.load_config(args)
+
+        executor = SSHExecutor(config.all_hosts_meta)
+        cephfs_manager = self.get_fs_manager(executor, config)
+        fs_names = cephfs_manager.get_fs_names()
+
+        mount_manager, ganesha_manager = self.get_mount_and_ganesha(
+            executor, config, cephfs_manager
+        )
 
         workload_runner = self.get_workload_runner(executor, config, fs_names)
 
