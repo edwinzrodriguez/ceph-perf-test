@@ -328,11 +328,22 @@ Mounts CephFS directly via the kernel client.
 
 ### `MountNfsManager`
 
-Mounts via NFS v4.1 through Ganesha.
+Mounts via NFS through Ganesha.
 
 - Requires `ganesha.enabled: true`.
 - Distributes clients across Ganesha nodes in round-robin order.
 - `mounts_per_fs` controls the number of mount points per client per filesystem.
+
+Configured via the `mount_nfs` section:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `mount_options` | string | `nfsvers=4.1,proto=tcp` | Options passed to `mount -t nfs -o` |
+
+```yaml
+mount_nfs:
+  mount_options: "nfsvers=4.1,proto=tcp,sec=sys"
+```
 
 ### `StubMountManager`
 
