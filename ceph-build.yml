@@ -1,5 +1,5 @@
 - name: Build Ceph from source
-  hosts: ganeshas
+  hosts: mdss clients ganeshas
   become: true
   vars:
     git_base_dir: "{{ ansible_env.HOME }}/git"
@@ -13,18 +13,6 @@
     ganesha_build_dir: "ganesha-build"
     ganesha_install_prefix: "/usr/local"
   tasks:
-    - name: Remove existing ceph packages
-      ansible.builtin.dnf:
-        name:
-          - "*ceph*"
-        state: absent
-      ignore_errors: yes
-
-    - name: Remove packages from ibm-storage-ceph-9 repo
-      ansible.builtin.command:
-        cmd: dnf repository-packages ibm-storage-ceph-9 remove -y
-      ignore_errors: yes
-
     - name: Remove epel-release
       ansible.builtin.dnf:
         name: epel-release
@@ -270,106 +258,109 @@
       ansible.builtin.command:
         cmd: ldconfig
 
-    - name: Install Ganesha development dependencies
-      ansible.builtin.dnf:
-        name:
-          - libacl-devel
-          - libnsl2-devel
-          - procps-ng
-          - procps-ng-devel
-        state: present
+    - name: Build and install NFS-Ganesha (ganeshas hosts only)
+      when: "'ganeshas' in group_names"
+      block:
+        - name: Install Ganesha development dependencies
+          ansible.builtin.dnf:
+            name:
+              - libacl-devel
+              - libnsl2-devel
+              - procps-ng
+              - procps-ng-devel
+            state: present
 
-    - name: Check if Ganesha source directory exists
-      ansible.builtin.stat:
-        path: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
-      register: ganesha_source_stat
-      become: false
+        - name: Check if Ganesha source directory exists
+          ansible.builtin.stat:
+            path: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+          register: ganesha_source_stat
+          become: false
 
-    - name: Check if Ganesha build directory exists
-      ansible.builtin.stat:
-        path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-      register: ganesha_build_stat
-      become: false
+        - name: Check if Ganesha build directory exists
+          ansible.builtin.stat:
+            path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+          register: ganesha_build_stat
+          become: false
 
-    - name: Clone NFS-Ganesha repository (V9.7 branch)
-      ansible.builtin.git:
-        repo: "{{ ganesha_repo_url }}"
-        dest: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
-        version: "{{ ganesha_version }}"
-        single_branch: yes
-        recursive: yes
-      become: false
-      when: not ganesha_source_stat.stat.exists
+        - name: Clone NFS-Ganesha repository (V9.7 branch)
+          ansible.builtin.git:
+            repo: "{{ ganesha_repo_url }}"
+            dest: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+            version: "{{ ganesha_version }}"
+            single_branch: yes
+            recursive: yes
+          become: false
+          when: not ganesha_source_stat.stat.exists
 
-    - name: Update Ganesha submodules
-      ansible.builtin.command:
-        cmd: git submodule update --init --recursive
-        chdir: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
-      become: false
-      when: not ganesha_source_stat.stat.exists
+        - name: Update Ganesha submodules
+          ansible.builtin.command:
+            cmd: git submodule update --init --recursive
+            chdir: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+          become: false
+          when: not ganesha_source_stat.stat.exists
 
-    - name: Create Ganesha build directory
-      ansible.builtin.file:
-        path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-        state: directory
-        mode: '0755'
-      become: false
-      when: not ganesha_build_stat.stat.exists
+        - name: Create Ganesha build directory
+          ansible.builtin.file:
+            path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+            state: directory
+            mode: '0755'
+          become: false
+          when: not ganesha_build_stat.stat.exists
 
-    - name: Run cmake for NFS-Ganesha
-      ansible.builtin.command:
-        cmd: "cmake -GNinja -DUSE_TRACEFLOW=ON -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
-        chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-      become: false
-      when: not ganesha_build_stat.stat.exists
+        - name: Run cmake for NFS-Ganesha
+          ansible.builtin.command:
+            cmd: "cmake -GNinja -DUSE_TRACEFLOW=ON -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
+            chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+          become: false
+          when: not ganesha_build_stat.stat.exists
 
-    - name: Build Ganesha with ninja
-      ansible.builtin.command:
-        cmd: ninja
-        chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-      become: false
-      when: not ganesha_build_stat.stat.exists
+        - name: Build Ganesha with ninja
+          ansible.builtin.command:
+            cmd: ninja
+            chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+          become: false
+          when: not ganesha_build_stat.stat.exists
 
-    - name: Install Ganesha with ninja
-      ansible.builtin.command:
-        cmd: ninja install
-        chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-      when: not ganesha_build_stat.stat.exists
+        - name: Install Ganesha with ninja
+          ansible.builtin.command:
+            cmd: ninja install
+            chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+          when: not ganesha_build_stat.stat.exists
 
-    - name: Run ldconfig
-      ansible.builtin.command:
-        cmd: ldconfig
+        - name: Run ldconfig
+          ansible.builtin.command:
+            cmd: ldconfig
 
-    - name: Check if nfs-ganesha systemd service file exists
-      ansible.builtin.stat:
-        path: /etc/systemd/system/nfs-ganesha.service
-      register: ganesha_service_stat
+        - name: Check if nfs-ganesha systemd service file exists
+          ansible.builtin.stat:
+            path: /etc/systemd/system/nfs-ganesha.service
+          register: ganesha_service_stat
 
-    - name: Create nfs-ganesha systemd service file
-      ansible.builtin.copy:
-        dest: /etc/systemd/system/nfs-ganesha.service
-        content: |
-          [Unit]
-          Description=NFS-Ganesha-Server
-          After=network.target
+        - name: Create nfs-ganesha systemd service file
+          ansible.builtin.copy:
+            dest: /etc/systemd/system/nfs-ganesha.service
+            content: |
+              [Unit]
+              Description=NFS-Ganesha-Server
+              After=network.target
 
-          [Service]
-          Type=forking
-          ExecStart={{ ganesha_install_prefix }}/bin/ganesha.nfsd -f {{ ganesha_install_prefix }}/etc/ganesha/ganesha.conf -L /var/log/ganesha.log
-          ExecReload=/bin/kill -HUP $MAINPID
-          PIDFile=/var/run/ganesha.pid
+              [Service]
+              Type=forking
+              ExecStart={{ ganesha_install_prefix }}/bin/ganesha.nfsd -f {{ ganesha_install_prefix }}/etc/ganesha/ganesha.conf -L /var/log/ganesha.log
+              ExecReload=/bin/kill -HUP $MAINPID
+              PIDFile=/var/run/ganesha.pid
 
-          [Install]
-          WantedBy=multi-user.target
-        mode: '0644'
-      when: not ganesha_service_stat.stat.exists
+              [Install]
+              WantedBy=multi-user.target
+            mode: '0644'
+          when: not ganesha_service_stat.stat.exists
 
-    - name: Reload systemd daemon
-      ansible.builtin.systemd:
-        daemon_reload: yes
+        - name: Reload systemd daemon
+          ansible.builtin.systemd:
+            daemon_reload: yes
 
-    - name: Disable nfs-ganesha service
-      ansible.builtin.systemd:
-        name: nfs-ganesha
-        enabled: no
-        state: started
+        - name: Disable nfs-ganesha service
+          ansible.builtin.systemd:
+            name: nfs-ganesha
+            enabled: no
+            state: started
