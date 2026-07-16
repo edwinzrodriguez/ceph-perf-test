@@ -94,13 +94,34 @@ inventory:
       ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
 
 fs_name: "perf_test_fs"
-fs_manager_type: "CephFSManager"
+# CephFSCephadmManager (or legacy CephFSManager) deploys MDS via `ceph orch`.
+# CephFSSystemdManager runs a local ceph-mds process on each MDS host.
+fs_manager_type: "CephFSCephadmManager"
 mount_manager_type: "MountKernelManager"
 
 mount_nfs:
   mount_options: "nfsvers=4.1,proto=tcp,sec=sys"
 num_filesystems: 1
-mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec
+mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec (cephadm only)
+
+# Local ceph-mds settings (used when fs_manager_type is CephFSSystemdManager)
+mds:
+  binary_path: "/usr/local/bin/ceph-mds"
+  ceph_binary_path: "/usr/local/bin/ceph"
+  data_dir: "/var/lib/ceph/mds"
+  log_dir: "/var/log/ceph"
+  run_dir: "/var/run/ceph"
+  env_vars:
+    LD_LIBRARY_PATH: "/usr/local/lib64:${LD_LIBRARY_PATH}"
+    ENABLE_LOCKSTAT: "true"
+  lockstat:
+    enabled: true
+    path: "/usr/local/bin/ceph-lockstat"
+    threshold: 0
+  perf_record: true
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record_executable: "ceph-mds"
+  perf_record_duration: 5
 
 ceph:
   conf: "/etc/ceph/ceph.conf"

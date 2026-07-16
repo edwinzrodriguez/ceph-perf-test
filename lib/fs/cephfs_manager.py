@@ -1,11 +1,15 @@
-import json
-import yaml
 import time
-import subprocess
 from cephfs_perf_lib import CommonUtils, FSManager
 
 
 class CephFSManager(FSManager):
+    """Base CephFS manager with common lifecycle, logging, and lockstat logic.
+
+    Deployment-specific behavior (cephadm orch vs local ceph-mds process) is
+    implemented by subclasses via ``_remove_mds_service``, ``_deploy_mds``,
+    and ``_collect_mds_logs``.
+    """
+
     def __init__(self, executor, config):
         self.executor = executor
         self.config = config
@@ -20,6 +24,8 @@ class CephFSManager(FSManager):
         )
         self.mdss = config.mdss
         self.lockstat_exists = {}
+        # Track deployed MDS instances: {fs_name: [(host, mds_id), ...]}
+        self._mds_instances = {}
 
     def start_fs_logging(self, loadpoint):
         debug_mds = self.config.get("logging", {}).get("debug_mds", 20)
@@ -44,37 +50,12 @@ class CephFSManager(FSManager):
                 server_name, "sudo ceph config set mds debug_mds 1"
             )
             self.executor.run_remote(server_name, "sudo ceph config set mds debug_ms 1")
-            if results_dir:
-                lp_tag = f"{int(loadpoint):02d}"
-                fsid = self.executor.run_remote(server_name, "sudo ceph fsid").strip()
-                log_dir = f"/var/log/ceph/{fsid}"
-                ps_output = self.executor.run_remote(
-                    self.admin,
-                    f"sudo ceph orch ps --hostname {server_name} --daemon_type mds --format json",
-                )
-                daemons = self.safe_json_load(ps_output)
-                for daemon in daemons:
-                    daemon_name = daemon.get("daemon_name")
-                    if not daemon_name:
-                        continue
-                    src_log = f"{log_dir}/ceph-{daemon_name}.log"
-                    dest_log = f"{server_name}_lp{lp_tag}_{daemon_name}.log"
-                    self.executor.run_remote(
-                        server_name, f"sudo cp {src_log} /tmp/{dest_log}"
-                    )
-                    user, _, _ = self.executor.get_ssh_details(server_name)
-                    self.executor.run_remote(
-                        server_name, f"sudo chown {user}:{user} /tmp/{dest_log}"
-                    )
-                    admin_user, admin_host, admin_port = self.executor.get_ssh_details(
-                        self.admin
-                    )
-                    copy_cmd = f"scp -o StrictHostKeyChecking=no -P {admin_port} /tmp/{dest_log} {admin_user}@{admin_host}:{results_dir}/"
-                    self.executor.run_remote(server_name, copy_cmd)
-                    self.executor.run_remote(server_name, f"rm -f /tmp/{dest_log}")
-                    self.executor.run_remote(
-                        server_name, f"sudo truncate -s 0 {src_log}"
-                    )
+        if results_dir:
+            self._collect_mds_logs(loadpoint, results_dir)
+
+    def _collect_mds_logs(self, loadpoint, results_dir):
+        """Collect MDS logs into results_dir. Override in subclasses if needed."""
+        pass
 
     def start_lockstat(self, fs):
         lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
@@ -163,18 +144,7 @@ class CephFSManager(FSManager):
         if self.config.ganesha_enabled and ganesha_manager:
             ganesha_manager.cleanup_ganesha()
         for fs in self.get_fs_names():
-            self.executor.run_remote(self.admin, f"sudo ceph orch rm mds.{fs} || true")
-            for _ in range(24):
-                if not any(
-                    s.get("service_type") == "mds" and s.get("service_id") == fs
-                    for s in self.safe_json_load(
-                        self.executor.run_remote(
-                            self.admin, "sudo ceph orch ls --format json"
-                        )
-                    )
-                ):
-                    break
-                time.sleep(5)
+            self._remove_mds_service(fs)
             self.executor.run_remote(
                 self.admin, f"sudo ceph fs fail {fs} --yes-i-really-mean-it || true"
             )
@@ -189,7 +159,7 @@ class CephFSManager(FSManager):
                 self.admin,
                 f"sudo ceph osd pool delete {fs}_data {fs}_data --yes-i-really-really-mean-it || true",
             )
-            
+
             osd_hosts_count = 0
             try:
                 osd_tree_raw = self.executor.run_remote(self.admin, "sudo ceph osd tree --format json")
@@ -217,91 +187,54 @@ class CephFSManager(FSManager):
             self.executor.run_remote(
                 self.admin, f"sudo ceph fs new {fs} {fs}_metadata {fs}_data"
             )
-            self.generate_mds_yaml(fs, settings.get("max_mds", 1), settings)
-            self.executor.run_remote(
-                self.admin, f"sudo ceph orch apply -i {self.config.mds_yaml_path}"
-            )
-            for _ in range(60):
-                status_raw = self.executor.run_remote(
-                    self.admin, f"sudo ceph fs status {fs} --format json"
-                )
-                status = self.safe_json_load(status_raw, {})
-                if isinstance(status, list):
-                    status = status[0] if status else {}
-                mdsmap = status.get("mdsmap", {})
-                if isinstance(mdsmap, dict):
-                    if (
-                        mdsmap.get("up")
-                        or mdsmap.get("up:active")
-                        or mdsmap.get("active")
-                    ):
-                        break
-                elif isinstance(mdsmap, list):
-                    if any(
-                        str(e.get("state", "")).lower() in ["active", "up:active"]
-                        or "active" in str(e.get("state", "")).lower()
-                        for e in mdsmap
-                    ):
-                        break
-                time.sleep(5)
+            self._deploy_mds(fs, settings)
+            self._wait_for_mds_active(fs)
             self.setup_client_auth(fs)
         self.distribute_keys_and_config()
 
-    def generate_mds_yaml(self, fs, count, settings=None):
+    def _remove_mds_service(self, fs):
+        """Tear down MDS daemons for the given filesystem. Subclasses implement this."""
+        raise NotImplementedError
+
+    def _deploy_mds(self, fs, settings):
+        """Deploy MDS daemons for the given filesystem. Subclasses implement this."""
+        raise NotImplementedError
+
+    def _select_mds_hosts(self, fs, count):
+        """Select host placement for MDS daemons (active + standbys)."""
         num_mdss = len(self.mdss)
+        if num_mdss == 0:
+            raise RuntimeError("No MDS hosts available in inventory")
         num_hosts = min(count + 2, num_mdss)
         start_idx = (
             self.get_fs_names().index(fs) if fs in self.get_fs_names() else 0
         ) % num_mdss
-        selected_hosts = [
-            self.mdss[(start_idx + i) % num_mdss] for i in range(num_hosts)
-        ]
-        has_sfs = any(
-            "EXISTS"
-            in self.executor.run_remote(
-                h, "test -d /cephfs_perf/sfs2020 && echo EXISTS || echo MISSING"
+        return [self.mdss[(start_idx + i) % num_mdss] for i in range(num_hosts)]
+
+    def _wait_for_mds_active(self, fs, timeout_iters=60, sleep_secs=5):
+        for _ in range(timeout_iters):
+            status_raw = self.executor.run_remote(
+                self.admin, f"sudo ceph fs status {fs} --format json"
             )
-            for h in selected_hosts
-        )
-        spec = {
-            "service_type": "mds",
-            "service_id": fs,
-            "placement": {"hosts": selected_hosts},
-            "extra_container_args": [
-                "--privileged",
-                "--cap-add",
-                "SYS_MODULE",
-                "-e",
-                "ENABLE_LOCKSTAT=true",
-                "-v",
-                "/sys/kernel/debug:/sys/kernel/debug:rw",
-                "-v",
-                "/usr/src/kernels:/usr/src/kernels:ro",
-                "-v",
-                "/usr/lib/modules:/usr/lib/modules:ro",
-                "-v",
-                "/usr/lib/debug:/usr/lib/debug:ro",
-            ],
-        }
-        if settings and "cpus" in settings:
-            spec["extra_container_args"].extend(["--cpus", str(settings["cpus"])])
-        if has_sfs:
-            spec["extra_container_args"].extend(["-v", "/cephfs_perf:/cephfs_perf"])
-        with open("mds.yaml", "w") as f:
-            yaml.dump(spec, f)
-        if self.config.mds_yaml_path != "mds.yaml":
-            u, h, p = self.executor.get_ssh_details(self.admin)
-            subprocess.run(
-                [
-                    "scp",
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-P",
-                    str(p),
-                    "mds.yaml",
-                    f"{u}@{h}:{self.config.mds_yaml_path}",
-                ]
-            )
+            status = self.safe_json_load(status_raw, {})
+            if isinstance(status, list):
+                status = status[0] if status else {}
+            mdsmap = status.get("mdsmap", {})
+            if isinstance(mdsmap, dict):
+                if (
+                    mdsmap.get("up")
+                    or mdsmap.get("up:active")
+                    or mdsmap.get("active")
+                ):
+                    return
+            elif isinstance(mdsmap, list):
+                if any(
+                    str(e.get("state", "")).lower() in ["active", "up:active"]
+                    or "active" in str(e.get("state", "")).lower()
+                    for e in mdsmap
+                ):
+                    return
+            time.sleep(sleep_secs)
 
     def get_fs_names(self):
         return self.fs_names
@@ -343,3 +276,19 @@ class CephFSManager(FSManager):
                 t,
                 "sudo mv /tmp/ceph.conf /tmp/ceph.client.0.keyring /tmp/ceph.client.admin.keyring /etc/ceph/ && sudo chmod 0600 /etc/ceph/*.keyring",
             )
+
+    def _copy_log_to_results(self, server_name, src_log, dest_log, results_dir):
+        """Copy a remote log file to the admin host results directory."""
+        self.executor.run_remote(server_name, f"sudo cp {src_log} /tmp/{dest_log}")
+        user, _, _ = self.executor.get_ssh_details(server_name)
+        self.executor.run_remote(
+            server_name, f"sudo chown {user}:{user} /tmp/{dest_log}"
+        )
+        admin_user, admin_host, admin_port = self.executor.get_ssh_details(self.admin)
+        copy_cmd = (
+            f"scp -o StrictHostKeyChecking=no -P {admin_port} "
+            f"/tmp/{dest_log} {admin_user}@{admin_host}:{results_dir}/"
+        )
+        self.executor.run_remote(server_name, copy_cmd)
+        self.executor.run_remote(server_name, f"rm -f /tmp/{dest_log}")
+        self.executor.run_remote(server_name, f"sudo truncate -s 0 {src_log}")

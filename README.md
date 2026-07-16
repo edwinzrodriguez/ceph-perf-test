@@ -33,9 +33,24 @@ The framework operates on a **Test Matrix** principle. It iterates through combi
 |-----|------|---------|-------------|
 | `fs_name` | string | required | Name of the CephFS filesystem |
 | `num_filesystems` | int | `1` | Number of filesystems to create |
-| `fs_manager_type` | string | `CephFSManager` | Manager class for filesystem operations |
+| `fs_manager_type` | string | `CephFSManager` | Manager class: `CephFSCephadmManager` (or legacy `CephFSManager`) deploys MDS via `ceph orch`; `CephFSSystemdManager` runs local `ceph-mds`; also `StubFSManager`, `CephPoolManager` |
 | `mount_manager_type` | string | `MountKernelManager` | Mount handler (`MountKernelManager`, `MountNfsManager`, `StubMountManager`) |
-| `mds_yaml_path` | string | `/cephfs_perf/mds.yaml` | Path to MDS cephadm spec file |
+| `mds_yaml_path` | string | `/cephfs_perf/mds.yaml` | Path to MDS cephadm spec file (cephadm only) |
+
+---
+
+### `mds`
+
+Settings for local `ceph-mds` processes when `fs_manager_type` is `CephFSSystemdManager`.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `binary_path` | string | `/usr/local/bin/ceph-mds` | Path to the `ceph-mds` executable |
+| `ceph_binary_path` | string | `ceph` | Path to the `ceph` CLI (auth, config) |
+| `data_dir` | string | `/var/lib/ceph/mds` | Parent directory for MDS keyrings (`ceph-<id>/keyring`) |
+| `log_dir` | string | `/var/log/ceph` | Directory for MDS log files |
+| `run_dir` | string | `/var/run/ceph` | Directory for PID and admin-socket files |
+| `env_vars` | map | `{}` | Environment variables exported when starting `ceph-mds` (merged over defaults `ENABLE_LOCKSTAT` and `CEPH_CONF`) |
 
 ---
 

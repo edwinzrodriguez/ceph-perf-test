@@ -14,7 +14,8 @@ from cephfs_perf_lib import (
     StubFSManager,
 )
 from lib.mount.mount_manager import StubMountManager
-from lib.fs.cephfs_manager import CephFSManager
+from lib.fs.cephfs_cephadm_manager import CephFSCephadmManager
+from lib.fs.cephfs_systemd_manager import CephFSSystemdManager
 from lib.fs.ceph_pool_manager import CephPoolManager
 from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
 from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
@@ -76,7 +77,12 @@ class BenchRunner:
             return StubFSManager(config)
         if config.fs_manager_type == "CephPoolManager":
             return CephPoolManager(executor, config)
-        return CephFSManager(executor, config)
+        if config.fs_manager_type == "CephFSSystemdManager":
+            return CephFSSystemdManager(executor, config)
+        # CephFSManager is kept as a backward-compatible alias for cephadm
+        if config.fs_manager_type in ("CephFSCephadmManager", "CephFSManager"):
+            return CephFSCephadmManager(executor, config)
+        raise ValueError(f"Invalid fs_manager_type: {config.fs_manager_type}")
 
     def get_mount_and_ganesha(self, executor, config, cephfs_manager):
         """Return (mount_manager, ganesha_manager). Subclasses may override to
