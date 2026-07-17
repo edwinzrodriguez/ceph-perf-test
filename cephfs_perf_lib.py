@@ -97,9 +97,22 @@ class FSManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def dump_lockstat(self, loadpoint, results_dir=None):
-        """Dumps lockstat data to results_dir."""
+    def dump_lockstat(self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None):
+        """Dumps lockstat data to results_dir.
+
+        Extra ``phase``/``settings``/``lp_cfg`` args let workload runners
+        annotate dump filenames with the current phase and loadpoint options.
+        """
         pass
+
+    def is_mds_lockstat_enabled(self):
+        """Return True when MDS-side lockstat collection should be performed.
+
+        Default False so StubFSManager / CephPoolManager can be called
+        unconditionally by any workload. CephFSManager overrides to read
+        ``mds.lockstat.enabled`` from the config.
+        """
+        return False
 
     def safe_json_load(self, raw, default=None):
         """
@@ -166,7 +179,7 @@ class StubFSManager(FSManager):
     def reset_lockstat(self):
         pass
 
-    def dump_lockstat(self, loadpoint, results_dir=None):
+    def dump_lockstat(self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None):
         pass
 
 

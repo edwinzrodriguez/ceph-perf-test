@@ -101,13 +101,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
                 run_phase_started = True
-                if (
-                    self.config.get("specstorage", {})
-                    .get("lockstat", {})
-                    .get("enabled")
-                    and cephfs_manager
-                ):
-                    print(f"Resetting lockstat for Load Point {current_lp}...")
+                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
+                    print(f"Resetting MDS lockstat for Load Point {current_lp}...")
                     cephfs_manager.reset_lockstat()
                 if (
                     self.config.get("logging", {}).get("enabled")
@@ -127,14 +122,11 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                             ganesha_manager.reset_lockstat(g_host)
             if "Tests finished" in line:
                 r_dir = payload.get("results_dir")
-                if (
-                    self.config.get("specstorage", {})
-                    .get("lockstat", {})
-                    .get("enabled")
-                    and cephfs_manager
-                ):
-                    print(f"Dumping lockstat for Load Point {current_lp}...")
-                    cephfs_manager.dump_lockstat(current_lp, r_dir)
+                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
+                    print(f"Dumping MDS lockstat for Load Point {current_lp}...")
+                    cephfs_manager.dump_lockstat(
+                        current_lp, r_dir, settings=settings
+                    )
                 if logging_triggered and cephfs_manager:
                     print(f"Stopping MDS logging for Load Point {current_lp}...")
                     cephfs_manager.stop_fs_logging(current_lp, r_dir)

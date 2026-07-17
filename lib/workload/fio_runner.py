@@ -155,6 +155,9 @@ class FioWorkloadRunner(WorkloadRunner):
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
                 run_phase_started = True
+                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
+                    print(f"Resetting MDS lockstat for Load Point {current_lp}...")
+                    cephfs_manager.reset_lockstat()
                 if ganesha_perf_enabled:
                     print(
                         f"Resetting Ganesha perf counters for Load Point {current_lp}..."
@@ -201,6 +204,14 @@ class FioWorkloadRunner(WorkloadRunner):
                     perf_threads.append(t)
                 perf_triggered = True
             if "Finished Fio Load Point:" in line:
+                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
+                    print(f"Dumping MDS lockstat for Load Point {current_lp}...")
+                    cephfs_manager.dump_lockstat(
+                        current_lp,
+                        results_dir,
+                        settings=payload,
+                        lp_cfg=expanded_loadpoints[current_lp - 1],
+                    )
                 if ganesha_perf_enabled:
                     print(
                         f"Dumping Ganesha perf counters for Load Point {current_lp}..."

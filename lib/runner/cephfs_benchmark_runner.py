@@ -193,6 +193,15 @@ class BenchRunner:
 
             workload_runner.prepare_storage()
 
+            # Bracket the test with MDS-side lockstat start/stop when enabled.
+            # Rebuild recreates the MDS daemons each iteration, so start_lockstat
+            # must run per-iteration after apply_fs_settings + mount, and stop
+            # before the next rebuild tears the daemons down.
+            mds_lockstat_active = cephfs_manager.is_mds_lockstat_enabled()
+            if mds_lockstat_active:
+                for fs in fs_names:
+                    cephfs_manager.start_lockstat(fs)
+
             try:
                 workload_runner.run_workload(
                     current_settings,
@@ -203,8 +212,15 @@ class BenchRunner:
                 )
             except Exception as e:
                 print(f"Workload execution failed: {e}")
+                if mds_lockstat_active:
+                    for fs in fs_names:
+                        cephfs_manager.stop_lockstat(fs)
                 mount_manager.unmount_clients()
                 sys.exit(1)
+
+            if mds_lockstat_active:
+                for fs in fs_names:
+                    cephfs_manager.stop_lockstat(fs)
 
             mount_manager.unmount_clients()
 
@@ -212,7 +228,6 @@ class BenchRunner:
         self.post_run_cleanup(config, fs_names, workload_runner)
 
     def post_run_cleanup(self, config, fs_names, workload_runner):
-        if config.get("specstorage", {}).get("lockstat", {}).get("enabled", False):
-            # for fs in fs_names:
-            #     workload_runner.stop_lockstat(fs)
-            pass
+        # MDS lockstat is now stopped per-iteration inside run(); nothing to do
+        # here. Left as a hook for subclasses to override.
+        pass

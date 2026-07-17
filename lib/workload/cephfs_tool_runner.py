@@ -158,6 +158,9 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
                 run_phase_started = True
+                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
+                    print(f"Resetting MDS lockstat for Load Point {current_lp}...")
+                    cephfs_manager.reset_lockstat()
                 if cephfs_lockstat_enabled and not lockstat_started:
                     print(f"Starting cephfs-tool lockstat for Load Point {current_lp}...")
                     self._start_client_lockstat(self.config.clients, lockstat_path, lockstat_asok)
@@ -229,6 +232,14 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                     lockstat_data.setdefault(client, {})["read"] = data
                 read_lockstat_dumped = True
             if "Finished CephFS-Tool Load Point:" in line:
+                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
+                    print(f"Dumping MDS lockstat for Load Point {current_lp}...")
+                    cephfs_manager.dump_lockstat(
+                        current_lp,
+                        results_dir,
+                        settings=payload,
+                        lp_cfg=loadpoints[current_lp - 1],
+                    )
                 if cephfs_lockstat_enabled and lockstat_data:
                     self._inject_lockstat_into_results(
                         results_dir, lockstat_data, current_lp,

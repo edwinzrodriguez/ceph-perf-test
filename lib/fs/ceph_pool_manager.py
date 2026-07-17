@@ -56,7 +56,7 @@ class CephPoolManager(FSManager):
     def reset_lockstat(self):
         pass
 
-    def dump_lockstat(self, loadpoint, results_dir=None):
+    def dump_lockstat(self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None):
         pass
 
     def apply_fs_settings(self, settings):
