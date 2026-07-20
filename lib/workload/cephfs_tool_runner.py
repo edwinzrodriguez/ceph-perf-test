@@ -22,7 +22,12 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         run_cmd = cfg.get(
             "run_command", "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
         )
+        # Client-side (cephfs-tool binary) perf record is gated by cephfs_tool.perf_record.
+        # MDS-side perf record is gated by mds.perf_record via the FS manager.
         perf_record_enabled = cfg.get("perf_record", False)
+        mds_perf_record_enabled = bool(
+            cephfs_manager and cephfs_manager.is_mds_perf_record_enabled()
+        )
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )
@@ -167,9 +172,11 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                     lockstat_started = True
 
             if run_phase_started and not perf_triggered:
+                lp_cfg = loadpoints[current_lp - 1]
                 if perf_record_enabled:
-                    print(f"Triggering perf recording for Load Point {current_lp}...")
-                    lp_cfg = loadpoints[current_lp - 1]
+                    print(
+                        f"Triggering client-side perf recording for Load Point {current_lp}..."
+                    )
                     t = threading.Thread(
                         target=self.execute_perf_record,
                         args=(
@@ -180,6 +187,16 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                             payload,
                             lp_cfg,
                         ),
+                    )
+                    t.start()
+                    perf_threads.append(t)
+                if mds_perf_record_enabled:
+                    print(
+                        f"Triggering MDS perf recording for Load Point {current_lp}..."
+                    )
+                    t = threading.Thread(
+                        target=self.execute_mds_perf_record,
+                        args=(current_lp, results_dir, payload, lp_cfg),
                     )
                     t.start()
                     perf_threads.append(t)

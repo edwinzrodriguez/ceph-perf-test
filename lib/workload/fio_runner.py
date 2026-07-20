@@ -19,7 +19,11 @@ class FioWorkloadRunner(WorkloadRunner):
     ):
         fio_cfg = self.config.fio
         run_cmd = fio_cfg.get("run_command", "/cephfs_perf/fio/run_fio_workload.py")
-        perf_record_enabled = fio_cfg.get("perf_record", False)
+        # MDS-side perf record gate lives on the FS manager (reads mds.perf_record).
+        # fio.perf_record is no longer consulted for the MDS-target call.
+        mds_perf_record_enabled = bool(
+            cephfs_manager and cephfs_manager.is_mds_perf_record_enabled()
+        )
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )
@@ -167,19 +171,14 @@ class FioWorkloadRunner(WorkloadRunner):
                         if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
                             ganesha_manager.reset_lockstat(g_host)
             if run_phase_started and not perf_triggered:
-                if perf_record_enabled:
-                    print(f"Triggering perf recording for Load Point {current_lp}...")
+                if mds_perf_record_enabled:
+                    print(
+                        f"Triggering MDS perf recording for Load Point {current_lp}..."
+                    )
                     lp_cfg = expanded_loadpoints[current_lp - 1]
                     t = threading.Thread(
-                        target=self.execute_perf_record,
-                        args=(
-                            "fio",
-                            self.config.mdss,
-                            current_lp,
-                            results_dir,
-                            settings,
-                            lp_cfg,
-                        ),
+                        target=self.execute_mds_perf_record,
+                        args=(current_lp, results_dir, settings, lp_cfg),
                     )
                     t.start()
                     perf_threads.append(t)

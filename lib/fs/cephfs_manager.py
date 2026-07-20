@@ -60,6 +60,9 @@ class CephFSManager(FSManager):
     def is_mds_lockstat_enabled(self):
         return self._lockstat_cfg().get("enabled", False)
 
+    def is_mds_perf_record_enabled(self):
+        return bool(self.config.get("mds", {}).get("perf_record", False))
+
     def _lockstat_cfg(self):
         return self.config.get("mds", {}).get("lockstat", {}) or {}
 

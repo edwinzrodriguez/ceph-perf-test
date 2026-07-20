@@ -114,6 +114,14 @@ class FSManager(abc.ABC):
         """
         return False
 
+    def is_mds_perf_record_enabled(self):
+        """Return True when MDS-side perf-record collection should be performed.
+
+        Default False so pool/stub managers no-op. CephFSManager overrides
+        to read ``mds.perf_record`` from the config.
+        """
+        return False
+
     def safe_json_load(self, raw, default=None):
         """
         Safely loads a JSON string, returning a default value on failure.

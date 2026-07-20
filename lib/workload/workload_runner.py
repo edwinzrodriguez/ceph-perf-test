@@ -33,6 +33,31 @@ class WorkloadRunner(abc.ABC):
     def get_name(self):
         pass
 
+    def execute_mds_perf_record(
+        self,
+        loadpoint,
+        results_dir=None,
+        settings=None,
+        lp_cfg=None,
+    ):
+        """Trigger MDS-side perf-record using the top-level ``mds:`` config.
+
+        Parallel to the lockstat pattern (is_mds_lockstat_enabled +
+        reset_lockstat/dump_lockstat): workloads call this after checking
+        ``cephfs_manager.is_mds_perf_record_enabled()``. Files are named
+        ``mds_perf_record_<host>_lp<N>_...`` to distinguish them from any
+        workload-specific perf captures.
+        """
+        return self.execute_perf_record(
+            workload_name="mds",
+            target_nodes=self.config.mdss,
+            loadpoint=loadpoint,
+            results_dir=results_dir,
+            settings=settings,
+            lp_cfg=lp_cfg,
+            config_section="mds",
+        )
+
     def execute_perf_record(
         self,
         workload_name,
@@ -41,8 +66,15 @@ class WorkloadRunner(abc.ABC):
         results_dir=None,
         settings=None,
         lp_cfg=None,
+        config_section=None,
     ):
-        workload_cfg = self.config.get(workload_name, {})
+        # `workload_name` drives filename naming and the --workload arg passed
+        # to perf_record.py. `config_section` selects the yaml section that
+        # supplies perf_record_script/executable/duration/flamegraph paths.
+        # When omitted, it falls back to workload_name — preserving legacy
+        # behavior for callers that use the same value for both.
+        section = config_section or workload_name
+        workload_cfg = self.config.get(section, {}) or {}
         perf_script = workload_cfg.get(
             "perf_record_script", "/cephfs_perf/perf_record.py"
         )

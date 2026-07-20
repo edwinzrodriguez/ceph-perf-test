@@ -20,7 +20,11 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         cmd = self.config["specstorage"]["run_command"]
         cfg = self.config["specstorage"]["output_path"]
         workload_dir = self.config["specstorage"].get("workload_dir")
-        perf_record_enabled = self.config["specstorage"].get("perf_record", False)
+        # MDS-side perf record gate lives on the FS manager (reads mds.perf_record).
+        # specstorage.perf_record is no longer consulted for the MDS-target call.
+        mds_perf_record_enabled = bool(
+            cephfs_manager and cephfs_manager.is_mds_perf_record_enabled()
+        )
         payload = settings.copy()
         payload["fs_name"] = self.config.fs_name
         payload["num_filesystems"] = self.config.num_filesystems
@@ -149,20 +153,15 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                                 f"{g_host}_lp{lp_tag}_ganesha_perf.json", dump, r_dir
                             )
             if run_phase_started:
-                if perf_record_enabled and not perf_triggered:
+                if mds_perf_record_enabled and not perf_triggered:
                     if "Run " in line and " percent complete" in line:
-                        print(f"Triggering perf record for Load Point {current_lp}...")
+                        print(
+                            f"Triggering MDS perf record for Load Point {current_lp}..."
+                        )
                         r_dir = payload.get("results_dir")
                         t = threading.Thread(
-                            target=self.execute_perf_record,
-                            args=(
-                                "sfs2020",
-                                self.config.mdss,
-                                current_lp,
-                                r_dir,
-                                settings,
-                                None,
-                            ),
+                            target=self.execute_mds_perf_record,
+                            args=(current_lp, r_dir, settings, None),
                         )
                         t.start()
                         perf_threads.append(t)
