@@ -33,10 +33,13 @@ def rbd_image_exists(rbd_bin, pool, image, config_path, keyring, client_id):
 
 def ensure_rbd_image(
     client, rbd_bin, pool, image, size_bytes, config_path, keyring,
-    client_id, recreate,
+    client_id, recreate, env_vars=None,
 ):
     """Create the RBD image on `client` if missing (or if recreate=True)."""
     size_mib = max(1, int(size_bytes) // (1024 * 1024))
+    env_prefix = ""
+    if env_vars:
+        env_prefix = "env " + " ".join(f'{k}="{v}"' for k, v in env_vars.items()) + " "
     parts = [rbd_bin]
     if config_path:
         parts += ["-c", config_path]
@@ -45,7 +48,7 @@ def ensure_rbd_image(
     if client_id:
         parts += ["-n", f"client.{client_id}"]
 
-    exists_cmd = " ".join(parts + ["-p", pool, "info", image])
+    exists_cmd = env_prefix + " ".join(parts + ["-p", pool, "info", image])
     check = subprocess.run(
         ["ssh", "-o", "StrictHostKeyChecking=no", client, exists_cmd],
         capture_output=True,
@@ -54,7 +57,7 @@ def ensure_rbd_image(
     exists = check.returncode == 0
 
     if exists and recreate:
-        rm_cmd = " ".join(parts + ["-p", pool, "rm", image])
+        rm_cmd = env_prefix + " ".join(parts + ["-p", pool, "rm", image])
         subprocess.run(
             ["ssh", "-o", "StrictHostKeyChecking=no", client, rm_cmd],
             capture_output=True,
@@ -63,7 +66,7 @@ def ensure_rbd_image(
         exists = False
 
     if not exists:
-        create_cmd = " ".join(
+        create_cmd = env_prefix + " ".join(
             parts + ["-p", pool, "create", image, "--size", str(size_mib)]
         )
         print(f"[{client}] Creating RBD image {pool}/{image} ({size_mib} MiB)", flush=True)
@@ -136,7 +139,7 @@ def main():
             image = f"{c}_img_{idx:02d}"
             ensure_rbd_image(
                 c, rbd_bin, pool, image, image_size, config_path, keyring,
-                client_id, recreate_images,
+                client_id, recreate_images, env_vars=base_env_vars,
             )
 
     status_re = re.compile(
