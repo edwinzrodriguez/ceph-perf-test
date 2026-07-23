@@ -275,12 +275,19 @@ rados_bench:
   # Default duration (in seconds) if not overridden per-loadpoint via --run-length.
   duration: 30
   loadpoints:
-    - readwrite: ["seqwrite", "randwrite", "seqread", "randread"]
-      threads: [16, 32]
+    - readwrite: ["seqwrite", "randwrite"]
+      threads: [32, 16, 8 , 1]
       duration: 30
-      min-object-size: "4KiB"
+      min-object-size: "4MiB"
       max-object-size: "4MiB"
-      read-percent: 0
+#      read-percent: 0
+      extra_args: ""
+    - readwrite: ["seqread", "randread"]
+      threads: [32, 16, 8 , 1]
+      duration: 30
+      min-object-size: "4MiB"
+      max-object-size: "4MiB"
+#      read-percent: 100
       extra_args: ""
 
 # RBD (fio --ioengine=rbd) configuration
