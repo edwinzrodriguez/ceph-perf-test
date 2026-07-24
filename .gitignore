@@ -5,4 +5,5 @@ mds.yaml
 netmist.env
 **/ceph-rpms/
 __pycache__/
-
+**/build/
+**/ceph_perf_test.egg-info/
