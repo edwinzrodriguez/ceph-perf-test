@@ -242,7 +242,7 @@
 
     - name: Run do_cmake.sh
       ansible.builtin.command:
-        cmd: "./do_cmake.sh -DUSE_TRACEFLOW=ON -DCMAKE_INSTALL_PREFIX={{ ceph_install_prefix }} -DCMAKE_BUILD_TYPE=RelWithDebInfo"
+        cmd: "./do_cmake.sh -DUSE_TRACEFLOW=OFF -DCMAKE_INSTALL_PREFIX={{ ceph_install_prefix }} -DCMAKE_BUILD_TYPE=RelWithDebInfo"
         chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}"
       become: false
       when: not ceph_build_stat.stat.exists
@@ -318,7 +318,7 @@
 
     - name: Run cmake for NFS-Ganesha
       ansible.builtin.command:
-        cmd: "cmake -GNinja -DUSE_TRACEFLOW=ON -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
+        cmd: "cmake -GNinja -DUSE_TRACEFLOW=OFF -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
         chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
       become: false
       when: not ganesha_build_stat.stat.exists
