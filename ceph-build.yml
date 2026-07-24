@@ -255,16 +255,6 @@
         chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}/build"
       when: not ceph_build_stat.stat.exists
 
-    - name: Create ld.so.conf.d entry for Ceph
-      ansible.builtin.copy:
-        dest: /etc/ld.so.conf.d/ceph.conf
-        content: "{{ ceph_install_prefix }}/lib64\n"
-        mode: '0644'
-
-    - name: Run ldconfig
-      ansible.builtin.command:
-        cmd: ldconfig
-
     - name: Install Ganesha development dependencies
       ansible.builtin.dnf:
         name:
@@ -331,9 +321,11 @@
         chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
       when: not ganesha_build_stat.stat.exists
 
-    - name: Run ldconfig
-      ansible.builtin.command:
-        cmd: ldconfig
+    - name: Create Ganesha recovery directory
+      ansible.builtin.file:
+        path: "{{ ganesha_install_prefix }}/var/lib/nfs/ganesha"
+        state: directory
+        mode: '0755'
 
     - name: Ensure Ganesha config and log directories exist
       ansible.builtin.file:
@@ -343,6 +335,7 @@
       loop:
         - "{{ ganesha_install_prefix }}/etc/ganesha"
         - /var/log
+
 
     # Minimal config so the unit can start after install. Real EXPORT blocks
     # are written later by the perf framework (GaneshaSystemdManager).
