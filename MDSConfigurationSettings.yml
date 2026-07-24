@@ -133,8 +133,9 @@ ganesha:
   perf_record_duration: 5
   # CEPH FSAL options
   # umask: 0
-  client_oc: [true, false]
-  async: false
+  client_oc: [false, true]
+  syncdataonly: [false, true]
+  async: [false, true]
   zerocopy: false
   client_oc_size: [ "16GiB" ]
   msgr_workers: [3, 8, 12]

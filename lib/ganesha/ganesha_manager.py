@@ -31,6 +31,8 @@ class GaneshaManager(abc.ABC):
             parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{settings['umask']}")
         if "client_oc" in settings:
             parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(settings['client_oc'])}")
+        if "syncdataonly" in settings:
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Sync Data Only')}{CommonUtils.format_config_value(settings['syncdataonly'])}")
         if "async" in settings:
             parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(settings['async'])}")
         if "zerocopy" in settings:

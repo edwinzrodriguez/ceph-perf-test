@@ -205,6 +205,9 @@ class GaneshaSystemdManager(GaneshaManager):
         if self.config.ganesha_client_oc is not None:
             val = "true" if self.config.ganesha_client_oc else "false"
             ceph_options += f"    client_oc = {val};\n"
+        if self.config.ganesha_syncdataonly is not None:
+            val = "true" if self.config.ganesha_syncdataonly else "false"
+            ceph_options += f"    syncdataonly = {val};\n"
         if self.config.ganesha_async is not None:
             val = "true" if self.config.ganesha_async else "false"
             ceph_options += f"    async = {val};\n"

@@ -146,6 +146,7 @@ class BenchRunner:
                 "worker_threads",
                 "umask",
                 "client_oc",
+                "syncdataonly",
                 "async",
                 "zerocopy",
                 "client_oc_size",

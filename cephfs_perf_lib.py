@@ -424,6 +424,10 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("client_oc")
 
     @property
+    def ganesha_syncdataonly(self):
+        return self._config.get("ganesha", {}).get("syncdataonly")
+
+    @property
     def ganesha_async(self):
         return self._config.get("ganesha", {}).get("async")
 
@@ -709,6 +713,7 @@ class CommonUtils:
             "Ganesha Worker Threads": "gwt",
             "Ganesha Umask": "gum",
             "Ganesha Client Object Cache": "goc",
+            "Ganesha Sync Data Only": "gsdo",
             "Ganesha Async": "gas",
             "Ganesha Zero Copy": "gzc",
             "Ganesha Client Object Cache Size": "gocs",
@@ -802,6 +807,7 @@ class CommonUtils:
             "ganesha_worker_threads": "Ganesha Worker Threads",
             "ganesha_umask": "Ganesha Umask",
             "ganesha_client_oc": "Ganesha Client Object Cache",
+            "ganesha_syncdataonly": "Ganesha Sync Data Only",
             "ganesha_async": "Ganesha Async",
             "ganesha_zerocopy": "Ganesha Zero Copy",
             "ganesha_client_oc_size": "Ganesha Client Object Cache Size",
@@ -833,6 +839,7 @@ class CommonUtils:
             "ganesha_worker_threads",
             "ganesha_umask",
             "ganesha_client_oc",
+            "ganesha_syncdataonly",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_msgr_workers",
@@ -887,6 +894,7 @@ class CommonUtils:
             "ganesha_worker_threads",
             "ganesha_umask",
             "ganesha_client_oc",
+            "ganesha_syncdataonly",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
@@ -932,6 +940,8 @@ class CommonUtils:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{config.ganesha_umask}")
             if config.ganesha_client_oc is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(config.ganesha_client_oc)}")
+            if config.ganesha_syncdataonly is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Sync Data Only')}{CommonUtils.format_config_value(config.ganesha_syncdataonly)}")
             if config.ganesha_async is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(config.ganesha_async)}")
             if config.ganesha_zerocopy is not None:
@@ -952,6 +962,8 @@ class CommonUtils:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{settings['ganesha_umask']}")
             if settings.get("ganesha_client_oc") is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(settings['ganesha_client_oc'])}")
+            if settings.get("ganesha_syncdataonly") is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Sync Data Only')}{CommonUtils.format_config_value(settings['ganesha_syncdataonly'])}")
             if settings.get("ganesha_async") is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(settings['ganesha_async'])}")
             if settings.get("ganesha_zerocopy") is not None:

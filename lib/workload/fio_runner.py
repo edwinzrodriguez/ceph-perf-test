@@ -54,6 +54,7 @@ class FioWorkloadRunner(WorkloadRunner):
             "ganesha_worker_threads",
             "ganesha_umask",
             "ganesha_client_oc",
+            "ganesha_syncdataonly",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
