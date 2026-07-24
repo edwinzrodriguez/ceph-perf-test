@@ -13,16 +13,23 @@
     ganesha_build_dir: "ganesha-build"
     ganesha_install_prefix: "/usr/local"
   tasks:
-    - name: Remove epel-release
-      ansible.builtin.dnf:
-        name: epel-release
-        state: absent
-      ignore_errors: yes
 
-    - name: Install epel-release
-      ansible.builtin.dnf:
-        name: epel-release
+    - name: install epel-release RPMs
+      yum:
+        name:
+          - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+          - "https://dl.fedoraproject.org/pub/epel/epel-next-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
         state: present
+        update_cache: yes
+      when: ansible_distribution_major_version | int < 10
+
+    - name: install epel-release RPMs (RHEL 10+)
+      yum:
+        name:
+          - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+        state: present
+        update_cache: yes
+      when: ansible_distribution_major_version | int >= 10
 
     - name: Enable CRB for RHEL/CentOS 9
       ansible.builtin.command:
