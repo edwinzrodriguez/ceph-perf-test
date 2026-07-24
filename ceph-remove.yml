@@ -1,0 +1,15 @@
+- name: Remove existing Ceph packages
+  hosts: ganeshas
+  become: true
+  tasks:
+    - name: Remove existing ceph packages
+      ansible.builtin.dnf:
+        name:
+          - "*ceph*"
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove packages from ibm-storage-ceph-9 repo
+      ansible.builtin.command:
+        cmd: dnf repository-packages ibm-storage-ceph-9 remove -y
+      ignore_errors: yes
