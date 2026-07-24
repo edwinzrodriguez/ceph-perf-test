@@ -343,6 +343,7 @@
 
           [Service]
           Type=forking
+          Environment=LD_LIBRARY_PATH={{ ganesha_install_prefix }}/lib64:{{ ganesha_install_prefix }}/lib
           ExecStart={{ ganesha_install_prefix }}/bin/ganesha.nfsd -f {{ ganesha_install_prefix }}/etc/ganesha/ganesha.conf -L /var/log/ganesha.log
           ExecReload=/bin/kill -HUP $MAINPID
           PIDFile=/var/run/ganesha.pid
@@ -361,3 +362,4 @@
         name: nfs-ganesha
         enabled: no
         state: started
+      ignore_errors: yes
