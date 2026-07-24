@@ -99,7 +99,7 @@
         repo: "{{ ceph_repo_url }}"
         dest: "{{ git_base_dir }}/{{ ceph_dest_name }}"
         version: "{{ ceph_version }}"
-        single_branch: yes
+#        single_branch: yes
         recursive: yes
       become: false
       when: not ceph_repo_stat.stat.exists
@@ -291,7 +291,7 @@
         repo: "{{ ganesha_repo_url }}"
         dest: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
         version: "{{ ganesha_version }}"
-        single_branch: yes
+#        single_branch: yes
         recursive: yes
       become: false
       when: not ganesha_source_stat.stat.exists
