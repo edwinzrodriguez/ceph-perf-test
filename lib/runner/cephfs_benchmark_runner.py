@@ -134,9 +134,12 @@ class BenchRunner:
             else:
                 ranges.append(parsed_r)
 
+        # Only expand / provision Ganesha when this runner actually created a
+        # manager. Subclasses such as rados/rbd force StubMount + None even if
+        # --ganesha was passed (or set in the shared YAML).
         ganesha_keys = []
         ganesha_ranges = []
-        if config.ganesha_enabled:
+        if ganesha_manager is not None:
             ganesha_settings_raw = config.get("ganesha", {})
             # Relevant CEPH FSAL options that can be iterated
             for k in [
@@ -148,7 +151,7 @@ class BenchRunner:
                 "client_oc_size",
                 "msgr_workers",
                 "rpc_ioq_thrdmin",
-                "rpc_ioq_thrdmax"
+                "rpc_ioq_thrdmax",
             ]:
                 if k in ganesha_settings_raw:
                     val = ganesha_settings_raw[k]
@@ -178,7 +181,7 @@ class BenchRunner:
             )
             cephfs_manager.apply_fs_settings(current_settings)
 
-            if config.ganesha_enabled:
+            if ganesha_manager is not None:
                 ganesha_manager.provision_ganesha(
                     use_custom=True, results_dir=results_dir
                 )
