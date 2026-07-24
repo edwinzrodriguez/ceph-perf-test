@@ -335,10 +335,31 @@
       ansible.builtin.command:
         cmd: ldconfig
 
-    - name: Check if nfs-ganesha systemd service file exists
-      ansible.builtin.stat:
-        path: /etc/systemd/system/nfs-ganesha.service
-      register: ganesha_service_stat
+    - name: Ensure Ganesha config and log directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ ganesha_install_prefix }}/etc/ganesha"
+        - /var/log
+
+    # Minimal config so the unit can start after install. Real EXPORT blocks
+    # are written later by the perf framework (GaneshaSystemdManager).
+    - name: Create minimal ganesha.conf if missing
+      ansible.builtin.copy:
+        dest: "{{ ganesha_install_prefix }}/etc/ganesha/ganesha.conf"
+        content: |
+          NFS_CORE_PARAM {
+              Enable_NLM = false;
+              Enable_RQUOTA = false;
+              Protocols = 4;
+          }
+          EXPORT_DEFAULTS {
+              Access_Type = none;
+          }
+        mode: '0644'
+        force: false
 
     - name: Create nfs-ganesha systemd service file
       ansible.builtin.copy:
@@ -351,22 +372,23 @@
           [Service]
           Type=forking
           Environment=LD_LIBRARY_PATH={{ ganesha_install_prefix }}/lib64:{{ ganesha_install_prefix }}/lib
-          ExecStart={{ ganesha_install_prefix }}/bin/ganesha.nfsd -f {{ ganesha_install_prefix }}/etc/ganesha/ganesha.conf -L /var/log/ganesha.log
+          # Use /run (not legacy /var/run) and pass -p so the daemon writes
+          # the PID file Type=forking expects after the parent exits.
+          PIDFile=/run/ganesha.pid
+          ExecStart={{ ganesha_install_prefix }}/bin/ganesha.nfsd -p /run/ganesha.pid -f {{ ganesha_install_prefix }}/etc/ganesha/ganesha.conf -L /var/log/ganesha.log
           ExecReload=/bin/kill -HUP $MAINPID
-          PIDFile=/var/run/ganesha.pid
 
           [Install]
           WantedBy=multi-user.target
         mode: '0644'
-      when: not ganesha_service_stat.stat.exists
 
     - name: Reload systemd daemon
       ansible.builtin.systemd:
         daemon_reload: yes
 
-    - name: Disable nfs-ganesha service
+    - name: Disable nfs-ganesha service at boot but verify it starts
       ansible.builtin.systemd:
         name: nfs-ganesha
         enabled: no
         state: started
-      ignore_errors: yes
+        daemon_reload: yes
