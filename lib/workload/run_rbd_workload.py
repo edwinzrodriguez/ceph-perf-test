@@ -39,7 +39,7 @@ def ensure_rbd_image(
     size_mib = max(1, int(size_bytes) // (1024 * 1024))
     env_prefix = ""
     if env_vars:
-        env_prefix = "env " + " ".join(f'{k}="{v}"' for k, v in env_vars.items()) + " "
+        env_prefix = "".join(f'export {k}="{v}"; ' for k, v in env_vars.items())
     parts = [rbd_bin]
     if config_path:
         parts += ["-c", config_path]
@@ -49,6 +49,7 @@ def ensure_rbd_image(
         parts += ["-n", f"client.{client_id}"]
 
     exists_cmd = env_prefix + " ".join(parts + ["-p", pool, "info", image])
+    print(f"[{client}] Checking RBD image {pool}/{image}:  {exists_cmd}", flush=True)
     check = subprocess.run(
         ["ssh", "-o", "StrictHostKeyChecking=no", client, exists_cmd],
         capture_output=True,
@@ -58,6 +59,7 @@ def ensure_rbd_image(
 
     if exists and recreate:
         rm_cmd = env_prefix + " ".join(parts + ["-p", pool, "rm", image])
+        print(f"[{client}] Remove RBD image {pool}/{image}:  {rm_cmd}", flush=True)
         subprocess.run(
             ["ssh", "-o", "StrictHostKeyChecking=no", client, rm_cmd],
             capture_output=True,
@@ -69,7 +71,7 @@ def ensure_rbd_image(
         create_cmd = env_prefix + " ".join(
             parts + ["-p", pool, "create", image, "--size", str(size_mib)]
         )
-        print(f"[{client}] Creating RBD image {pool}/{image} ({size_mib} MiB)", flush=True)
+        print(f"[{client}] Creating RBD image {pool}/{image} ({size_mib} MiB): {create_cmd}", flush=True)
         r = subprocess.run(
             ["ssh", "-o", "StrictHostKeyChecking=no", client, create_cmd],
             capture_output=True,
@@ -162,8 +164,9 @@ def main():
 
                 fio_parts = []
                 if base_env_vars:
-                    env_str = " ".join(f'{k}="{v}"' for k, v in base_env_vars.items())
-                    fio_parts.append(f"env {env_str}")
+                    fio_parts.append(
+                        "".join(f'export {k}="{v}"; ' for k, v in base_env_vars.items())
+                    )
 
                 fio_parts.append(fio_bin)
                 fio_parts.append(f"--name=lp{loadpoint:02d}_{c}_{img_idx:02d}")
