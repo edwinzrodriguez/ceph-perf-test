@@ -67,6 +67,28 @@ class GaneshaManager(abc.ABC):
             args.append(f"--keyring {self.config.ganesha_keyring_path}")
         return " ".join(args)
 
+    def _get_ganesha_env(self):
+        """Merged env used for Ganesha and related ceph_bin invocations."""
+        default_env = {
+            "ENABLE_LOCKSTAT": "true",
+            "GSS_USE_HOSTNAME": "0",
+            "CEPH_CONF": self.config.ceph_conf_path,
+        }
+        return {**default_env, **self.config.ganesha_env_vars}
+
+    def _get_ganesha_env_exports(self):
+        """Shell export statements for ganesha env vars (for bash -c)."""
+        return "".join(f'export {k}="{v}"; ' for k, v in self._get_ganesha_env().items())
+
+    def _sudo_with_ganesha_env(self, cmd):
+        """Run cmd under sudo bash with ganesha environment variables set.
+
+        Ensures custom library paths (e.g. LD_LIBRARY_PATH) apply to ceph_bin
+        and other tools built alongside Ganesha.
+        """
+        escaped = cmd.replace("'", "'\\''")
+        return f"sudo bash -c '{self._get_ganesha_env_exports()}{escaped}'"
+
     def _get_asok_path(self, host_name):
         cmd = (
             "ls /var/run/ceph/ganesha-*.asok | grep -v 'client.admin.asok' | head -n 1"

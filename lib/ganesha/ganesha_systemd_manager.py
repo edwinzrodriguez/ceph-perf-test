@@ -41,13 +41,7 @@ class GaneshaSystemdManager(GaneshaManager):
             args = [binary, "-F", "-L", "STDOUT", "-N", "NIV_EVENT",
                     "-f", "/etc/ganesha/ganesha.conf", "-p", pid_path]
 
-        default_env = {
-            "ENABLE_LOCKSTAT": "true",
-            "GSS_USE_HOSTNAME": "0",
-            "CEPH_CONF": self.config.ceph_conf_path,
-        }
-        merged_env = {**default_env, **self.config.ganesha_env_vars}
-        env_vars = "".join(f'export {k}="{v}"; ' for k, v in merged_env.items())
+        env_vars = self._get_ganesha_env_exports()
 
         for host_name in self.ganeshas:
             # Create recovery directory
@@ -68,7 +62,7 @@ class GaneshaSystemdManager(GaneshaManager):
             ceph_bin = self.config.ganesha_ceph_binary_path
             self.executor.run_remote(
                 host_name,
-                f"sudo {ceph_bin} {self._get_ceph_args()} config generate-minimal-conf | sudo tee {ganesha_ceph_conf} > /dev/null",
+                f"{self._sudo_with_ganesha_env(f'{ceph_bin} {self._get_ceph_args()} config generate-minimal-conf')} | sudo tee {ganesha_ceph_conf} > /dev/null",
             )
 
             client_section = f"\n[client.{self.config.ganesha_user_id}]\n    admin_socket = {asok_path}\n"
@@ -144,7 +138,9 @@ class GaneshaSystemdManager(GaneshaManager):
                     ceph_bin = self.config.ganesha_ceph_binary_path
                     diff_output = self.executor.run_remote(
                         host_name,
-                        f"sudo {ceph_bin} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} config diff",
+                        self._sudo_with_ganesha_env(
+                            f"{ceph_bin} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} config diff"
+                        ),
                     )
                     filename = f"ganesha_config_diff_{host_name}.json"
                     local_temp = f"/tmp/{filename}"

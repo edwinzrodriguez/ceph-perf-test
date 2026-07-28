@@ -22,10 +22,15 @@ class GaneshaCephadmManager(GaneshaManager):
         ceph_bin = self.config.ganesha_ceph_binary_path
         self.executor.run_remote(
             self.admin,
-            f"sudo {ceph_bin} {self._get_ceph_args()} osd pool create .nfs --yes-i-really-mean-it || true",
+            self._sudo_with_ganesha_env(
+                f"{ceph_bin} {self._get_ceph_args()} osd pool create .nfs --yes-i-really-mean-it || true"
+            ),
         )
         self.executor.run_remote(
-            self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} osd pool application enable .nfs nfs || true"
+            self.admin,
+            self._sudo_with_ganesha_env(
+                f"{ceph_bin} {self._get_ceph_args()} osd pool application enable .nfs nfs || true"
+            ),
         )
         if use_custom:
             for host_name in self.ganeshas:
@@ -38,7 +43,7 @@ class GaneshaCephadmManager(GaneshaManager):
                 ceph_bin = self.config.ganesha_ceph_binary_path
                 self.executor.run_remote(
                     host_name,
-                    f"sudo {ceph_bin} {self._get_ceph_args()} config generate-minimal-conf | sudo tee {ganesha_ceph_conf} > /dev/null",
+                    f"{self._sudo_with_ganesha_env(f'{ceph_bin} {self._get_ceph_args()} config generate-minimal-conf')} | sudo tee {ganesha_ceph_conf} > /dev/null",
                 )
 
                 # In cephadm, the asok name is ganesha-$cluster-$name.asok
@@ -78,7 +83,12 @@ class GaneshaCephadmManager(GaneshaManager):
         self.generate_ganesha_yaml(sid, self.ganeshas, use_custom)
         ypath = self.config.ganesha_yaml_path
         ceph_bin = self.config.ganesha_ceph_binary_path
-        self.executor.run_remote(self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} orch apply -i {ypath}")
+        self.executor.run_remote(
+            self.admin,
+            self._sudo_with_ganesha_env(
+                f"{ceph_bin} {self._get_ceph_args()} orch apply -i {ypath}"
+            ),
+        )
 
         # Enable lockstat on all Ganesha hosts after applying orchestrator spec
         for host_name in self.ganeshas:
@@ -92,7 +102,9 @@ class GaneshaCephadmManager(GaneshaManager):
             svcs = self.safe_json_load(
                 self.executor.run_remote(
                     self.admin,
-                    f"sudo {ceph_bin} {self._get_ceph_args()} orch ls --service_type nfs --format json",
+                    self._sudo_with_ganesha_env(
+                        f"{ceph_bin} {self._get_ceph_args()} orch ls --service_type nfs --format json"
+                    ),
                 )
             )
             if any(
@@ -145,7 +157,9 @@ class GaneshaCephadmManager(GaneshaManager):
                     ceph_bin = self.config.ganesha_ceph_binary_path
                     self.executor.run_remote(
                         self.admin,
-                        f"sudo {ceph_bin} {self._get_ceph_args()} nfs export apply {sid} -i /cephfs_perf/sfs2020/export_{fs}.json",
+                        self._sudo_with_ganesha_env(
+                            f"{ceph_bin} {self._get_ceph_args()} nfs export apply {sid} -i /cephfs_perf/sfs2020/export_{fs}.json"
+                        ),
                         check=True,
                     )
                     break
@@ -155,7 +169,12 @@ class GaneshaCephadmManager(GaneshaManager):
                     print(f"Retrying export apply for {fs} ({i + 1}/12): {e}")
                     time.sleep(10)
         ceph_bin = self.config.ganesha_ceph_binary_path
-        self.executor.run_remote(self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} orch restart nfs.{sid}")
+        self.executor.run_remote(
+            self.admin,
+            self._sudo_with_ganesha_env(
+                f"{ceph_bin} {self._get_ceph_args()} orch restart nfs.{sid}"
+            ),
+        )
 
         # After ganesha starts, run 'config diff' via the admin socket and store results in the output directory
         print("Waiting for Ganesha nodes to start and admin socket to be available...")
@@ -192,7 +211,10 @@ class GaneshaCephadmManager(GaneshaManager):
             print(f"[{g_host}] Running 'config diff' via {asok_path}...")
             ceph_bin = self.config.ganesha_ceph_binary_path
             diff_output = self.executor.run_remote(
-                g_host, f"sudo {ceph_bin} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} config diff"
+                g_host,
+                self._sudo_with_ganesha_env(
+                    f"{ceph_bin} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} config diff"
+                ),
             )
 
             filename = f"ganesha_config_diff_{g_host}.json"

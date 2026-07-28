@@ -115,7 +115,8 @@ ganesha:
   type: "systemd"
   binary_path: "/usr/local/bin/ganesha.nfsd"
   env_vars:
-    LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
+    CEPH_INSTALL_PREFIX: "/usr/local"
+    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
   ceph_binary_path: "/usr/local/bin/ceph"
   pid_path: "/var/run/ganesha.pid"
   config_path: "/etc/ganesha/ganesha.conf"
@@ -212,7 +213,8 @@ cephfs_tool:
   executable_path: "/usr/local/bin/cephfs-tool"
   env_vars:
     CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
-    LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
+    CEPH_INSTALL_PREFIX: "/usr/local"
+    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
   config_path: "/etc/ceph/ceph.conf"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"
@@ -260,7 +262,8 @@ rados_bench:
   executable_path: "/usr/local/bin/rados"
   env_vars:
     CEPH_ARGS: "--log-to-stderr=false --log-to-file=false"
-    LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
+    CEPH_INSTALL_PREFIX: "/usr/local"
+    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
   config_path: "/etc/ceph/ceph.conf"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"
@@ -303,7 +306,8 @@ rbd:
   executable_path: "/usr/local/bin/fio"
   rbd_executable_path: "/usr/local/bin/rbd"
   env_vars:
-    LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
+    CEPH_INSTALL_PREFIX: "/usr/local"
+    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
   config_path: "/etc/ceph/ceph.conf"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"
