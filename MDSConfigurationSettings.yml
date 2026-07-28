@@ -259,7 +259,7 @@ rados_bench:
   perf_record: false
   perf_record_executable: "rados"
   perf_record_duration: 30
-  executable_path: "/usr/local/bin/rados"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/rados"
   env_vars:
     CEPH_ARGS: "--log-to-stderr=false --log-to-file=false"
     CEPH_INSTALL_PREFIX: "/usr/local"
@@ -303,8 +303,8 @@ rbd:
   perf_record_executable: "fio"
   perf_record_duration: 30
   flamegraph_path: "/cephfs_perf/FlameGraph"
-  executable_path: "/usr/local/bin/fio"
-  rbd_executable_path: "/usr/local/bin/rbd"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
+  rbd_executable_path: "${CEPH_INSTALL_PREFIX}/bin/rbd"
   env_vars:
     CEPH_INSTALL_PREFIX: "/usr/local"
     LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
