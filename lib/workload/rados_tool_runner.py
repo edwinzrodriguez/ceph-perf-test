@@ -47,7 +47,6 @@ class RadosToolWorkloadRunner(WorkloadRunner):
 
         for key in [
             "executable_path",
-            "env_vars",
             "config_path",
             "keyring",
             "client_id",
@@ -57,6 +56,7 @@ class RadosToolWorkloadRunner(WorkloadRunner):
         ]:
             if key in cfg:
                 payload[key] = cfg[key]
+        payload["env_vars"] = self.config.get_merged_env_vars(cfg.get("env_vars"))
 
         settings_json = json.dumps(payload)
         loadpoints_json = json.dumps(loadpoints)

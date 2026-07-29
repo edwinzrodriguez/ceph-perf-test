@@ -46,7 +46,6 @@ class FioWorkloadRunner(WorkloadRunner):
         # Add global fio settings to payload
         for key in [
             "executable_path",
-            "env_vars",
             "gtod_reduce",
             "ramp_time",
             "threads_fio",
@@ -54,6 +53,7 @@ class FioWorkloadRunner(WorkloadRunner):
         ]:
             if key in fio_cfg:
                 payload[key] = fio_cfg[key]
+        payload["env_vars"] = self.config.get_merged_env_vars(fio_cfg.get("env_vars"))
 
         # Add Ganesha settings to payload
         ganesha_keys = [

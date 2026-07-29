@@ -80,6 +80,7 @@ class CephFSManager(FSManager):
         lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
         lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         threshold = lockstat_cfg.get("threshold", 0)
+        env_vars = self.config.env_vars
         for server_name in self.mdss:
             if server_name not in self.lockstat_exists:
                 check = self.executor.run_remote(
@@ -93,17 +94,27 @@ class CephFSManager(FSManager):
                 )
                 self.executor.run_remote(
                     server_name,
-                    f"sudo python3 {lockstat_path} mds.{fs} start --threshold {threshold}",
+                    CommonUtils.with_env_exports(
+                        f"python3 {lockstat_path} mds.{fs} start --threshold {threshold}",
+                        env_vars,
+                        sudo=True,
+                    ),
                 )
 
     def stop_lockstat(self, fs):
         lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
         lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
+        env_vars = self.config.env_vars
         for server_name in self.mdss:
             if self.lockstat_exists.get(server_name):
                 print(f"[{server_name}] Stopping lockstat for mds.{fs} via {lockstat_path}")
                 self.executor.run_remote(
-                    server_name, f"sudo python3 {lockstat_path} mds.{fs} stop"
+                    server_name,
+                    CommonUtils.with_env_exports(
+                        f"python3 {lockstat_path} mds.{fs} stop",
+                        env_vars,
+                        sudo=True,
+                    ),
                 )
 
     def _check_lockstat_exists(self, server_name, lockstat_path):
@@ -118,18 +129,25 @@ class CephFSManager(FSManager):
     def reset_lockstat(self, config_section="specstorage"):
         lockstat_cfg = self.config.get(config_section, {}).get("lockstat", {})
         lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
+        env_vars = self.config.env_vars
         for fs in self.get_fs_names():
             for server_name in self.mdss:
                 self._check_lockstat_exists(server_name, lockstat_path)
                 if self.lockstat_exists.get(server_name):
                     print(f"[{server_name}] Resetting lockstat for mds.{fs}")
                     self.executor.run_remote(
-                        server_name, f"sudo python3 {lockstat_path} mds.{fs} reset"
+                        server_name,
+                        CommonUtils.with_env_exports(
+                            f"python3 {lockstat_path} mds.{fs} reset",
+                            env_vars,
+                            sudo=True,
+                        ),
                     )
 
     def dump_lockstat(self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None, config_section="specstorage"):
         lockstat_cfg = self.config.get(config_section, {}).get("lockstat", {})
         lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
+        env_vars = self.config.env_vars
         for fs in self.get_fs_names():
             for server_name in self.mdss:
                 self._check_lockstat_exists(server_name, lockstat_path)
@@ -139,7 +157,10 @@ class CephFSManager(FSManager):
                         f"[{server_name}] Dumping lockstat for mds.{fs} (Load Point {loadpoint}{phase_label})"
                     )
                     if results_dir:
-                        dump_cmd = f"python3 {lockstat_path} mds.{fs} dump --detail"
+                        dump_cmd = CommonUtils.with_env_exports(
+                            f"python3 {lockstat_path} mds.{fs} dump --detail",
+                            env_vars,
+                        )
                         CommonUtils.dump_lockstat_common(
                             self.executor,
                             server_name,

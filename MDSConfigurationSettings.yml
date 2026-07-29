@@ -96,6 +96,10 @@ inventory:
 fs_name: "perf_test_fs"
 fs_manager_type: "CephFSManager"
 mount_manager_type: "MountKernelManager"
+env_vars:
+  CEPH_INSTALL_PREFIX: "/usr/local"
+  LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
+  PATH: "${CEPH_INSTALL_PREFIX}/bin:${PATH}"
 
 mount_nfs:
   mount_options: "nfsvers=4.1,proto=tcp,sec=sys"
@@ -114,9 +118,8 @@ ganesha:
   # type = systemd|cephadm
   type: "systemd"
   binary_path: "${CEPH_INSTALL_PREFIX}/bin/ganesha.nfsd"
-  env_vars:
-    CEPH_INSTALL_PREFIX: "/usr/local"
-    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
+  # Optional: extra env_vars merged on top of top-level env_vars
+  # env_vars: {}
   ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
   pid_path: "/var/run/ganesha.pid"
   config_path: "/etc/ganesha/ganesha.conf"
@@ -142,7 +145,7 @@ ganesha:
   rpc_ioq_thrdmax: [20, 40, 60]
   lockstat:
     enabled: true
-    path: "/usr/local/bin/ceph-lockstat"
+    path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
     threshold: 0
 
 # SpecStorage configuration
@@ -158,7 +161,7 @@ specstorage:
   perf_record_duration: 5
   lockstat:
     enabled: true
-    path: "/usr/local/bin/ceph-lockstat"
+    path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
     threshold: 0
 # Official BENCHMARK values are
 #       SWBUILD, VDA, EDA_BLENDED, AI_IMAGE, ENOMICS
@@ -177,9 +180,8 @@ fio:
   results_base_dir: "/cephfs_perf/results"
   run_command: "/cephfs_perf/fio/run_fio_workload.py"
   executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
-  env_vars:
-    CEPH_INSTALL_PREFIX: "/usr/local"
-    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"  perf_record_script: "/cephfs_perf/perf_record.py"
+  # Optional: extra env_vars merged on top of top-level env_vars
+  # env_vars: {}
   perf_record: false
   perf_record_executable: "ganesha.nfsd"
   perf_record_duration: 30
@@ -214,8 +216,6 @@ cephfs_tool:
   executable_path: "${CEPH_INSTALL_PREFIX}/bin/cephfs-tool"
   env_vars:
     CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
-    CEPH_INSTALL_PREFIX: "/usr/local"
-    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
   config_path: "/etc/ceph/ceph.conf"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"
@@ -225,7 +225,7 @@ cephfs_tool:
   progress_interval: 10
   lockstat:
     enabled: true
-    path: "/usr/local/bin/ceph-lockstat"
+    path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
     asok: "/var/run/ceph/cephfs-tool.asok"
     threshold: 0
   loadpoints:
@@ -263,8 +263,6 @@ rados_bench:
   executable_path: "${CEPH_INSTALL_PREFIX}/bin/rados"
   env_vars:
     CEPH_ARGS: "--log-to-stderr=false --log-to-file=false"
-    CEPH_INSTALL_PREFIX: "/usr/local"
-    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
   config_path: "/etc/ceph/ceph.conf"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"
@@ -307,8 +305,7 @@ rbd:
   executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
   rbd_executable_path: "${CEPH_INSTALL_PREFIX}/bin/rbd"
   env_vars:
-    CEPH_INSTALL_PREFIX: "/usr/local"
-    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
+    CEPH_ARGS: "--log-to-stderr=false --log-to-file=true --log-file=/tmp/bench.log"
   config_path: "/etc/ceph/ceph.conf"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"

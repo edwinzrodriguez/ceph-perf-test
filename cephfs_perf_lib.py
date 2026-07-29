@@ -466,6 +466,19 @@ class PerformanceTestConfig:
         return self.ceph_keyring_path
 
     @property
+    def env_vars(self):
+        """Top-level env_vars used as the base for all tool invocations."""
+        return dict(self._config.get("env_vars") or {})
+
+    def get_merged_env_vars(self, *extra_dicts):
+        """Merge global env_vars with additional dicts (later entries win)."""
+        merged = self.env_vars
+        for d in extra_dicts:
+            if d:
+                merged.update(d)
+        return merged
+
+    @property
     def ganesha_env_vars(self):
         return self._config.get("ganesha", {}).get("env_vars", {})
 
@@ -686,6 +699,22 @@ class CommonUtils:
         if isinstance(value, bool):
             return 1 if value else 0
         return value
+
+    @staticmethod
+    def format_env_exports(env_vars):
+        """Shell export statements for env_vars (values are double-quoted)."""
+        if not env_vars:
+            return ""
+        return "".join(f'export {k}="{v}"; ' for k, v in env_vars.items())
+
+    @staticmethod
+    def with_env_exports(cmd, env_vars, sudo=False):
+        """Prefix cmd with env exports; optionally wrap under sudo bash -c."""
+        exports = CommonUtils.format_env_exports(env_vars)
+        if sudo:
+            escaped = cmd.replace("'", "'\\''")
+            return f"sudo bash -c '{exports}{escaped}'"
+        return f"{exports}{cmd}" if exports else cmd
 
     @staticmethod
     def get_short_name(var_name):

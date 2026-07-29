@@ -47,7 +47,6 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         # Add global cephfs_tool config options to payload, overriding with tool-specific if present
         for key in [
             "executable_path",
-            "env_vars",
             "config_path",
             "keyring",
             "client_id",
@@ -57,6 +56,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         ]:
             if key in cfg:
                 payload[key] = cfg[key]
+        payload["env_vars"] = self.config.get_merged_env_vars(cfg.get("env_vars"))
 
         lockstat_cfg = cfg.get("lockstat", {})
         if lockstat_cfg.get("enabled", False):
@@ -246,18 +246,31 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
 
         return "".join(output)
 
+    def _lockstat_env(self):
+        return self.config.get_merged_env_vars(
+            self.config.get("cephfs_tool", {}).get("env_vars")
+        )
+
     def _start_client_lockstat(self, clients, lockstat_path, asok_path):
+        env_vars = self._lockstat_env()
         for client in clients:
             print(f"[{client}] Starting cephfs-tool lockstat via {asok_path}...")
             self.executor.run_remote(
-                client, f"{lockstat_path} {asok_path} start"
+                client,
+                CommonUtils.with_env_exports(
+                    f"{lockstat_path} {asok_path} start", env_vars
+                ),
             )
 
     def _reset_client_lockstat(self, clients, lockstat_path, asok_path):
+        env_vars = self._lockstat_env()
         for client in clients:
             print(f"[{client}] Resetting cephfs-tool lockstat via {asok_path}...")
             self.executor.run_remote(
-                client, f"{lockstat_path} {asok_path} reset"
+                client,
+                CommonUtils.with_env_exports(
+                    f"{lockstat_path} {asok_path} reset", env_vars
+                ),
             )
 
     def _dump_client_lockstat(self, clients, asok_path, phase):

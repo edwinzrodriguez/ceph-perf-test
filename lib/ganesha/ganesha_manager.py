@@ -1,6 +1,6 @@
 import abc
 import json
-from cephfs_perf_lib import FSManager
+from cephfs_perf_lib import CommonUtils, FSManager
 
 
 class GaneshaManager(abc.ABC):
@@ -74,7 +74,7 @@ class GaneshaManager(abc.ABC):
             "GSS_USE_HOSTNAME": "0",
             "CEPH_CONF": self.config.ceph_conf_path,
         }
-        return {**default_env, **self.config.ganesha_env_vars}
+        return self.config.get_merged_env_vars(default_env, self.config.ganesha_env_vars)
 
     def _get_ganesha_env_exports(self):
         """Shell export statements for ganesha env vars (for bash -c)."""
@@ -131,7 +131,10 @@ class GaneshaManager(abc.ABC):
         print(f"[{host_name}] Starting Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
-            f"{self.config.ganesha_lockstat_path} {asok_path} start",
+            CommonUtils.with_env_exports(
+                f"{self.config.ganesha_lockstat_path} {asok_path} start",
+                self._get_ganesha_env(),
+            ),
         )
 
     def stop_lockstat(self, host_name):
@@ -144,7 +147,10 @@ class GaneshaManager(abc.ABC):
         print(f"[{host_name}] Stopping Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
-            f"{self.config.ganesha_lockstat_path} {asok_path} stop",
+            CommonUtils.with_env_exports(
+                f"{self.config.ganesha_lockstat_path} {asok_path} stop",
+                self._get_ganesha_env(),
+            ),
         )
 
     def reset_lockstat(self, host_name):
@@ -157,7 +163,10 @@ class GaneshaManager(abc.ABC):
         print(f"[{host_name}] Resetting Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
-            f"{self.config.ganesha_lockstat_path} {asok_path} reset",
+            CommonUtils.with_env_exports(
+                f"{self.config.ganesha_lockstat_path} {asok_path} reset",
+                self._get_ganesha_env(),
+            ),
         )
 
     def dump_lockstat(self, host_name):

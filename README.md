@@ -36,6 +36,7 @@ The framework operates on a **Test Matrix** principle. It iterates through combi
 | `fs_manager_type` | string | `CephFSManager` | Manager class for filesystem operations |
 | `mount_manager_type` | string | `MountKernelManager` | Mount handler (`MountKernelManager`, `MountNfsManager`, `StubMountManager`) |
 | `mds_yaml_path` | string | `/cephfs_perf/mds.yaml` | Path to MDS cephadm spec file |
+| `env_vars` | dict | `{}` | Base environment variables for tool invocations (workloads, ganesha, lockstat). Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. Per-section `env_vars` are merged on top (section wins on key conflict). |
 
 ---
 
@@ -107,7 +108,7 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `env_vars` | dict | `{}` | Environment variables set before launching `ganesha.nfsd`. Values are double-quoted, allowing `$VAR` and `${VAR}` expansion. Merged with framework defaults (`ENABLE_LOCKSTAT`, `GSS_USE_HOSTNAME`, `CEPH_CONF`); user-provided keys override defaults. Example: `LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"` |
+| `env_vars` | dict | `{}` | Extra environment variables for `ganesha.nfsd`. Merge order: top-level `env_vars`, then framework defaults (`ENABLE_LOCKSTAT`, `GSS_USE_HOSTNAME`, `CEPH_CONF`), then this section (later wins). Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
 
 #### Profiling
 
@@ -147,7 +148,7 @@ Configuration for the `cephfs-tool bench` workload runner.
 | `progress` | bool | `true` | Show progress output |
 | `progress_interval` | int | `10` | Progress update interval in seconds |
 | `msgr_workers` | int | | Default messenger worker count (overridable per loadpoint) |
-| `env_vars` | dict | `{}` | Environment variables passed to `cephfs-tool`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. Common use: `CEPH_ARGS`, `LD_LIBRARY_PATH`. |
+| `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `cephfs-tool`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. Common use: `CEPH_ARGS`. |
 
 #### Profiling
 
@@ -256,7 +257,7 @@ Set `mount_manager_type: StubMountManager` when running rados bench only — no 
 | `pool_recreate` | bool | `false` | Wipe and recreate the pool before each iteration |
 | `no_cleanup` | bool | `true` | Keep bench objects after write phase so subsequent read loadpoints can find them |
 | `duration` | int | `30` | Default bench duration in seconds (overridable per loadpoint) |
-| `env_vars` | dict | `{}` | Environment variables passed to `rados`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
+| `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `rados`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
 
 #### Profiling
 
@@ -340,7 +341,7 @@ RBD images are created once per client before any loadpoints run and reused acro
 | `ramp_time` | int | `5` | Warmup time in seconds before measuring |
 | `randrepeat` | int | | fio `randrepeat` setting |
 | `timestamp_progress` | bool | `false` | Prefix each progress line with an ISO 8601 UTC timestamp |
-| `env_vars` | dict | `{}` | Environment variables passed to `fio`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. Common use: `LD_LIBRARY_PATH`. |
+| `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `fio`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
 
 #### Profiling
 
