@@ -142,7 +142,7 @@ ganesha:
   client_oc_size: [ "16GiB" ]
   msgr_workers: [3, 8, 12]
   #rpc_ioq_thrdmin: 4
-  rpc_ioq_thrdmax: [20, 40, 60]
+#  rpc_ioq_thrdmax: [20, 40, 60]
   lockstat:
     enabled: true
     path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
@@ -182,6 +182,7 @@ fio:
   executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
   # Optional: extra env_vars merged on top of top-level env_vars
   # env_vars: {}
+  perf_record_script: "/cephfs_perf/perf_record.py"
   perf_record: false
   perf_record_executable: "ganesha.nfsd"
   perf_record_duration: 30
