@@ -88,6 +88,8 @@ def main():
     fs_name = settings.get("fs_name", "perf_test_fs")
     results_dir = settings.get("results_dir")
     timestamp_progress = settings.get("timestamp_progress", False)
+    fio_bin = settings.get("executable_path", "/usr/local/bin/fio")
+    base_env_vars = dict(settings.get("env_vars", {}))
 
     if not results_dir:
         print("Error: results_dir is required in settings")
@@ -127,7 +129,12 @@ def main():
                 # Construct fio command from loadpoint configuration
                 lp_cfg = config
                 # fio command basic options
-                fio_parts = ["fio"]
+                fio_parts = []
+                if base_env_vars:
+                    fio_parts.append(
+                        "".join(f'export {k}="{v}"; ' for k, v in base_env_vars.items())
+                    )
+                fio_parts.append(fio_bin)
                 fio_parts.append(f"--name=lp{loadpoint:02d}_{c}")
                 fio_parts.append(f"--directory={mp}")
 

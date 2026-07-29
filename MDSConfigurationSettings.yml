@@ -178,7 +178,10 @@ specstorage:
 fio:
   results_base_dir: "/cephfs_perf/results"
   run_command: "/cephfs_perf/fio/run_fio_workload.py"
-  perf_record_script: "/cephfs_perf/perf_record.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
+  env_vars:
+    CEPH_INSTALL_PREFIX: "/usr/local"
+    LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"  perf_record_script: "/cephfs_perf/perf_record.py"
   perf_record: false
   perf_record_executable: "ganesha.nfsd"
   perf_record_duration: 30
