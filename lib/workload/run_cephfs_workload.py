@@ -77,9 +77,9 @@ def main():
             if settings.get("cephfs_tool_lockstat_enabled"):
                 env_vars["ENABLE_LOCKSTAT"] = "true"
             if env_vars:
-                env_str = " ".join(f'{k}="{v}"' for k, v in env_vars.items())
-                cmd_parts.append(f"env {env_str}")
-
+                cmd_parts.append(
+                    "".join(f'export {k}="{v}"; ' for k, v in base_env_vars.items())
+                )
             cmd_parts.append(executable)
             cmd_parts.append("bench")
 
