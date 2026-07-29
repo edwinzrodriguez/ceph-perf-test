@@ -78,7 +78,7 @@ def main():
                 env_vars["ENABLE_LOCKSTAT"] = "true"
             if env_vars:
                 cmd_parts.append(
-                    "".join(f'export {k}="{v}"; ' for k, v in base_env_vars.items())
+                    "".join(f'export {k}="{v}"; ' for k, v in env_vars.items())
                 )
             cmd_parts.append(executable)
             cmd_parts.append("bench")

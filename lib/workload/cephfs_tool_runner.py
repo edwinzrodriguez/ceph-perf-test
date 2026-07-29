@@ -247,9 +247,14 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         return "".join(output)
 
     def _lockstat_env(self):
-        return self.config.get_merged_env_vars(
+        env = self.config.get_merged_env_vars(
             self.config.get("cephfs_tool", {}).get("env_vars")
         )
+        # CEPH_ARGS (e.g. --log-to-stderr=false) is intended for cephfs-tool
+        # itself; lockstat forwards CEPH_ARGS into the admin-socket command and
+        # treats those flags as invalid arguments.
+        env.pop("CEPH_ARGS", None)
+        return env
 
     def _start_client_lockstat(self, clients, lockstat_path, asok_path):
         env_vars = self._lockstat_env()
@@ -275,9 +280,13 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
 
     def _dump_client_lockstat(self, clients, asok_path, phase):
         results = {}
+        env_vars = self._lockstat_env()
         for client in clients:
             print(f"[{client}] Dumping cephfs-tool lockstat ({phase} phase) via {asok_path}...")
-            dump_cmd = f"ceph --admin-daemon {asok_path} lockstat dump 2>&1"
+            dump_cmd = CommonUtils.with_env_exports(
+                f"ceph --admin-daemon {asok_path} lockstat dump 2>&1",
+                env_vars,
+            )
             output = self.executor.run_remote(client, dump_cmd)
             try:
                 results[client] = json.loads(output)
