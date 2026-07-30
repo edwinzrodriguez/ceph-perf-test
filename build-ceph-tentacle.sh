@@ -42,13 +42,15 @@ for i in ceph-bench-tentacle-base ceph-bench-tentacle-osdc ceph-bench-tentacle-c
     popd
     mkdir -pv /usr/local/$i/var/lib/nfs/ganesha
 
-    pushd ~/git
-      git clone https://github.com/axboe/fio.git fio-$i
-    popd
+    if [ ! -e ~/git/fio-$i ]; then
+      pushd ~/git
+        git clone https://github.com/axboe/fio.git fio-$i
+      popd
+    fi
     pushd ~/git/fio-$i
       git checkout fio-3.36
       git submodule update --init --recursive
-      ./configure --prefix=/usr/local/$i
+      ./configure --prefix=/usr/local/$i --extra-cflags="-I/usr/local/$i/include -L/usr/local/$i/lib64"
       make install
     popd
 
