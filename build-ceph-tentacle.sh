@@ -14,7 +14,7 @@ for i in "$@"; do
         popd
     fi
     pushd ~/git/$i
-        git checkout origin/$i
+        # git checkout origin/$i
         git submodule update --init --recursive
         if [ ! -e ~/git/$i/build ]; then
             ./do_cmake.sh -DUSE_TRACEFLOW=OFF \
