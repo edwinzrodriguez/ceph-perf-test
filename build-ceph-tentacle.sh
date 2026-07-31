@@ -19,12 +19,14 @@ for i in "$@"; do
         if [ ! -e ~/git/$i/build ]; then
             ./do_cmake.sh -DUSE_TRACEFLOW=OFF \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_INSTALL_PREFIX=/usr/local
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DENABLE_GIT_VERSION=OFF
         else
           pushd ~/git/$i/build
               cmake .. -DUSE_TRACEFLOW=OFF \
                 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-                -DCMAKE_INSTALL_PREFIX=/usr/local
+                -DCMAKE_INSTALL_PREFIX=/usr/local \
+                -DENABLE_GIT_VERSION=OFF
           popd
         fi
         pushd ~/git/$i/build
