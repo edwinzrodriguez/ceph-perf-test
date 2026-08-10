@@ -31,10 +31,10 @@
         update_cache: yes
       when: ansible_distribution_major_version | int >= 10
 
-    - name: Enable CRB for RHEL/CentOS 9
+    - name: Enable CRB for RHEL/CentOS Stream 9+
       ansible.builtin.command:
         cmd: crb enable
-      when: ansible_distribution_major_version == "9"
+      when: ansible_distribution_major_version | int >= 9
       ignore_errors: yes
 
     - name: Enable PowerTools for RHEL/CentOS 8
@@ -43,10 +43,26 @@
       when: ansible_distribution_major_version == "8"
       ignore_errors: yes
 
+    # Host images / prior tooling sometimes exclude thrift*, re2*, libarrow*,
+    # parquet-libs* from EPEL (e.g. OpenStack coexistence). Those packages are
+    # required by install-deps.sh and grpc-devel; clear the filters before deps.
+    - name: Clear EPEL package excludes that block Ceph build dependencies
+      ansible.builtin.shell: |
+        set -e
+        shopt -s nullglob
+        for f in /etc/yum.repos.d/epel*.repo; do
+          # Drop every exclude= line (duplicate keys are common in hand-edited repos)
+          sed -i '/^[[:space:]]*exclude[[:space:]]*=/d' "$f"
+        done
+      args:
+        executable: /bin/bash
+      ignore_errors: yes
+
     - name: Install Development Tools group
       ansible.builtin.dnf:
         name: "@Development Tools"
         state: present
+        disable_excludes: all
 
     - name: Create git directory
       ansible.builtin.file:
@@ -161,6 +177,20 @@
       ansible.builtin.dnf:
         name: python3-setuptools
         state: present
+        disable_excludes: all
+
+    # Re-clear excludes immediately before install-deps: some host images or a
+    # previous partial run leave thrift*/re2*/libarrow* filtered out of EPEL.
+    - name: Re-clear EPEL excludes before install-deps.sh
+      ansible.builtin.shell: |
+        set -e
+        shopt -s nullglob
+        for f in /etc/yum.repos.d/epel*.repo; do
+          sed -i '/^[[:space:]]*exclude[[:space:]]*=/d' "$f"
+        done
+      args:
+        executable: /bin/bash
+      ignore_errors: yes
 
     - name: Run install-deps.sh
       ansible.builtin.command:
@@ -232,6 +262,7 @@
           - lttng-ust-devel
           - libbabeltrace-devel
           - thrift-devel
+          - re2-devel
           - gperf
           - librabbitmq-devel
           - librdkafka-devel
@@ -241,6 +272,8 @@
           - libaio-devel
           - grpc-devel
         state: present
+        # Host epel.repo may still filter thrift*/re2* etc.; override for this txn
+        disable_excludes: all
 
     - name: Check if Ceph build directory exists
       ansible.builtin.stat:
@@ -277,17 +310,17 @@
           - procps-ng-devel
         state: present
 
-        - name: Check if Ganesha source directory exists
-          ansible.builtin.stat:
-            path: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
-          register: ganesha_source_stat
-          become: false
+    - name: Check if Ganesha source directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+      register: ganesha_source_stat
+      become: false
 
-        - name: Check if Ganesha build directory exists
-          ansible.builtin.stat:
-            path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-          register: ganesha_build_stat
-          become: false
+    - name: Check if Ganesha build directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      register: ganesha_build_stat
+      become: false
 
     - name: Clone NFS-Ganesha repository (V9.7 branch)
       ansible.builtin.git:
@@ -299,20 +332,20 @@
       become: false
       when: not ganesha_source_stat.stat.exists
 
-        - name: Update Ganesha submodules
-          ansible.builtin.command:
-            cmd: git submodule update --init --recursive
-            chdir: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
-          become: false
-          when: not ganesha_source_stat.stat.exists
+    - name: Update Ganesha submodules
+      ansible.builtin.command:
+        cmd: git submodule update --init --recursive
+        chdir: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+      become: false
+      when: not ganesha_source_stat.stat.exists
 
-        - name: Create Ganesha build directory
-          ansible.builtin.file:
-            path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-            state: directory
-            mode: '0755'
-          become: false
-          when: not ganesha_build_stat.stat.exists
+    - name: Create Ganesha build directory
+      ansible.builtin.file:
+        path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+        state: directory
+        mode: '0755'
+      become: false
+      when: not ganesha_build_stat.stat.exists
 
     - name: Run cmake for NFS-Ganesha
       ansible.builtin.command:
@@ -321,18 +354,18 @@
       become: false
       when: not ganesha_build_stat.stat.exists
 
-        - name: Build Ganesha with ninja
-          ansible.builtin.command:
-            cmd: ninja
-            chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-          become: false
-          when: not ganesha_build_stat.stat.exists
+    - name: Build Ganesha with ninja
+      ansible.builtin.command:
+        cmd: ninja
+        chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      become: false
+      when: not ganesha_build_stat.stat.exists
 
-        - name: Install Ganesha with ninja
-          ansible.builtin.command:
-            cmd: ninja install
-            chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
-          when: not ganesha_build_stat.stat.exists
+    - name: Install Ganesha with ninja
+      ansible.builtin.command:
+        cmd: ninja install
+        chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      when: not ganesha_build_stat.stat.exists
 
     - name: Create Ganesha recovery directory
       ansible.builtin.file:
@@ -367,13 +400,13 @@
         mode: '0644'
         force: false
 
-        - name: Create nfs-ganesha systemd service file
-          ansible.builtin.copy:
-            dest: /etc/systemd/system/nfs-ganesha.service
-            content: |
-              [Unit]
-              Description=NFS-Ganesha-Server
-              After=network.target
+    - name: Create nfs-ganesha systemd service file
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/nfs-ganesha.service
+        content: |
+          [Unit]
+          Description=NFS-Ganesha-Server
+          After=network.target
 
           [Service]
           Type=forking
@@ -388,9 +421,9 @@
           WantedBy=multi-user.target
         mode: '0644'
 
-        - name: Reload systemd daemon
-          ansible.builtin.systemd:
-            daemon_reload: yes
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
 
     - name: Disable nfs-ganesha service at boot but verify it starts
       ansible.builtin.systemd:
