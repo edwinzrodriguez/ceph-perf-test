@@ -116,11 +116,10 @@ mds:
   log_dir: "/var/log/ceph"
   run_dir: "/var/run/ceph"
   env_vars:
-    LD_LIBRARY_PATH: "/usr/local/lib64:${LD_LIBRARY_PATH}"
     ENABLE_LOCKSTAT: "true"
   lockstat:
     enabled: true
-    path: "/usr/local/bin/ceph-lockstat"
+    path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
     threshold: 0
   perf_record: true
   perf_record_script: "/cephfs_perf/perf_record.py"
