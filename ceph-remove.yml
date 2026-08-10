@@ -1,5 +1,5 @@
 - name: Remove existing Ceph packages
-  hosts: mons mgrs osds mdss grafana-servers clients ganeshas
+  hosts: ganeshas
   become: true
   tasks:
     - name: Remove existing ceph packages

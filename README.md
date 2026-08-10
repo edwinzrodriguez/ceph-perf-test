@@ -51,6 +51,7 @@ Settings for local `ceph-mds` processes when `fs_manager_type` is `CephFSSystemd
 | `log_dir` | string | `/var/log/ceph` | Directory for MDS log files |
 | `run_dir` | string | `/var/run/ceph` | Directory for PID and admin-socket files |
 | `env_vars` | map | `{}` | Environment variables exported when starting `ceph-mds` (merged over defaults `ENABLE_LOCKSTAT` and `CEPH_CONF`) |
+| `mds_yaml_path` | string | `/cephfs_perf/mds.yaml` | Path to MDS cephadm spec file |
 
 ---
 
@@ -97,6 +98,7 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 |-----|------|---------|-------------|
 | `client_oc` | bool or list | | Enable/disable client object cache |
 | `client_oc_size` | string or list | | Object cache size (e.g., `16GiB`, `1GiB`) |
+| `syncdataonly` | bool or list | | Enable/disable CEPH FSAL `syncdataonly` |
 | `async` | bool or list | | Enable async FSAL operations |
 | `zerocopy` | bool or list | | Enable zero-copy I/O |
 | `umask` | int | | File creation umask |
@@ -121,7 +123,7 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `env_vars` | dict | `{}` | Environment variables set before launching `ganesha.nfsd`. Values are double-quoted, allowing `$VAR` and `${VAR}` expansion. Merged with framework defaults (`ENABLE_LOCKSTAT`, `GSS_USE_HOSTNAME`, `CEPH_CONF`); user-provided keys override defaults. Example: `LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"` |
+| `env_vars` | dict | `{}` | Extra environment variables for `ganesha.nfsd`. Merge order: top-level `env_vars`, then framework defaults (`ENABLE_LOCKSTAT`, `GSS_USE_HOSTNAME`, `CEPH_CONF`), then this section (later wins). Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
 
 #### Profiling
 
@@ -161,7 +163,7 @@ Configuration for the `cephfs-tool bench` workload runner.
 | `progress` | bool | `true` | Show progress output |
 | `progress_interval` | int | `10` | Progress update interval in seconds |
 | `msgr_workers` | int | | Default messenger worker count (overridable per loadpoint) |
-| `env_vars` | dict | `{}` | Environment variables passed to `cephfs-tool`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. Common use: `CEPH_ARGS`, `LD_LIBRARY_PATH`. |
+| `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `cephfs-tool`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. Common use: `CEPH_ARGS`. |
 
 #### Profiling
 
@@ -244,6 +246,175 @@ Configuration for the fio workload runner.
 | `threads` | int or list | | Number of fio jobs |
 | `ramp_time` | int | | Per-loadpoint ramp time override |
 | `extra_args` | string | | Additional fio command-line arguments |
+
+---
+
+### `rados_bench`
+
+Configuration for the `rados bench` workload runner. This workload targets a RADOS pool directly (not CephFS), making it useful for isolating OSD-level performance from MDS overhead.
+
+Set `mount_manager_type: StubMountManager` when running rados bench only — no filesystem mounts are needed.
+
+#### Global Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `results_base_dir` | string | `/cephfs_perf/results` | Base directory for result files |
+| `run_command` | string | `/cephfs_perf/rados_bench/run_rados_workload.py` | Remote driver script path |
+| `executable_path` | string | `/usr/local/bin/rados` | Path to the `rados` binary |
+| `config_path` | string | `/etc/ceph/ceph.conf` | Path to `ceph.conf` |
+| `keyring` | string | | Path to Ceph keyring file |
+| `client_id` | string | `admin` | Ceph client user ID |
+| `pool` | string | required | RADOS pool to benchmark. Created automatically by `CephPoolManager` if it does not exist. |
+| `pool_pg_num` | int | | PG count for the pool (optional) |
+| `pool_size` | int | | Replication size (optional) |
+| `pool_min_size` | int | | Minimum replication size (optional) |
+| `pool_recreate` | bool | `false` | Wipe and recreate the pool before each iteration |
+| `no_cleanup` | bool | `true` | Keep bench objects after write phase so subsequent read loadpoints can find them |
+| `duration` | int | `30` | Default bench duration in seconds (overridable per loadpoint) |
+| `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `rados`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
+
+#### Profiling
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `perf_record` | bool | `false` | Enable `perf record` profiling |
+| `perf_record_script` | string | | Path to perf recording script |
+| `perf_record_executable` | string | `rados` | Executable to profile |
+| `perf_record_duration` | int | `30` | Profiling duration in seconds |
+
+#### Loadpoint Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `readwrite` | string or list | `seqwrite` | Access pattern: `seqwrite`, `randwrite`, `seqread`, `randread` |
+| `threads` | int or list | `16` | Number of concurrent I/O streams (`--concurrent-ios`) |
+| `duration` | int | global `duration` | Per-loadpoint bench duration in seconds |
+| `min-object-size` | string | | Minimum object size for write loadpoints (e.g., `4KiB`). SI units supported. |
+| `max-object-size` | string | | Maximum object size for write loadpoints (e.g., `4MiB`). SI units supported. |
+| `read-percent` | int | | Read percentage (passed as `--read-percent`; for mixed workloads) |
+| `no_cleanup` | bool | global `no_cleanup` | Per-loadpoint override for `--no-cleanup` |
+| `run_name` | string | `<fs_name>_<client>` | Override the `--run-name` prefix. Useful when chaining write and read loadpoints across separate runs. |
+| `extra_args` | string | | Additional arguments appended verbatim to the `rados bench` command |
+
+> **Note on read loadpoints**: `seqread` and `randread` require objects from a prior `seqwrite`/`randwrite` run with the same `--run-name`. Set `no_cleanup: true` on the write loadpoint so objects persist for subsequent reads.
+
+#### Example Configuration
+
+```yaml
+mount_manager_type: "StubMountManager"
+
+rados_bench:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/rados_bench/run_rados_workload.py"
+  executable_path: "/usr/local/bin/rados"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  pool: "rados_bench_pool"
+  no_cleanup: true
+  duration: 30
+  loadpoints:
+    - readwrite: ["seqwrite", "randwrite", "seqread", "randread"]
+      threads: [16, 32]
+      duration: 30
+      min-object-size: "4KiB"
+      max-object-size: "4MiB"
+      extra_args: ""
+```
+
+---
+
+### `rbd`
+
+Configuration for the RBD workload runner, which uses fio's `rbd` ioengine (librbd) to benchmark a RADOS block device pool directly. Like `rados_bench`, this targets the OSD layer without CephFS/MDS involvement.
+
+Set `mount_manager_type: StubMountManager` — no filesystem mounts are needed.
+
+RBD images are created once per client before any loadpoints run and reused across all loadpoints unless `recreate_images: true`.
+
+#### Global Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `results_base_dir` | string | `/cephfs_perf/results` | Base directory for result files |
+| `run_command` | string | `/cephfs_perf/rbd/run_rbd_workload.py` | Remote driver script path |
+| `executable_path` | string | `/usr/local/bin/fio` | Path to the `fio` binary |
+| `rbd_executable_path` | string | `/usr/local/bin/rbd` | Path to the `rbd` binary (used for image management) |
+| `config_path` | string | | Path to `ceph.conf` |
+| `keyring` | string | | Path to Ceph keyring file |
+| `client_id` | string | `admin` | Ceph client user ID (passed as `--clientname`) |
+| `pool` | string | required | RBD pool name. Created and initialized by `CephPoolManager` if it does not exist. |
+| `pool_pg_num` | int | | PG count for the pool (optional) |
+| `pool_size` | int | | Replication size (optional) |
+| `pool_min_size` | int | | Minimum replication size (optional) |
+| `pool_recreate` | bool | `false` | Wipe and recreate the pool before each iteration |
+| `image_size` | string | `10GiB` | Size of each RBD image (SI units supported) |
+| `images_per_client` | int | `1` | Number of RBD images created per client. fio runs one job per image. |
+| `recreate_images` | bool | `false` | Delete and recreate images before each iteration |
+| `gtod_reduce` | int | `1` | Enable fio `gtod_reduce` to reduce `gettimeofday` overhead |
+| `ramp_time` | int | `5` | Warmup time in seconds before measuring |
+| `randrepeat` | int | | fio `randrepeat` setting |
+| `timestamp_progress` | bool | `false` | Prefix each progress line with an ISO 8601 UTC timestamp |
+| `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `fio`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
+
+#### Profiling
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `perf_record` | bool | `false` | Enable `perf record` profiling |
+| `perf_record_script` | string | | Path to perf recording script |
+| `perf_record_executable` | string | `fio` | Executable to profile |
+| `perf_record_duration` | int | `30` | Profiling duration in seconds |
+| `flamegraph_path` | string | | Path to FlameGraph tools for SVG generation |
+
+#### Loadpoint Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `readwrite` | string or list | | Access pattern (`randread`, `randwrite`, `randrw`, `read`, `write`) |
+| `block-size` | string or list | | I/O block size (e.g., `4MiB`, `256KiB`) |
+| `iodepth` | int or list | | I/O queue depth |
+| `direct` | int or list | | Direct I/O (`1`=on, `0`=off) |
+| `rwmixread` | int or list | | Read percentage for `randrw` mode |
+| `threads` | int or list | | Number of fio jobs (maps to `--numjobs`) |
+| `size` | string | | Total I/O size per job |
+| `duration` | int | global `duration` | Per-loadpoint runtime in seconds |
+| `gtod_reduce` | int | global value | Per-loadpoint override |
+| `ramp_time` | int | global value | Per-loadpoint ramp time override |
+| `randrepeat` | int | global value | Per-loadpoint override |
+| `extra_args` | string | | Additional fio arguments appended verbatim |
+
+> **Note**: Do not set `create_serialize: 0` for RBD loadpoints. fio's `rbd` ioengine can race on concurrent connect when `numjobs > 1` and setup runs inside each thread. Leave it at fio's default (`1`).
+
+#### Example Configuration
+
+```yaml
+mount_manager_type: "StubMountManager"
+
+rbd:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/rbd/run_rbd_workload.py"
+  executable_path: "/usr/local/bin/fio"
+  rbd_executable_path: "/usr/local/bin/rbd"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  pool: "rbd_bench_pool"
+  image_size: "10GiB"
+  images_per_client: 1
+  recreate_images: false
+  gtod_reduce: 1
+  ramp_time: 5
+  loadpoints:
+      duration: 60
+      block-size: ["4MiB", "256KiB"]
+      iodepth: [8]
+      readwrite: ["randwrite", "randread"]
+      direct: [1]
+      threads: [32, 8]
+      extra_args: ""
+```
 
 ---
 
@@ -343,11 +514,22 @@ Mounts CephFS directly via the kernel client.
 
 ### `MountNfsManager`
 
-Mounts via NFS v4.1 through Ganesha.
+Mounts via NFS through Ganesha.
 
 - Requires `ganesha.enabled: true`.
 - Distributes clients across Ganesha nodes in round-robin order.
 - `mounts_per_fs` controls the number of mount points per client per filesystem.
+
+Configured via the `mount_nfs` section:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `mount_options` | string | `nfsvers=4.1,proto=tcp` | Options passed to `mount -t nfs -o` |
+
+```yaml
+mount_nfs:
+  mount_options: "nfsvers=4.1,proto=tcp,sec=sys"
+```
 
 ### `StubMountManager`
 

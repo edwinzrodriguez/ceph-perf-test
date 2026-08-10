@@ -1,6 +1,6 @@
 import abc
 import json
-from cephfs_perf_lib import FSManager
+from cephfs_perf_lib import CommonUtils, FSManager
 
 
 class GaneshaManager(abc.ABC):
@@ -31,6 +31,8 @@ class GaneshaManager(abc.ABC):
             parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{settings['umask']}")
         if "client_oc" in settings:
             parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(settings['client_oc'])}")
+        if "syncdataonly" in settings:
+            parts.append(f"{CommonUtils.get_short_name('Ganesha Sync Data Only')}{CommonUtils.format_config_value(settings['syncdataonly'])}")
         if "async" in settings:
             parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(settings['async'])}")
         if "zerocopy" in settings:
@@ -64,6 +66,28 @@ class GaneshaManager(abc.ABC):
         if include_keyring and self.config.ganesha_keyring_path:
             args.append(f"--keyring {self.config.ganesha_keyring_path}")
         return " ".join(args)
+
+    def _get_ganesha_env(self):
+        """Merged env used for Ganesha and related ceph_bin invocations."""
+        default_env = {
+            "ENABLE_LOCKSTAT": "true",
+            "GSS_USE_HOSTNAME": "0",
+            "CEPH_CONF": self.config.ceph_conf_path,
+        }
+        return self.config.get_merged_env_vars(default_env, self.config.ganesha_env_vars)
+
+    def _get_ganesha_env_exports(self):
+        """Shell export statements for ganesha env vars (for bash -c)."""
+        return CommonUtils.format_env_exports(self._get_ganesha_env())
+
+    def _sudo_with_ganesha_env(self, cmd):
+        """Run cmd under sudo bash with ganesha environment variables set.
+
+        Ensures custom library paths (e.g. LD_LIBRARY_PATH) apply to ceph_bin
+        and other tools built alongside Ganesha. Also expands ${VAR} references
+        in cmd (e.g. CEPH_INSTALL_PREFIX in binary paths).
+        """
+        return CommonUtils.with_env_exports(cmd, self._get_ganesha_env(), sudo=True)
 
     def _get_asok_path(self, host_name):
         cmd = (
@@ -107,7 +131,10 @@ class GaneshaManager(abc.ABC):
         print(f"[{host_name}] Starting Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
-            f"{self.config.ganesha_lockstat_path} {asok_path} start",
+            CommonUtils.with_env_exports(
+                f"{self.config.ganesha_lockstat_path} {asok_path} start",
+                self._get_ganesha_env(),
+            ),
         )
 
     def stop_lockstat(self, host_name):
@@ -120,7 +147,10 @@ class GaneshaManager(abc.ABC):
         print(f"[{host_name}] Stopping Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
-            f"{self.config.ganesha_lockstat_path} {asok_path} stop",
+            CommonUtils.with_env_exports(
+                f"{self.config.ganesha_lockstat_path} {asok_path} stop",
+                self._get_ganesha_env(),
+            ),
         )
 
     def reset_lockstat(self, host_name):
@@ -133,7 +163,10 @@ class GaneshaManager(abc.ABC):
         print(f"[{host_name}] Resetting Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
-            f"{self.config.ganesha_lockstat_path} {asok_path} reset",
+            CommonUtils.with_env_exports(
+                f"{self.config.ganesha_lockstat_path} {asok_path} reset",
+                self._get_ganesha_env(),
+            ),
         )
 
     def dump_lockstat(self, host_name):

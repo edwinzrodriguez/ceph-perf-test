@@ -48,9 +48,16 @@ class FioWorkloadRunner(WorkloadRunner):
         payload["results_dir"] = results_dir
 
         # Add global fio settings to payload
-        for key in ["gtod_reduce", "ramp_time", "threads_fio", "timestamp_progress"]:
+        for key in [
+            "executable_path",
+            "gtod_reduce",
+            "ramp_time",
+            "threads_fio",
+            "timestamp_progress",
+        ]:
             if key in fio_cfg:
                 payload[key] = fio_cfg[key]
+        payload["env_vars"] = self.config.get_merged_env_vars(fio_cfg.get("env_vars"))
 
         # Add Ganesha settings to payload
         ganesha_keys = [
@@ -58,6 +65,7 @@ class FioWorkloadRunner(WorkloadRunner):
             "ganesha_worker_threads",
             "ganesha_umask",
             "ganesha_client_oc",
+            "ganesha_syncdataonly",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_client_oc_size",

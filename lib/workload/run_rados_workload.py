@@ -126,8 +126,9 @@ def main():
             cmd_parts = []
             env_vars = dict(base_env_vars)
             if env_vars:
-                env_str = " ".join(f'{k}="{v}"' for k, v in env_vars.items())
-                cmd_parts.append(f"env {env_str}")
+                cmd_parts.append(
+                    "".join(f'export {k}="{v}"; ' for k, v in base_env_vars.items())
+                )
 
             cmd_parts.append(executable)
             if config_path:

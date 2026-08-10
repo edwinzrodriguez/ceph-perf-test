@@ -424,8 +424,10 @@ class PerformanceTestConfig:
 
     @property
     def ganesha_binary_path(self):
-        return self._config.get("ganesha", {}).get(
-            "binary_path", "/usr/local/ceph/bin/ganesha.nfsd"
+        return self.expand_env(
+            self._config.get("ganesha", {}).get(
+                "binary_path", "/usr/local/ceph/bin/ganesha.nfsd"
+            )
         )
 
     @property
@@ -443,6 +445,10 @@ class PerformanceTestConfig:
     @property
     def ganesha_client_oc(self):
         return self._config.get("ganesha", {}).get("client_oc")
+
+    @property
+    def ganesha_syncdataonly(self):
+        return self._config.get("ganesha", {}).get("syncdataonly")
 
     @property
     def ganesha_async(self):
@@ -483,6 +489,30 @@ class PerformanceTestConfig:
         return self.ceph_keyring_path
 
     @property
+    def env_vars(self):
+        """Top-level env_vars used as the base for all tool invocations."""
+        return dict(self._config.get("env_vars") or {})
+
+    def get_merged_env_vars(self, *extra_dicts):
+        """Merge global env_vars with additional dicts (later entries win)."""
+        merged = self.env_vars
+        for d in extra_dicts:
+            if d:
+                merged.update(d)
+        return merged
+
+    def expand_env(self, value, *extra_env_dicts):
+        """Expand $VAR / ${VAR} in value using top-level (and optional extra) env_vars.
+
+        Used for config paths like ``${CEPH_INSTALL_PREFIX}/bin/ceph`` that are
+        not themselves env_vars entries.
+        """
+        known = CommonUtils.expand_env_vars_map(
+            self.get_merged_env_vars(*extra_env_dicts)
+        )
+        return CommonUtils.expand_env_value(value, known)
+
+    @property
     def ganesha_env_vars(self):
         return self._config.get("ganesha", {}).get("env_vars", {})
 
@@ -500,11 +530,13 @@ class PerformanceTestConfig:
 
     @property
     def ganesha_ceph_binary_path(self):
-        return self._config.get("ganesha", {}).get("ceph_binary_path", "/usr/bin/ceph")
+        return self.expand_env(
+            self._config.get("ganesha", {}).get("ceph_binary_path", "/usr/bin/ceph")
+        )
 
     @property
     def ganesha_lockstat_path(self):
-        return (
+        return self.expand_env(
             self._config.get("ganesha", {}).get("lockstat", {}).get("path")
             or self._config.get("specstorage", {}).get("lockstat", {}).get("path")
             or "ceph-lockstat"
@@ -704,6 +736,75 @@ class CommonUtils:
             return 1 if value else 0
         return value
 
+    # $VAR or ${VAR} — same forms the shell expands in double quotes
+    _ENV_VAR_RE = re.compile(
+        r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)"
+    )
+
+    @staticmethod
+    def expand_env_value(value, known_vars):
+        """Expand $VAR / ${VAR} using known_vars, shell-style (single pass).
+
+        Only names present in known_vars are substituted. Unknown references
+        (e.g. ${PATH} on a remote host) are left unchanged so the shell can
+        expand them at export time.
+        """
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            value = str(value)
+
+        def repl(match):
+            name = match.group(1) or match.group(2)
+            if name in known_vars:
+                return str(known_vars[name])
+            return match.group(0)
+
+        return CommonUtils._ENV_VAR_RE.sub(repl, value)
+
+    @staticmethod
+    def expand_env_vars_map(env_vars):
+        """Return a new dict with values expanded shell-style in declaration order.
+
+        Each entry may reference earlier keys. Unknown references are left intact.
+        """
+        if not env_vars:
+            return {}
+        known = {}
+        for k, v in env_vars.items():
+            known[k] = CommonUtils.expand_env_value(v, known)
+        return known
+
+    @staticmethod
+    def format_env_exports(env_vars):
+        """Shell export statements for env_vars (values are double-quoted).
+
+        Values are expanded shell-style in declaration order: each entry may
+        reference earlier keys in env_vars (e.g. CEPH_INSTALL_PREFIX). References
+        to variables not yet defined in env_vars are left intact for the remote
+        shell (e.g. ${PATH}, ${LD_LIBRARY_PATH}).
+        """
+        if not env_vars:
+            return ""
+        expanded = CommonUtils.expand_env_vars_map(env_vars)
+        return "".join(f'export {k}="{v}"; ' for k, v in expanded.items())
+
+    @staticmethod
+    def with_env_exports(cmd, env_vars, sudo=False):
+        """Prefix cmd with env exports; optionally wrap under sudo bash -c.
+
+        Both export values and the command string are expanded using env_vars
+        (so paths like ``${CEPH_INSTALL_PREFIX}/bin/ceph`` resolve).
+        """
+        known = CommonUtils.expand_env_vars_map(env_vars)
+        if cmd is not None:
+            cmd = CommonUtils.expand_env_value(cmd, known)
+        exports = "".join(f'export {k}="{v}"; ' for k, v in known.items()) if known else ""
+        if sudo:
+            escaped = cmd.replace("'", "'\\''")
+            return f"sudo bash -c '{exports}{escaped}'"
+        return f"{exports}{cmd}" if exports else cmd
+
     @staticmethod
     def get_short_name(var_name):
         """Map a human-readable parameter name to its short abbreviation."""
@@ -730,6 +831,7 @@ class CommonUtils:
             "Ganesha Worker Threads": "gwt",
             "Ganesha Umask": "gum",
             "Ganesha Client Object Cache": "goc",
+            "Ganesha Sync Data Only": "gsdo",
             "Ganesha Async": "gas",
             "Ganesha Zero Copy": "gzc",
             "Ganesha Client Object Cache Size": "gocs",
@@ -823,6 +925,7 @@ class CommonUtils:
             "ganesha_worker_threads": "Ganesha Worker Threads",
             "ganesha_umask": "Ganesha Umask",
             "ganesha_client_oc": "Ganesha Client Object Cache",
+            "ganesha_syncdataonly": "Ganesha Sync Data Only",
             "ganesha_async": "Ganesha Async",
             "ganesha_zerocopy": "Ganesha Zero Copy",
             "ganesha_client_oc_size": "Ganesha Client Object Cache Size",
@@ -854,6 +957,7 @@ class CommonUtils:
             "ganesha_worker_threads",
             "ganesha_umask",
             "ganesha_client_oc",
+            "ganesha_syncdataonly",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_msgr_workers",
@@ -908,6 +1012,7 @@ class CommonUtils:
             "ganesha_worker_threads",
             "ganesha_umask",
             "ganesha_client_oc",
+            "ganesha_syncdataonly",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
@@ -953,6 +1058,8 @@ class CommonUtils:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{config.ganesha_umask}")
             if config.ganesha_client_oc is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(config.ganesha_client_oc)}")
+            if config.ganesha_syncdataonly is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Sync Data Only')}{CommonUtils.format_config_value(config.ganesha_syncdataonly)}")
             if config.ganesha_async is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(config.ganesha_async)}")
             if config.ganesha_zerocopy is not None:
@@ -973,6 +1080,8 @@ class CommonUtils:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Umask')}{settings['ganesha_umask']}")
             if settings.get("ganesha_client_oc") is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(settings['ganesha_client_oc'])}")
+            if settings.get("ganesha_syncdataonly") is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Sync Data Only')}{CommonUtils.format_config_value(settings['ganesha_syncdataonly'])}")
             if settings.get("ganesha_async") is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(settings['ganesha_async'])}")
             if settings.get("ganesha_zerocopy") is not None:
