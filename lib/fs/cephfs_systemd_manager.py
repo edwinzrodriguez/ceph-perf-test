@@ -6,6 +6,7 @@ auth keyring, then launch ``ceph-mds -i <id> -c <conf>`` on each MDS host.
 
 import re
 import time
+from cephfs_perf_lib import CommonUtils
 from lib.fs.cephfs_manager import CephFSManager
 
 
@@ -29,10 +30,17 @@ class CephFSSystemdManager(CephFSManager):
         return self.config.get("mds", {}) or {}
 
     def _binary_path(self):
-        return self._mds_cfg().get("binary_path", "/usr/local/bin/ceph-mds")
+        # Expand ${CEPH_INSTALL_PREFIX} etc. from top-level env_vars
+        return self.config.expand_env(
+            self._mds_cfg().get("binary_path", "/usr/local/bin/ceph-mds")
+        )
 
     def _ceph_binary(self):
-        return self._mds_cfg().get("ceph_binary_path", "ceph")
+        # Prefer mds.ceph_binary_path; fall back to base CephFSManager resolution
+        path = self._mds_cfg().get("ceph_binary_path")
+        if path:
+            return self.config.expand_env(path)
+        return self._ceph_bin()
 
     def _data_dir(self):
         return self._mds_cfg().get("data_dir", "/var/lib/ceph/mds")
@@ -49,7 +57,9 @@ class CephFSSystemdManager(CephFSManager):
             "CEPH_CONF": self.config.ceph_conf_path,
         }
         user_env = self._mds_cfg().get("env_vars", {}) or {}
-        return {**default_env, **user_env}
+        # Top-level env_vars (CEPH_INSTALL_PREFIX, LD_LIBRARY_PATH, PATH) first,
+        # then defaults / mds.env_vars so local overrides win.
+        return self.config.get_merged_env_vars(default_env, user_env)
 
     def _mds_id(self, fs, host_name, index):
         # Stable, filesystem-scoped id (host-based to aid multi-host placement)
@@ -80,11 +90,18 @@ class CephFSSystemdManager(CephFSManager):
             f"sudo kill $(cat {pid_path}) 2>/dev/null || true; "
             f"sudo rm -f {pid_path}; fi",
         )
-        # Catch any leftover process for this id
+        # Catch any leftover process for this id; escalate if it does not exit
         self.executor.run_remote(
             host_name,
             f"pids=$(pgrep -f '{bin_re}.*-i {id_re}( |$)' 2>/dev/null || true); "
-            f"if [ -n \"$pids\" ]; then sudo kill $pids 2>/dev/null || true; fi",
+            f"if [ -n \"$pids\" ]; then sudo kill $pids 2>/dev/null || true; fi; "
+            f"for i in 1 2 3 4 5; do "
+            f"  pids=$(pgrep -f '{bin_re}.*-i {id_re}( |$)' 2>/dev/null || true); "
+            f"  [ -z \"$pids\" ] && break; "
+            f"  sleep 1; "
+            f"done; "
+            f"pids=$(pgrep -f '{bin_re}.*-i {id_re}( |$)' 2>/dev/null || true); "
+            f"if [ -n \"$pids\" ]; then sudo kill -9 $pids 2>/dev/null || true; fi",
         )
         self.executor.run_remote(
             host_name, f"sudo rm -f {self._asok_path(mds_id)} || true"
@@ -108,16 +125,15 @@ class CephFSSystemdManager(CephFSManager):
                 print(f"[{host_name}] Stopping local ceph-mds mds.{mds_id}")
                 self._kill_mds(host_name, mds_id)
                 # Remove auth entity so recreate is clean
-                ceph = self._ceph_binary()
-                self.executor.run_remote(
+                conf = self.config.ceph_conf_path
+                self._run_ceph(
                     self.admin,
-                    f"sudo {ceph} auth rm mds.{mds_id} || true",
+                    f"-c {conf} auth rm mds.{mds_id} || true",
                 )
         self._mds_instances.pop(fs, None)
 
     def _create_mds_auth(self, mds_id, keyring_path):
         """Create MDS keyring and register it with the cluster (vstart-style)."""
-        ceph = self._ceph_binary()
         conf = self.config.ceph_conf_path
         # Caps mirror vstart.sh start_mds():
         # mon 'allow profile mds' osd 'allow rw tag cephfs *=*' mds 'allow' mgr 'allow profile mds'
@@ -127,10 +143,11 @@ class CephFSSystemdManager(CephFSManager):
             "mds 'allow' "
             "mgr 'allow profile mds'"
         )
-        self.executor.run_remote(
+        self._run_ceph(
             self.admin,
-            f"sudo {ceph} -c {conf} auth get-or-create mds.{mds_id} {caps} "
+            f"-c {conf} auth get-or-create mds.{mds_id} {caps} "
             f"-o {keyring_path}",
+            check=True,
         )
         self.executor.run_remote(self.admin, f"sudo chmod 0600 {keyring_path}")
 
@@ -172,14 +189,12 @@ class CephFSSystemdManager(CephFSManager):
             )
 
         # Point this MDS at the target filesystem (multi-FS friendly)
-        ceph = self._ceph_binary()
-        self.executor.run_remote(
+        self._run_ceph(
             self.admin,
-            f"sudo {ceph} -c {conf} config set mds.{mds_id} mds_join_fs {fs} || true",
+            f"-c {conf} config set mds.{mds_id} mds_join_fs {fs} || true",
         )
 
         env = self._env_vars()
-        env_exports = "".join(f'export {k}="{v}"; ' for k, v in env.items())
 
         # Optional CPU pinning via taskset when mds_settings.cpus is set
         cpus = settings.get("cpus") if settings else None
@@ -204,9 +219,11 @@ class CephFSSystemdManager(CephFSManager):
             f"--err-to-stderr true "
             f"-f"
         )
-        cmd = (
-            f"sudo bash -c 'ulimit -c unlimited; {env_exports} "
-            f"nohup {args} > /dev/null 2>&1 &'"
+        # Expand ${CEPH_INSTALL_PREFIX} etc. and export env for the daemon.
+        cmd = CommonUtils.with_env_exports(
+            f"ulimit -c unlimited; nohup {args} > /dev/null 2>&1 &",
+            env,
+            sudo=True,
         )
         print(f"[{host_name}] Starting local ceph-mds mds.{mds_id}")
         self.executor.run_remote(host_name, cmd, check=True)
@@ -251,8 +268,8 @@ class CephFSSystemdManager(CephFSManager):
 
         # Ensure max_mds is applied after daemons are online (vstart does this late)
         if settings and "max_mds" in settings:
-            self.executor.run_remote(
-                self.admin, f"sudo ceph fs set {fs} max_mds {settings['max_mds']}"
+            self._run_ceph(
+                self.admin, f"fs set {fs} max_mds {settings['max_mds']}"
             )
 
     def _collect_mds_logs(self, loadpoint, results_dir):
