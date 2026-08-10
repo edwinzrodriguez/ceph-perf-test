@@ -78,16 +78,16 @@ class GaneshaManager(abc.ABC):
 
     def _get_ganesha_env_exports(self):
         """Shell export statements for ganesha env vars (for bash -c)."""
-        return "".join(f'export {k}="{v}"; ' for k, v in self._get_ganesha_env().items())
+        return CommonUtils.format_env_exports(self._get_ganesha_env())
 
     def _sudo_with_ganesha_env(self, cmd):
         """Run cmd under sudo bash with ganesha environment variables set.
 
         Ensures custom library paths (e.g. LD_LIBRARY_PATH) apply to ceph_bin
-        and other tools built alongside Ganesha.
+        and other tools built alongside Ganesha. Also expands ${VAR} references
+        in cmd (e.g. CEPH_INSTALL_PREFIX in binary paths).
         """
-        escaped = cmd.replace("'", "'\\''")
-        return f"sudo bash -c '{self._get_ganesha_env_exports()}{escaped}'"
+        return CommonUtils.with_env_exports(cmd, self._get_ganesha_env(), sudo=True)
 
     def _get_asok_path(self, host_name):
         cmd = (
