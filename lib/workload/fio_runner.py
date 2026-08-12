@@ -170,6 +170,11 @@ class FioWorkloadRunner(WorkloadRunner):
                 if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
                     print(f"Resetting MDS lockstat for Load Point {current_lp}...")
                     cephfs_manager.reset_lockstat()
+                if cephfs_manager:
+                    print(
+                        f"Resetting MDS perf counters for Load Point {current_lp}..."
+                    )
+                    cephfs_manager.reset_perf_counters()
                 if ganesha_perf_enabled:
                     print(
                         f"Resetting Ganesha perf counters for Load Point {current_lp}..."
@@ -214,6 +219,16 @@ class FioWorkloadRunner(WorkloadRunner):
                 if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
                     print(f"Dumping MDS lockstat for Load Point {current_lp}...")
                     cephfs_manager.dump_lockstat(
+                        current_lp,
+                        results_dir,
+                        settings=payload,
+                        lp_cfg=expanded_loadpoints[current_lp - 1],
+                    )
+                if cephfs_manager and results_dir:
+                    print(
+                        f"Dumping MDS perf counters for Load Point {current_lp}..."
+                    )
+                    cephfs_manager.dump_perf_counters(
                         current_lp,
                         results_dir,
                         settings=payload,

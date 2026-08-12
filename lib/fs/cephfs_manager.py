@@ -196,6 +196,147 @@ class CephFSManager(FSManager):
                             phase=phase,
                         )
 
+    # ------------------------------------------------------------------
+    # Admin-socket perf counters (full loadpoint window)
+    # ------------------------------------------------------------------
+
+    def _mds_asok_path(self, mds_id):
+        """Default host path for an MDS admin socket (systemd layout)."""
+        run_dir = (self.config.get("mds", {}) or {}).get("run_dir", "/var/run/ceph")
+        return f"{run_dir}/ceph-mds.{mds_id}.asok"
+
+    def _iter_mds_admin_sockets(self):
+        """Yield ``(host, mds_id, asok_path)`` for known or discovered MDS daemons.
+
+        Prefers ``_mds_instances`` populated at deploy time; falls back to listing
+        ``ceph-mds.*.asok`` under the MDS run dir on each MDS host.
+        """
+        seen = set()
+        for _fs, instances in (self._mds_instances or {}).items():
+            for host, mds_id in instances:
+                asok = self._mds_asok_path(mds_id)
+                key = (host, asok)
+                if key in seen:
+                    continue
+                seen.add(key)
+                yield host, mds_id, asok
+
+        if seen:
+            return
+
+        # Discover sockets (covers cephadm paths under /var/run/ceph/<fsid>/… too).
+        run_dir = (self.config.get("mds", {}) or {}).get("run_dir", "/var/run/ceph")
+        for host in self.mdss:
+            listing = self.executor.run_remote(
+                host,
+                f"find {run_dir} -type s -name 'ceph-mds.*.asok' 2>/dev/null || true",
+            ).strip()
+            for asok in listing.split():
+                if not asok or (host, asok) in seen:
+                    continue
+                base = asok.rsplit("/", 1)[-1]
+                mds_id = base[len("ceph-mds.") : -len(".asok")] if base.startswith(
+                    "ceph-mds."
+                ) and base.endswith(".asok") else base
+                seen.add((host, asok))
+                yield host, mds_id, asok
+
+    def _asok_exists(self, host, asok_path):
+        out = self.executor.run_remote(
+            host, f"test -S {asok_path} && echo OK || echo MISSING"
+        ).strip()
+        return "OK" in out
+
+    def reset_perf_counters(self):
+        """Reset MDS admin-socket perf counters (start of a loadpoint window).
+
+        Mirrors GaneshaManager.reset_ganesha_perf / lockstat reset: call at the
+        beginning of each RUN phase so the subsequent dump spans the whole
+        loadpoint, not just a short ``perf record`` sample.
+        """
+        found = False
+        for host, mds_id, asok in self._iter_mds_admin_sockets():
+            if not self._asok_exists(host, asok):
+                print(
+                    f"[{host}] Warning: MDS admin socket not found for "
+                    f"mds.{mds_id} ({asok}); skip perf reset"
+                )
+                continue
+            found = True
+            print(
+                f"[{host}] Resetting MDS perf counters for mds.{mds_id} via {asok}..."
+            )
+            self.executor.run_remote(
+                host,
+                self._ceph_cmd(f"--admin-daemon {asok} perf reset all"),
+            )
+        if not found:
+            print("Warning: no MDS admin sockets found for perf counter reset")
+
+    def dump_perf_counters(
+        self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None
+    ):
+        """Dump MDS admin-socket ``perf dump`` JSON for the loadpoint window.
+
+        Mirrors dump_lockstat / collect_ganesha_perf_dump: call at loadpoint end
+        so counters cover the full RUN phase.
+        """
+        if not results_dir:
+            print(
+                f"Skipping MDS perf dump for load point {loadpoint}: no results_dir"
+            )
+            return
+
+        found = False
+        for host, mds_id, asok in self._iter_mds_admin_sockets():
+            if not self._asok_exists(host, asok):
+                print(
+                    f"[{host}] Warning: MDS admin socket not found for "
+                    f"mds.{mds_id} ({asok}); skip perf dump"
+                )
+                continue
+            found = True
+            phase_label = f" ({phase} phase)" if phase else ""
+            print(
+                f"[{host}] Dumping MDS perf counters for mds.{mds_id} "
+                f"(Load Point {loadpoint}{phase_label}) via {asok}..."
+            )
+            target_name = f"mds.{mds_id}"
+            output_type = f"perf_dump_{phase}" if phase else "perf_dump"
+            if settings is not None:
+                dest_file = (
+                    f"{CommonUtils.get_workload_base_name(target_name, output_type, host, loadpoint, settings, lp_cfg)}.json"
+                )
+            else:
+                lp_tag = f"{int(loadpoint):02d}"
+                phase_suffix = f"_{phase}" if phase else ""
+                dest_file = (
+                    f"{target_name}_perf_dump{phase_suffix}_{host}_lp{lp_tag}.json"
+                )
+            temp_file = f"/tmp/{dest_file}"
+            dump_cmd = self._ceph_cmd(f"--admin-daemon {asok} perf dump")
+            self.executor.run_remote(
+                host, f"{dump_cmd} | sudo tee {temp_file} > /dev/null"
+            )
+            user, _, _ = self.executor.get_ssh_details(host)
+            self.executor.run_remote(host, f"sudo chown {user}:{user} {temp_file}")
+            admin_user, admin_host_addr, admin_port = self.executor.get_ssh_details(
+                self.admin
+            )
+            copy_cmd = (
+                f"scp -o StrictHostKeyChecking=no -P {admin_port} "
+                f"{temp_file} {admin_user}@{admin_host_addr}:{results_dir}/"
+            )
+            self.executor.run_remote(host, copy_cmd)
+            self.executor.run_remote(host, f"rm -f {temp_file}")
+            print(f"[{host}] Wrote MDS perf dump {dest_file} → {results_dir}/")
+
+        if not found:
+            print(
+                f"Warning: no MDS admin sockets found for perf dump "
+                f"(load point {loadpoint})"
+            )
+
     def rebuild_filesystem(self, settings, ganesha_manager=None, results_dir=None):
         self._run_ceph(self.admin, "config set mon mon_allow_pool_delete true")
         self._run_ceph(self.admin, "config set global mon_max_pg_per_osd 1000")

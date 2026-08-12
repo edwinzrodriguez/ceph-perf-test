@@ -122,6 +122,22 @@ class FSManager(abc.ABC):
         """
         return False
 
+    def reset_perf_counters(self):
+        """Reset MDS admin-socket perf counters (start of loadpoint window).
+
+        Default no-op for stub/pool managers. CephFSManager implements this.
+        """
+        pass
+
+    def dump_perf_counters(
+        self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None
+    ):
+        """Dump MDS admin-socket perf counters (end of loadpoint window).
+
+        Default no-op for stub/pool managers. CephFSManager implements this.
+        """
+        pass
+
     def safe_json_load(self, raw, default=None):
         """
         Safely loads a JSON string, returning a default value on failure.
@@ -188,6 +204,14 @@ class StubFSManager(FSManager):
         pass
 
     def dump_lockstat(self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None):
+        pass
+
+    def reset_perf_counters(self):
+        pass
+
+    def dump_perf_counters(
+        self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None
+    ):
         pass
 
 

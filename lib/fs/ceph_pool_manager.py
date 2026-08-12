@@ -59,6 +59,14 @@ class CephPoolManager(FSManager):
     def dump_lockstat(self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None):
         pass
 
+    def reset_perf_counters(self):
+        pass
+
+    def dump_perf_counters(
+        self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None
+    ):
+        pass
+
     def apply_fs_settings(self, settings):
         # mds_* settings from the benchmark matrix don't apply to a bare pool.
         # Silently ignore so the matrix expansion in BenchRunner still drives

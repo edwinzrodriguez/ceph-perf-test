@@ -109,6 +109,11 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                 if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
                     print(f"Resetting MDS lockstat for Load Point {current_lp}...")
                     cephfs_manager.reset_lockstat()
+                if cephfs_manager:
+                    print(
+                        f"Resetting MDS perf counters for Load Point {current_lp}..."
+                    )
+                    cephfs_manager.reset_perf_counters()
                 if (
                     self.config.get("logging", {}).get("enabled")
                     and not logging_triggered
@@ -130,6 +135,13 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                 if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
                     print(f"Dumping MDS lockstat for Load Point {current_lp}...")
                     cephfs_manager.dump_lockstat(
+                        current_lp, r_dir, settings=settings
+                    )
+                if cephfs_manager and r_dir:
+                    print(
+                        f"Dumping MDS perf counters for Load Point {current_lp}..."
+                    )
+                    cephfs_manager.dump_perf_counters(
                         current_lp, r_dir, settings=settings
                     )
                 if logging_triggered and cephfs_manager:
