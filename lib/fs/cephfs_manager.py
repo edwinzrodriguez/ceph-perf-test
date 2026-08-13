@@ -1,3 +1,6 @@
+import json
+import re
+import shlex
 import time
 from cephfs_perf_lib import CommonUtils, FSManager
 
@@ -69,6 +72,26 @@ class CephFSManager(FSManager):
         return self.executor.run_remote(
             host, self._ceph_cmd(args, sudo=sudo), check=check
         )
+
+    def _admin_daemon_cmd(self, asok, args):
+        """``ceph --admin-daemon`` using a short relative socket path.
+
+        Linux AF_UNIX ``sun_path`` is 108 bytes including the trailing NUL
+        (107 usable). Cephadm sockets under ``/var/run/ceph/<fsid>/`` plus a
+        long MDS id often exceed that (``AF_UNIX path too long``). ``cd`` to
+        the socket directory and pass only the basename so connect() stays
+        under the limit.
+        """
+        asok = (asok or "").rstrip("/")
+        if "/" in asok:
+            directory, name = asok.rsplit("/", 1)
+        else:
+            directory, name = ".", asok
+        inner = (
+            f"cd {shlex.quote(directory)} && "
+            f"{self._ceph_bin()} --admin-daemon {shlex.quote(name)} {args}"
+        )
+        return CommonUtils.with_env_exports(inner, self._ceph_env(), sudo=True)
 
     def start_fs_logging(self, loadpoint):
         debug_mds = self.config.get("logging", {}).get("debug_mds", 20)
@@ -208,10 +231,14 @@ class CephFSManager(FSManager):
     def _iter_mds_admin_sockets(self):
         """Yield ``(host, mds_id, asok_path)`` for known or discovered MDS daemons.
 
-        Prefers ``_mds_instances`` populated at deploy time; falls back to listing
-        ``ceph-mds.*.asok`` under the MDS run dir on each MDS host.
+        Prefers constructed paths from ``_mds_instances`` when at least one of
+        those sockets exists (local/systemd MDS). Otherwise lists
+        ``ceph-mds.*.asok`` under the MDS run dir so cephadm sockets under
+        ``/var/run/ceph/<fsid>/`` are found — without also picking up leftover
+        sockets from a previous deployment on the same host.
         """
         seen = set()
+        known = []
         for _fs, instances in (self._mds_instances or {}).items():
             for host, mds_id in instances:
                 asok = self._mds_asok_path(mds_id)
@@ -219,12 +246,18 @@ class CephFSManager(FSManager):
                 if key in seen:
                     continue
                 seen.add(key)
-                yield host, mds_id, asok
+                known.append((host, mds_id, asok))
 
-        if seen:
+        # systemd/local MDS writes a predictable asok. Do not also scrape
+        # leftover cephadm sockets (often AF_UNIX-too-long) on that host.
+        if known and any(self._asok_exists(h, a) for h, _, a in known):
+            for item in known:
+                yield item
             return
 
-        # Discover sockets (covers cephadm paths under /var/run/ceph/<fsid>/… too).
+        for item in known:
+            yield item
+
         run_dir = (self.config.get("mds", {}) or {}).get("run_dir", "/var/run/ceph")
         for host in self.mdss:
             listing = self.executor.run_remote(
@@ -268,7 +301,7 @@ class CephFSManager(FSManager):
             )
             self.executor.run_remote(
                 host,
-                self._ceph_cmd(f"--admin-daemon {asok} perf reset all"),
+                self._admin_daemon_cmd(asok, "perf reset all"),
             )
         if not found:
             print("Warning: no MDS admin sockets found for perf counter reset")
@@ -314,7 +347,7 @@ class CephFSManager(FSManager):
                     f"{target_name}_perf_dump{phase_suffix}_{host}_lp{lp_tag}.json"
                 )
             temp_file = f"/tmp/{dest_file}"
-            dump_cmd = self._ceph_cmd(f"--admin-daemon {asok} perf dump")
+            dump_cmd = self._admin_daemon_cmd(asok, "perf dump")
             self.executor.run_remote(
                 host, f"{dump_cmd} | sudo tee {temp_file} > /dev/null"
             )
@@ -500,21 +533,314 @@ class CephFSManager(FSManager):
     def get_fs_names(self):
         return self.fs_names
 
+    # `ceph fs set` only accepts filesystem-map fields. MDS daemon options
+    # (mds_cache_memory_limit, etc.) go through `ceph config set mds`.
+    _FS_SET_VARS = frozenset(
+        {
+            "max_mds",
+            "allow_dirfrags",
+            "allow_new_snaps",
+            "allow_standby_replay",
+            "bal_rank_mask",
+            "balance_automate",
+            "balancer",
+            "cluster_down",
+            "down",
+            "inline_data",
+            "joinable",
+            "max_file_size",
+            "max_xattr_size",
+            "min_compat_client",
+            "refuse_client_session",
+            "refuse_standby_for_another_fs",
+            "session_autoclose",
+            "session_timeout",
+            "standby_count_wanted",
+        }
+    )
+
     def apply_fs_settings(self, settings):
+        """Apply mds_settings to the cluster.
+
+        Daemon options (``mds_*``) use ``ceph config set mds``. Filesystem-map
+        fields (``max_mds``, ...) use ``ceph fs set``. ``cpus`` is a host
+        placement knob handled at deploy time, not a Ceph option.
+
+        Raises if any set command fails, or if a subsequent MDS
+        ``config diff`` does not show the expected live values.
+        """
+        fs_set_pending = {}
         for k, v in settings.items():
-            if k in ["max_mds", "cpus"]:
+            if k == "cpus":
+                continue
+            val = CommonUtils.format_si_units(v)
+            if k in self._FS_SET_VARS:
+                fs_set_pending[k] = val
                 continue
             # Settings keys are already mds_* (e.g. mds_cache_memory_limit);
             # do not double-prefix with mds_.
-            fs_key = k if k.startswith("mds_") else f"mds_{k}"
-            val = CommonUtils.format_si_units(v)
-            for fs in self.get_fs_names():
-                self._run_ceph(self.admin, f"fs set {fs} {fs_key} {val}")
-        if "max_mds" in settings:
+            key = k if k.startswith("mds_") else f"mds_{k}"
+            self._run_ceph(
+                self.admin, f"config set mds {key} {val}", check=True
+            )
+        # Apply fs-map options last (max_mds can change rank count).
+        for k, val in fs_set_pending.items():
             for fs in self.get_fs_names():
                 self._run_ceph(
-                    self.admin, f"fs set {fs} max_mds {settings['max_mds']}"
+                    self.admin, f"fs set {fs} {k} {val}", check=True
                 )
+        self._verify_mds_settings(settings, fs_set_pending)
+
+    def _mds_config_from_settings(self, settings):
+        """Return ``{option: formatted_value}`` for daemon options we applied."""
+        expected = {}
+        for k, v in settings.items():
+            if k == "cpus" or k in self._FS_SET_VARS:
+                continue
+            key = k if k.startswith("mds_") else f"mds_{k}"
+            expected[key] = CommonUtils.format_si_units(v)
+        return expected
+
+    def _extract_json_object(self, raw):
+        """Parse a JSON object from ceph CLI output, skipping leading noise."""
+        if not raw:
+            return {}
+        data = self.safe_json_load(raw, {})
+        if isinstance(data, dict) and data:
+            return data
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start >= 0 and end > start:
+            data = self.safe_json_load(raw[start : end + 1], {})
+            if isinstance(data, dict):
+                return data
+        return {}
+
+    def _parse_config_diff(self, raw):
+        """Map option name → effective value from an MDS ``config diff``.
+
+        Admin-socket output is::
+
+            {"config_diff": {"diff": {"opt": {"default": ..., "mon": ..., "final": ...}}}}
+        """
+        data = self._extract_json_object(raw)
+        diff = data.get("config_diff", data)
+        if isinstance(diff, dict):
+            diff = diff.get("diff", diff)
+        if not isinstance(diff, dict):
+            return {}
+        out = {}
+        for key, entry in diff.items():
+            if key in ("current", "defaults") and isinstance(entry, dict):
+                for inner_k, inner_v in entry.items():
+                    out[inner_k] = inner_v
+                continue
+            if isinstance(entry, dict):
+                if "final" in entry:
+                    out[key] = entry["final"]
+                elif "override" in entry:
+                    out[key] = entry["override"]
+                elif "mon" in entry:
+                    out[key] = entry["mon"]
+                else:
+                    out[key] = entry
+            else:
+                out[key] = entry
+        return out
+
+    def _parse_config_get(self, raw, key):
+        data = self._extract_json_object(raw)
+        if key in data:
+            return data[key]
+        inner = data.get("config_get", {})
+        if isinstance(inner, dict) and key in inner:
+            return inner[key]
+        return None
+
+    @staticmethod
+    def _normalize_config_value(value):
+        """Turn a Ceph config value into a comparable number, bool, or string."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value) if value == int(value) else value
+        s = str(value).strip().replace(" ", "")
+        if s.lower() in ("true", "yes", "on"):
+            return True
+        if s.lower() in ("false", "no", "off"):
+            return False
+        m = re.fullmatch(r"(-?\d+(?:\.\d+)?)([KMGTPEkmgtpe]i?B?)?", s)
+        if not m:
+            return s.lower()
+        num = float(m.group(1))
+        unit = m.group(2) or ""
+        if unit.lower().endswith("b"):
+            unit = unit[:-1]
+        iec = {
+            "ki": 1024,
+            "mi": 1024**2,
+            "gi": 1024**3,
+            "ti": 1024**4,
+            "pi": 1024**5,
+            "ei": 1024**6,
+        }
+        si = {
+            "k": 1000,
+            "m": 1000**2,
+            "g": 1000**3,
+            "t": 1000**4,
+            "p": 1000**5,
+            "e": 1000**6,
+        }
+        unit_l = unit.lower()
+        if unit_l in iec:
+            return int(num * iec[unit_l])
+        if unit_l in si:
+            return int(num * si[unit_l])
+        if num == int(num):
+            return int(num)
+        return num
+
+    def _config_values_match(self, expected, actual):
+        a = self._normalize_config_value(expected)
+        b = self._normalize_config_value(actual)
+        if a == b:
+            return True
+        try:
+            return float(a) == float(b)
+        except (TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def _asok_error_is_unusable(exc):
+        text = str(exc).lower()
+        return any(
+            s in text
+            for s in (
+                "af_unix path too long",
+                "connection refused",
+                "no such file",
+                "socket operation on non-socket",
+            )
+        )
+
+    def _live_mds_asoks(self):
+        """Return ``[(host, mds_id, asok), ...]`` for sockets that exist."""
+        live = []
+        seen = set()
+        for host, mds_id, asok in self._iter_mds_admin_sockets():
+            key = (host, asok)
+            if key in seen:
+                continue
+            seen.add(key)
+            if self._asok_exists(host, asok):
+                live.append((host, mds_id, asok))
+        return live
+
+    def _collect_mds_config_diff(self, host, mds_id, asok):
+        print(f"[{host}] Running MDS 'config diff' for mds.{mds_id} via {asok}...")
+        raw = self.executor.run_remote(
+            host,
+            self._admin_daemon_cmd(asok, "config diff"),
+            check=True,
+        )
+        parsed = self._extract_json_object(raw)
+        if parsed:
+            pretty = json.dumps(parsed, indent=2, default=str)
+        else:
+            pretty = raw
+        print(f"[{host}] mds.{mds_id} config diff:\n{pretty}")
+        return raw
+
+    def _live_mds_config_value(self, host, asok, key, diff_vals):
+        if key in diff_vals:
+            return diff_vals[key]
+        raw = self.executor.run_remote(
+            host,
+            self._admin_daemon_cmd(asok, f"config get {key}"),
+            check=True,
+        )
+        return self._parse_config_get(raw, key)
+
+    def _verify_mds_settings(self, settings, fs_set_pending, retries=8, sleep_secs=2):
+        """Collect MDS ``config diff`` and require live values to match *settings*."""
+        expected = self._mds_config_from_settings(settings)
+        for attempt in range(retries):
+            try:
+                sockets = self._live_mds_asoks()
+                if expected and not sockets:
+                    raise RuntimeError(
+                        "No MDS admin sockets found; cannot collect "
+                        "config diff after apply_fs_settings"
+                    )
+                usable = 0
+                for host, mds_id, asok in sockets:
+                    try:
+                        raw = self._collect_mds_config_diff(host, mds_id, asok)
+                    except Exception as e:
+                        if self._asok_error_is_unusable(e):
+                            print(
+                                f"[{host}] Skipping unusable MDS socket "
+                                f"{asok}: {e}"
+                            )
+                            continue
+                        raise
+                    usable += 1
+                    if not expected:
+                        continue
+                    live = self._parse_config_diff(raw)
+                    mismatches = []
+                    for key, exp in expected.items():
+                        got = self._live_mds_config_value(host, asok, key, live)
+                        if got is None:
+                            mismatches.append(
+                                f"{key}: expected {exp!r}, not present in "
+                                f"config diff / config get"
+                            )
+                        elif not self._config_values_match(exp, got):
+                            mismatches.append(
+                                f"{key}: expected {exp!r}, live {got!r}"
+                            )
+                        else:
+                            print(
+                                f"[{host}] mds.{mds_id} {key}="
+                                f"{got!r} matches expected {exp!r}"
+                            )
+                    if mismatches:
+                        raise RuntimeError(
+                            f"MDS config mismatch on mds.{mds_id}@{host}: "
+                            + "; ".join(mismatches)
+                        )
+                if expected and usable == 0:
+                    raise RuntimeError(
+                        "No usable MDS admin sockets found; cannot collect "
+                        "config diff after apply_fs_settings"
+                    )
+                for k, val in fs_set_pending.items():
+                    for fs in self.get_fs_names():
+                        raw = self._run_ceph(
+                            self.admin, f"fs get {fs} --format json", check=True
+                        )
+                        fs_data = self._extract_json_object(raw)
+                        mdsmap = fs_data.get("mdsmap", fs_data)
+                        got = mdsmap.get(k) if isinstance(mdsmap, dict) else None
+                        if got is None or not self._config_values_match(val, got):
+                            raise RuntimeError(
+                                f"fs {fs} {k}: expected {val!r}, live {got!r}"
+                            )
+                        print(f"[fs {fs}] {k}={got!r} matches expected {val!r}")
+                return
+            except Exception as e:
+                if attempt + 1 < retries:
+                    print(
+                        f"[wait] MDS settings not live yet "
+                        f"(attempt {attempt + 1}/{retries}): {e}"
+                    )
+                    time.sleep(sleep_secs)
+                    continue
+                raise
 
     def setup_client_auth(self, fs):
         self._run_ceph(self.admin, f"fs authorize {fs} client.0 / rwps")
