@@ -125,6 +125,10 @@ mds:
   perf_record_script: "/cephfs_perf/perf_record.py"
   perf_record_executable: "ceph-mds"
   perf_record_duration: 5
+  logging:
+    enabled: true
+    debug_mds: 5
+    debug_ms: 1
 
 ceph:
   conf: "/etc/ceph/ceph.conf"
@@ -358,11 +362,6 @@ rbd:
       # instead of sequentially in the main thread. Leave at fio's default (1).
       threads: [32, 8]
       extra_args: ""
-
-logging:
-  enabled: false
-  debug_mds: 5
-  debug_ms: 1
 
 # Ranges for MDS settings (start, stop, step)
 mds_settings:

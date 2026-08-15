@@ -93,9 +93,21 @@ class CephFSManager(FSManager):
         )
         return CommonUtils.with_env_exports(inner, self._ceph_env(), sudo=True)
 
+    def _mds_logging_cfg(self):
+        """Return the MDS logging block, preferring ``mds.logging``.
+
+        Falls back to a top-level ``logging`` section so older settings
+        files keep working until they are migrated.
+        """
+        mds_cfg = self.config.get("mds", {}) or {}
+        if "logging" in mds_cfg:
+            return mds_cfg.get("logging") or {}
+        return self.config.get("logging", {}) or {}
+
     def start_fs_logging(self, loadpoint):
-        debug_mds = self.config.get("logging", {}).get("debug_mds", 20)
-        debug_ms = self.config.get("logging", {}).get("debug_ms", 1)
+        logging_cfg = self._mds_logging_cfg()
+        debug_mds = logging_cfg.get("debug_mds", 20)
+        debug_ms = logging_cfg.get("debug_ms", 1)
         for server_name in self.mdss:
             print(
                 f"[{server_name}] Starting MDS debug logging for Load Point {loadpoint}"
@@ -895,3 +907,6 @@ class CephFSManager(FSManager):
 
     def is_mds_perf_record_enabled(self):
         return bool(self.config.get("mds", {}).get("perf_record", False))
+
+    def is_mds_logging_enabled(self):
+        return bool(self._mds_logging_cfg().get("enabled"))

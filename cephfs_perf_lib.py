@@ -122,6 +122,14 @@ class FSManager(abc.ABC):
         """
         return False
 
+    def is_mds_logging_enabled(self):
+        """Return True when MDS debug logging should be toggled per loadpoint.
+
+        Default False so pool/stub managers no-op. CephFSManager overrides
+        to read ``mds.logging.enabled`` from the config.
+        """
+        return False
+
     def reset_perf_counters(self):
         """Reset MDS admin-socket perf counters (start of loadpoint window).
 

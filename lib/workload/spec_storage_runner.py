@@ -115,9 +115,9 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                     )
                     cephfs_manager.reset_perf_counters()
                 if (
-                    self.config.get("logging", {}).get("enabled")
+                    cephfs_manager
+                    and cephfs_manager.is_mds_logging_enabled()
                     and not logging_triggered
-                    and cephfs_manager
                 ):
                     print(f"Triggering MDS logging for Load Point {current_lp}...")
                     cephfs_manager.start_fs_logging(current_lp)

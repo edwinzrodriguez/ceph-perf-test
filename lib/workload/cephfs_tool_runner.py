@@ -125,7 +125,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         ]
 
         current_lp, run_phase_started = 0, False
-        perf_triggered = False
+        perf_triggered, logging_triggered = False, False
         lockstat_cfg = self.config.get("cephfs_tool", {}).get("lockstat", {})
         cephfs_lockstat_enabled = lockstat_cfg.get("enabled", False)
         lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
@@ -155,7 +155,11 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             output.append(line)
             if "Starting tests..." in line:
                 current_lp += 1
-                run_phase_started, perf_triggered = False, False
+                run_phase_started, perf_triggered, logging_triggered = (
+                    False,
+                    False,
+                    False,
+                )
                 current_phase = None
                 write_lockstat_dumped = False
                 read_lockstat_dumped = False
@@ -171,6 +175,14 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                         f"Resetting MDS perf counters for Load Point {current_lp}..."
                     )
                     cephfs_manager.reset_perf_counters()
+                if (
+                    cephfs_manager
+                    and cephfs_manager.is_mds_logging_enabled()
+                    and not logging_triggered
+                ):
+                    print(f"Triggering MDS logging for Load Point {current_lp}...")
+                    cephfs_manager.start_fs_logging(current_lp)
+                    logging_triggered = True
                 if cephfs_lockstat_enabled and not lockstat_started:
                     print(f"Starting cephfs-tool lockstat for Load Point {current_lp}...")
                     self._start_client_lockstat(self.config.clients, lockstat_path, lockstat_asok)
@@ -277,6 +289,9 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                         results_dir, lockstat_data, current_lp,
                         payload, loadpoints[current_lp - 1],
                     )
+                if logging_triggered and cephfs_manager:
+                    print(f"Stopping MDS logging for Load Point {current_lp}...")
+                    cephfs_manager.stop_fs_logging(current_lp, results_dir)
                 run_phase_started = False
                 lockstat_started = False
 

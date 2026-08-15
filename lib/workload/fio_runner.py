@@ -142,7 +142,7 @@ class FioWorkloadRunner(WorkloadRunner):
         ganeshas = self.config.ganeshas
 
         current_lp, run_phase_started = 0, False
-        perf_triggered = False
+        perf_triggered, logging_triggered = False, False
         ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
         perf_threads = []
 
@@ -163,7 +163,11 @@ class FioWorkloadRunner(WorkloadRunner):
             output.append(line)
             if "Starting tests..." in line:
                 current_lp += 1
-                run_phase_started, perf_triggered = False, False
+                run_phase_started, perf_triggered, logging_triggered = (
+                    False,
+                    False,
+                    False,
+                )
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
                 run_phase_started = True
@@ -175,6 +179,14 @@ class FioWorkloadRunner(WorkloadRunner):
                         f"Resetting MDS perf counters for Load Point {current_lp}..."
                     )
                     cephfs_manager.reset_perf_counters()
+                if (
+                    cephfs_manager
+                    and cephfs_manager.is_mds_logging_enabled()
+                    and not logging_triggered
+                ):
+                    print(f"Triggering MDS logging for Load Point {current_lp}...")
+                    cephfs_manager.start_fs_logging(current_lp)
+                    logging_triggered = True
                 if ganesha_perf_enabled:
                     print(
                         f"Resetting Ganesha perf counters for Load Point {current_lp}..."
@@ -224,6 +236,9 @@ class FioWorkloadRunner(WorkloadRunner):
                         settings=payload,
                         lp_cfg=expanded_loadpoints[current_lp - 1],
                     )
+                if logging_triggered and cephfs_manager:
+                    print(f"Stopping MDS logging for Load Point {current_lp}...")
+                    cephfs_manager.stop_fs_logging(current_lp, results_dir)
                 if cephfs_manager and results_dir:
                     print(
                         f"Dumping MDS perf counters for Load Point {current_lp}..."
