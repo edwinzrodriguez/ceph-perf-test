@@ -8,6 +8,10 @@ if [ "$#" -eq 0 ]; then
 fi
 
 for i in "$@"; do
+    if [ ! -e /usr/local/$i ]; then
+        mkdir -pv /home/$USER/usr/local/$i
+        ln -s /home/$USER/usr/local/$i /usr/local/$i
+    fi
     if [ ! -e ~/git/$i ]; then
         pushd ~/git/ceph-tentacle
         git worktree add ~/git/$i -b $i origin/$i
@@ -19,13 +23,13 @@ for i in "$@"; do
         if [ ! -e ~/git/$i/build ]; then
             ./do_cmake.sh -DUSE_TRACEFLOW=OFF \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DCMAKE_INSTALL_PREFIX=/usr/local/$i \
             -DENABLE_GIT_VERSION=OFF
         else
           pushd ~/git/$i/build
               cmake .. -DUSE_TRACEFLOW=OFF \
                 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-                -DCMAKE_INSTALL_PREFIX=/usr/local \
+                -DCMAKE_INSTALL_PREFIX=/usr/local/$i \
                 -DENABLE_GIT_VERSION=OFF
           popd
         fi
@@ -42,13 +46,13 @@ for i in "$@"; do
     cmake ../nfs-ganesha/src/ -GNinja \
       -DUSE_TRACEFLOW=OFF \
       -DUSE_FSAL_CEPH=true \
-      -DCEPHFS_INCLUDE_DIR=/usr/local/include \
-      -DCEPHFS_LIBRARY_DIR=/usr/local/lib64 \
+      -DCEPHFS_INCLUDE_DIR=/usr/local/$i/include \
+      -DCEPHFS_LIBRARY_DIR=/usr/local/$i/lib64 \
       -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-      -DCMAKE_INSTALL_PREFIX=/usr/local
+      -DCMAKE_INSTALL_PREFIX=/usr/local/$i
     ninja install
     popd
-    mkdir -pv /usr/local/var/lib/nfs/ganesha
+    mkdir -pv /usr/local/$i/var/lib/nfs/ganesha
 
     if [ ! -e ~/git/fio-$i ]; then
       pushd ~/git
@@ -58,7 +62,7 @@ for i in "$@"; do
     pushd ~/git/fio-$i
       git checkout fio-3.36
       git submodule update --init --recursive
-      ./configure --prefix=/usr/local --extra-cflags="-I/usr/local/include -L/usr/local/lib64"
+      ./configure --prefix=/usr/local/$i --extra-cflags="-I/usr/local/$i/include -L/usr/local/$i/lib64"
       make install
     popd
 
