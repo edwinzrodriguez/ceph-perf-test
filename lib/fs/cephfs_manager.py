@@ -104,7 +104,24 @@ class CephFSManager(FSManager):
             return mds_cfg.get("logging") or {}
         return self.config.get("logging", {}) or {}
 
+    def _configure_mds_logging(self):
+        """Apply baseline MDS logging from ``mds.logging`` after daemons are up."""
+        if self.is_mds_logging_enabled():
+            self._run_ceph(self.admin, "config set mds debug_mds 1")
+            self._run_ceph(self.admin, "config set mds debug_ms 1")
+            self._run_ceph(self.admin, "config set mds log_to_file true")
+            self._run_ceph(self.admin, "config set mds log_to_stderr false")
+            self._run_ceph(self.admin, "config set mds err_to_stderr true")
+        else:
+            self._run_ceph(self.admin, "config set mds debug_mds 1")
+            self._run_ceph(self.admin, "config set mds debug_ms 1")
+            self._run_ceph(self.admin, "config set mds log_to_file false")
+            self._run_ceph(self.admin, "config set mds log_to_stderr false")
+            self._run_ceph(self.admin, "config set mds err_to_stderr false")
+
     def start_fs_logging(self, loadpoint):
+        if not self.is_mds_logging_enabled():
+            return
         logging_cfg = self._mds_logging_cfg()
         debug_mds = logging_cfg.get("debug_mds", 20)
         debug_ms = logging_cfg.get("debug_ms", 1)
@@ -116,6 +133,8 @@ class CephFSManager(FSManager):
             self._run_ceph(server_name, f"config set mds debug_ms {debug_ms}")
 
     def stop_fs_logging(self, loadpoint, results_dir=None):
+        if not self.is_mds_logging_enabled():
+            return
         for server_name in self.mdss:
             print(
                 f"[{server_name}] Stopping MDS debug logging for Load Point {loadpoint}"
@@ -469,6 +488,7 @@ class CephFSManager(FSManager):
             self._run_ceph(self.admin, f"fs set {fs} joinable true || true")
             self._deploy_mds(fs, settings)
             self._wait_for_mds_active(fs)
+            self._configure_mds_logging()
             self.setup_client_auth(fs)
         self.distribute_keys_and_config()
 

@@ -209,14 +209,24 @@ class CephFSSystemdManager(CephFSManager):
 
         # Launch like vstart: ceph-mds -i <id> -c <conf>
         # Extra args set log/asok/pid/keyring so paths are predictable.
+        if self.is_mds_logging_enabled():
+            log_args = (
+                f"--log-file {log_path} "
+                f"--log-to-stderr false "
+                f"--err-to-stderr true "
+            )
+        else:
+            log_args = (
+                "--log-to-file false "
+                "--log-to-stderr false "
+                "--err-to-stderr false "
+            )
         args = (
             f"{taskset_prefix}{binary} -i {mds_id} -c {conf} "
             f"--keyring {keyring} "
             f"--pid-file {pid_path} "
             f"--admin-socket {asok_path} "
-            f"--log-file {log_path} "
-            f"--log-to-stderr false "
-            f"--err-to-stderr true "
+            f"{log_args}"
             f"-f"
         )
         # Expand ${CEPH_INSTALL_PREFIX} etc. and export env for the daemon.
@@ -273,6 +283,8 @@ class CephFSSystemdManager(CephFSManager):
             )
 
     def _collect_mds_logs(self, loadpoint, results_dir):
+        if not self.is_mds_logging_enabled():
+            return
         lp_tag = f"{int(loadpoint):02d}"
         for fs, instances in self._mds_instances.items():
             for host_name, mds_id in instances:

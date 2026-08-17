@@ -82,6 +82,8 @@ class CephFSCephadmManager(CephFSManager):
             )
 
     def _collect_mds_logs(self, loadpoint, results_dir):
+        if not self.is_mds_logging_enabled():
+            return
         lp_tag = f"{int(loadpoint):02d}"
         for server_name in self.mdss:
             fsid = self.executor.run_remote(server_name, "sudo ceph fsid").strip()
