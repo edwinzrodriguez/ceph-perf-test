@@ -264,6 +264,7 @@ cephfs_tool:
       client-oc: [1, 0]
       client-oc-size: ["16GiB", "1GiB", "200MiB"]
       block-size: ["4MiB", "1MiB", "256KiB"]
+      fsync-every: [false, true]
     - files: 1024
       size: "5GiB"
       iterations: 3
@@ -275,6 +276,7 @@ cephfs_tool:
       client-oc: [1, 0]
       client-oc-size: ["16GiB", "1GiB", "200MiB"]
       block-size: ["4MiB", "1MiB", "256KiB"]
+      fsync-every: [false, true]
 
 
 # Rados bench configuration

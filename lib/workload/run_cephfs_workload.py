@@ -135,6 +135,14 @@ def main():
                 block_size = str(CommonUtils.parse_si_unit(block_size))
                 cmd_parts.extend(["--block-size", block_size])
 
+            if lp_cfg.get("fsync-every"):
+                fsync_every = block_size
+                if fsync_every is None:
+                    fsync_every = str(
+                        CommonUtils.parse_si_unit(lp_cfg.get("block-size", "4MiB"))
+                    )
+                cmd_parts.extend(["--fsync-every", str(fsync_every)])
+
             if lp_cfg.get("async"):
                 cmd_parts.append("--async-io")
                 queue_depth = lp_cfg.get("queue-depth")

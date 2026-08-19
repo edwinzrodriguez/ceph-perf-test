@@ -879,6 +879,7 @@ class CommonUtils:
             "Msgr Workers": "mw",
             "CephFS Tool Async": "cta",
             "CephFS Tool Queue Depth": "ctqd",
+            "Fsync Every": "fe",
         }
         return name_map.get(var_name, var_name.replace(" ", "_").replace("/", "_"))
 
@@ -954,6 +955,7 @@ class CommonUtils:
             "client-oc-size": "Client Object Cache Size",
             "async": "CephFS Tool Async",
             "queue-depth": "CephFS Tool Queue Depth",
+            "fsync-every": "Fsync Every",
             "ganesha_worker_threads": "Ganesha Worker Threads",
             "ganesha_umask": "Ganesha Umask",
             "ganesha_client_oc": "Ganesha Client Object Cache",
@@ -1161,6 +1163,8 @@ class CommonUtils:
                 parts.append(f"{CommonUtils.get_short_name('CephFS Tool Async')}{CommonUtils.format_config_value(lp_cfg['async'])}")
             if "queue-depth" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('CephFS Tool Queue Depth')}{lp_cfg['queue-depth']}")
+            if "fsync-every" in lp_cfg:
+                parts.append(f"{CommonUtils.get_short_name('Fsync Every')}{CommonUtils.format_config_value(lp_cfg['fsync-every'])}")
             # if "gtod_reduce" in lp_cfg:
             #     parts.append(f"gr{lp_cfg['gtod_reduce']}")
             # elif "gtod_reduce" in settings:
