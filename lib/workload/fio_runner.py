@@ -328,7 +328,7 @@ class FioWorkloadRunner(WorkloadRunner):
             if g_str:
                 g_p = "_" + g_str
 
-        return os.path.join(base, f"{ts}_{fs_p}_{mds_p}{g_p}")
+        return os.path.join(base, f"{ts}_{self.get_name()}_{fs_p}_{mds_p}{g_p}")
 
     def prepare_storage(self):
         fio_cfg = self.config.get("fio", {})

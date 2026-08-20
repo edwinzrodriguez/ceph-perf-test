@@ -384,7 +384,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         )
         g_p = ""
 
-        return os.path.join(base, f"{ts}_{fs_p}_{mds_p}{g_p}")
+        return os.path.join(base, f"{ts}_{self.get_name()}_{fs_p}_{mds_p}{g_p}")
 
     def get_name(self):
         return "cephfs_tool"
