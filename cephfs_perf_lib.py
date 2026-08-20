@@ -880,6 +880,8 @@ class CommonUtils:
             "CephFS Tool Async": "cta",
             "CephFS Tool Queue Depth": "ctqd",
             "Fsync Every": "fe",
+            "Min Object Size": "minos",
+            "Max Object Size": "maxos",
         }
         return name_map.get(var_name, var_name.replace(" ", "_").replace("/", "_"))
 
@@ -972,6 +974,8 @@ class CommonUtils:
             "ganesha_enabled": "Ganesha Enabled",
             "threads_fio": "Fio Threads",
             "msgr_workers": "Msgr Workers",
+            "min-object-size": "Min Object Size",
+            "max-object-size": "Max Object Size",
         }
 
         # Helper to format values
@@ -1145,6 +1149,14 @@ class CommonUtils:
                 )
             if "block-size" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('Block Size')}{CommonUtils.format_si_units(lp_cfg['block-size'])}")
+            if "min-object-size" in lp_cfg:
+                parts.append(
+                    f"{CommonUtils.get_short_name('Min Object Size')}{lp_cfg['min-object-size']}"
+                )
+            if "max-object-size" in lp_cfg:
+                parts.append(
+                    f"{CommonUtils.get_short_name('Max Object Size')}{lp_cfg['max-object-size']}"
+                )
             if "iodepth" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('I/O Depth')}{lp_cfg['iodepth']}")
             if "readwrite" in lp_cfg:
