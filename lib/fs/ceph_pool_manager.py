@@ -80,6 +80,16 @@ class CephPoolManager(FSManager):
         pools = self.safe_json_load(out, [])
         return pool in pools
 
+    def _wait_for_pool(self, pool, exists=True, attempts=24, interval=2, raise_on_timeout=True):
+        for _ in range(attempts):
+            if self._pool_exists(pool) == exists:
+                return True
+            time.sleep(interval)
+        if raise_on_timeout:
+            verb = "appear" if exists else "be deleted"
+            raise RuntimeError(f"Timed out waiting for pool {pool} to {verb}")
+        return False
+
     def _osd_hosts_count(self):
         try:
             raw = self.executor.run_remote(
@@ -105,10 +115,7 @@ class CephPoolManager(FSManager):
                 f"sudo ceph osd pool delete {self.pool_name} {self.pool_name} "
                 f"--yes-i-really-really-mean-it || true",
             )
-            for _ in range(24):
-                if not self._pool_exists(self.pool_name):
-                    break
-                time.sleep(2)
+            self._wait_for_pool(self.pool_name, exists=False, raise_on_timeout=False)
 
         if not self._pool_exists(self.pool_name):
             print(f"Creating pool {self.pool_name}...")
@@ -116,6 +123,7 @@ class CephPoolManager(FSManager):
             if self.pg_num is not None:
                 create_cmd += f" {self.pg_num}"
             self.executor.run_remote(self.admin, create_cmd)
+            self._wait_for_pool(self.pool_name, exists=True)
             if self.application == "rbd":
                 # `rbd pool init` both enables the rbd application and does
                 # the RBD-specific pool init (writes the rbd_directory object).
