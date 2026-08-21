@@ -19,6 +19,7 @@ from lib.fs.cephfs_systemd_manager import CephFSSystemdManager
 from lib.fs.ceph_pool_manager import CephPoolManager
 from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
 from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
+from lib.mount.mount_fuse_manager import MountFuseManager
 from lib.mount.mount_kernel_manager import MountKernelManager
 from lib.mount.mount_nfs_manager import MountNfsManager
 
@@ -39,6 +40,15 @@ class BenchRunner:
             choices=["cephadm", "systemd"],
             help="Enable Ganesha and specify the type",
         )
+        self.parser.add_argument(
+            "--mount-manager",
+            choices=[
+                "MountKernelManager",
+                "MountFuseManager",
+                "StubMountManager",
+            ],
+            help="Override mount_manager_type from the configuration file",
+        )
 
     def load_config(self, args):
         with open(args.config, "r") as f:
@@ -54,6 +64,9 @@ class BenchRunner:
         if args.ganesha:
             config_dict["ganesha"]["enabled"] = True
             config_dict["ganesha"]["type"] = args.ganesha
+
+        if args.mount_manager:
+            config_dict["mount_manager_type"] = args.mount_manager
 
         if args.inventory:
             inventory_provider = AnsibleInventoryProvider(args.inventory)
@@ -92,8 +105,8 @@ class BenchRunner:
         Selection:
           - ``ganesha.enabled`` (YAML, or forced true by ``--ganesha``) →
             MountNfsManager + Ganesha manager
-          - else ``mount_manager_type: StubMountManager`` → StubMountManager
-          - else → MountKernelManager (``mount -t ceph``)
+          - else ``mount_manager_type`` (YAML, or ``--mount-manager``) selects
+            StubMountManager, MountFuseManager, or MountKernelManager
         """
         if config.ganesha_enabled:
             if config.ganesha_type == "systemd":
@@ -110,13 +123,19 @@ class BenchRunner:
                 f"Using MountNfsManager (ganesha.enabled=true, type={config.ganesha_type})"
             )
             return MountNfsManager(executor, config, cephfs_manager), ganesha_manager
-        if config.mount_manager_type == "StubMountManager":
+        mount_type = config.mount_manager_type
+        if mount_type == "StubMountManager":
             print("Using StubMountManager (no client mounts)")
             return StubMountManager(executor, config, cephfs_manager), None
-        print(
-            "Using MountKernelManager (ganesha.enabled=false → mount -t ceph)"
-        )
-        return MountKernelManager(executor, config, cephfs_manager), None
+        if mount_type == "MountFuseManager":
+            print("Using MountFuseManager (ganesha.enabled=false → ceph-fuse)")
+            return MountFuseManager(executor, config, cephfs_manager), None
+        if mount_type == "MountKernelManager":
+            print(
+                "Using MountKernelManager (ganesha.enabled=false → mount -t ceph)"
+            )
+            return MountKernelManager(executor, config, cephfs_manager), None
+        raise ValueError(f"Invalid mount_manager_type: {mount_type}")
 
     def run(self):
         args = self.parser.parse_args()

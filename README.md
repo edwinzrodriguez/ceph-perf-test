@@ -34,7 +34,7 @@ The framework operates on a **Test Matrix** principle. It iterates through combi
 | `fs_name` | string | required | Name of the CephFS filesystem |
 | `num_filesystems` | int | `1` | Number of filesystems to create |
 | `fs_manager_type` | string | `CephFSManager` | Manager class: `CephFSCephadmManager` (or legacy `CephFSManager`) deploys MDS via `ceph orch`; `CephFSSystemdManager` runs local `ceph-mds`; also `StubFSManager`, `CephPoolManager` |
-| `mount_manager_type` | string | `MountKernelManager` | Mount handler (`MountKernelManager`, `MountNfsManager`, `StubMountManager`) |
+| `mount_manager_type` | string | `MountKernelManager` | Mount handler (`MountKernelManager`, `MountFuseManager`, `MountNfsManager`, `StubMountManager`) |
 | `mds_yaml_path` | string | `/cephfs_perf/mds.yaml` | Path to MDS cephadm spec file (cephadm only) |
 
 ---
@@ -511,6 +511,33 @@ Mounts CephFS directly via the kernel client.
 
 - No additional configuration keys.
 - Uses `fs_name`, the cluster's monitor addresses, and the Ceph keyring.
+
+### `MountFuseManager`
+
+Mounts CephFS via `ceph-fuse` on each client.
+
+- Selected with `mount_manager_type: MountFuseManager` or `--mount-manager MountFuseManager`.
+- Monitor addresses are resolved on the admin host; auth defaults to the top-level `ceph:` section.
+
+Configured via the `mount_fuse` section:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/ceph-fuse` | Path to the `ceph-fuse` executable |
+| `client_id` | string | `ceph.user_id` | Ceph client id passed to `--id` |
+| `keyring` | string | `ceph.keyring` | Keyring path passed to `-k` |
+| `conf` | string | `ceph.conf` | Ceph config path passed to `-c` |
+| `mount_options` | string | *(empty)* | Extra arguments appended to the `ceph-fuse` command |
+| `env_vars` | dict | *(empty)* | Extra env vars merged on top of top-level `env_vars` |
+
+```yaml
+mount_manager_type: "MountFuseManager"
+mount_fuse:
+  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-fuse"
+  client_id: "admin"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  conf: "/etc/ceph/ceph.conf"
+```
 
 ### `MountNfsManager`
 

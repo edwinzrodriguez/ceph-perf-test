@@ -98,6 +98,16 @@ fs_name: "perf_test_fs"
 # CephFSSystemdManager runs a local ceph-mds process on each MDS host.
 fs_manager_type: "CephFSCephadmManager"
 mount_manager_type: "MountKernelManager"
+
+# Ceph-fuse client settings (used when mount_manager_type is MountFuseManager)
+mount_fuse:
+  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-fuse"
+  client_id: "admin"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  conf: "/etc/ceph/ceph.conf"
+  mount_options: ""
+  env_vars: {}
+
 env_vars:
   CEPH_INSTALL_PREFIX: "/usr/local"
   LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
