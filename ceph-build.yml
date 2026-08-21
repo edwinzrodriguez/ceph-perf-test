@@ -162,17 +162,6 @@
         path: "/tmp/pathfix.patch"
         state: absent
 
-    - name: Add ceph-lab-extras repo
-      ansible.builtin.copy:
-        dest: /etc/yum.repos.d/ceph-lab-extras.repo
-        content: |
-          [ceph-lab-extras]
-          name=ceph-lab-extras-$releasever
-          baseurl=https://apt-mirror.sepia.ceph.com/lab-extras/$releasever
-          enabled=1
-          gpgcheck=0
-        mode: '0644'
-
     - name: Ensure python3-setuptools is installed
       ansible.builtin.dnf:
         name: python3-setuptools
