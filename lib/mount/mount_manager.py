@@ -28,6 +28,11 @@ class MountManager(abc.ABC):
     def mount(self):
         pass
 
+    @abc.abstractmethod
+    def display_name(self):
+        """Human-readable mount type label for results paths and filenames."""
+        pass
+
 
 class StubMountManager(MountManager):
     def mount(self):
@@ -35,3 +40,6 @@ class StubMountManager(MountManager):
 
     def unmount_clients(self):
         pass
+
+    def display_name(self):
+        return None

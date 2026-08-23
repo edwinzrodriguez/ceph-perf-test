@@ -148,6 +148,7 @@ class BenchRunner:
         mount_manager, ganesha_manager = self.get_mount_and_ganesha(
             executor, config, cephfs_manager
         )
+        config.set_mount_display_name(mount_manager.display_name())
 
         workload_runner = self.get_workload_runner(executor, config, fs_names)
 

@@ -361,6 +361,14 @@ class PerformanceTestConfig:
         self.hosts_meta = inventory_provider.get_hosts()
         self.all_hosts_meta = inventory_provider.get_all_hosts_meta()
         self.vars = inventory_provider.get_vars()
+        self._mount_display_name = None
+
+    def set_mount_display_name(self, name):
+        self._mount_display_name = name or None
+
+    @property
+    def mount_display_name(self):
+        return self._mount_display_name
 
     def get(self, key, default=None):
         return self._config.get(key, default)
@@ -838,6 +846,16 @@ class CommonUtils:
         return f"{exports}{cmd}" if exports else cmd
 
     @staticmethod
+    def mount_name_suffix(config=None, sep="_", settings=None):
+        """Mount manager label after mds settings; empty for StubMountManager."""
+        name = None
+        if config is not None:
+            name = getattr(config, "mount_display_name", None)
+        if not name and isinstance(settings, dict):
+            name = settings.get("mount_display_name")
+        return f"{sep}{name}" if name else ""
+
+    @staticmethod
     def get_short_name(var_name):
         """Map a human-readable parameter name to its short abbreviation."""
         name_map = {
@@ -1080,6 +1098,7 @@ class CommonUtils:
             "ramp_time",
             "pool",
             "recreate_images",
+            "mount_display_name",
         }
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}"
@@ -1186,7 +1205,7 @@ class CommonUtils:
             # elif "ramp_time" in settings:
             #     parts.append(f"rt{settings['ramp_time']}")
 
-        options = mds_p + g_p
+        options = mds_p + CommonUtils.mount_name_suffix(config, sep="-", settings=settings) + g_p
         if parts:
             options += f"_{'_'.join(parts)}"
 

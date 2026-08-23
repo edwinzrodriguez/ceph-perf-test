@@ -61,5 +61,8 @@ class MountKernelManager(MountManager):
                     )
                     print(f"[{c}] Kernel-mounted cephfs {fs} at {p} via {maddrs}")
 
+    def display_name(self):
+        return "kernel_cephfs"
+
     def kernel_mount(self):
         self.mount()

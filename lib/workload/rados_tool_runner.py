@@ -168,7 +168,10 @@ class RadosToolWorkloadRunner(WorkloadRunner):
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}" for k, v in settings.items()
         )
-        return os.path.join(base, f"{ts}_{self.get_name()}_{fs_p}_{mds_p}")
+        return os.path.join(
+            base,
+            f"{ts}_{self.get_name()}_{fs_p}_{mds_p}{CommonUtils.mount_name_suffix(self.config)}",
+        )
 
     def get_name(self):
         return "rados_bench"

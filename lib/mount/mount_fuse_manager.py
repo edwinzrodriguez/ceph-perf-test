@@ -83,5 +83,8 @@ class MountFuseManager(MountManager):
                     )
                     print(f"[{c}] ceph-fuse mounted {fs} at {p} via {maddrs}")
 
+    def display_name(self):
+        return "fuse"
+
     def fuse_mount(self):
         self.mount()

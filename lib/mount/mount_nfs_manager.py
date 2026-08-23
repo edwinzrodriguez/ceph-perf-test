@@ -26,5 +26,8 @@ class MountNfsManager(MountManager):
                     u, _, _ = self.executor.get_ssh_details(c)
                     self.executor.run_remote(c, f"sudo chown {u}:{u} {p}")
 
+    def display_name(self):
+        return "nfs"
+
     def nfs_mount(self):
         self.mount()

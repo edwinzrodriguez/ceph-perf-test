@@ -46,6 +46,8 @@ class FioWorkloadRunner(WorkloadRunner):
         payload = settings.copy()
         payload["fs_name"] = self.config.fs_name
         payload["results_dir"] = results_dir
+        if self.config.mount_display_name:
+            payload["mount_display_name"] = self.config.mount_display_name
 
         # Add global fio settings to payload
         for key in [
@@ -328,7 +330,10 @@ class FioWorkloadRunner(WorkloadRunner):
             if g_str:
                 g_p = "_" + g_str
 
-        return os.path.join(base, f"{ts}_{self.get_name()}_{fs_p}_{mds_p}{g_p}")
+        return os.path.join(
+            base,
+            f"{ts}_{self.get_name()}_{fs_p}_{mds_p}{CommonUtils.mount_name_suffix(self.config)}{g_p}",
+        )
 
     def prepare_storage(self):
         fio_cfg = self.config.get("fio", {})
