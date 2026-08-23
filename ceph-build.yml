@@ -12,6 +12,10 @@
     ganesha_version: "traceflow"
     ganesha_build_dir: "ganesha-build"
     ganesha_install_prefix: "/usr/local"
+    fio_repo_url: "https://github.com/axboe/fio.git"
+    fio_dest_name: "fio"
+    fio_version: "fio-3.36"
+    fio_install_prefix: "/usr/local"
   tasks:
 
     - name: install epel-release RPMs
@@ -289,6 +293,44 @@
         cmd: ninja install
         chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}/build"
       when: not ceph_build_stat.stat.exists
+
+    - name: Check if fio source directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ fio_dest_name }}"
+      register: fio_dir_stat
+      become: false
+
+    - name: Clone fio repository
+      ansible.builtin.git:
+        repo: "{{ fio_repo_url }}"
+        dest: "{{ git_base_dir }}/{{ fio_dest_name }}"
+        version: "{{ fio_version }}"
+        recursive: yes
+      become: false
+      when: not fio_dir_stat.stat.exists
+
+    - name: Update fio submodules
+      ansible.builtin.command:
+        cmd: git submodule update --init --recursive
+        chdir: "{{ git_base_dir }}/{{ fio_dest_name }}"
+      become: false
+      when: not fio_dir_stat.stat.exists
+
+    - name: Configure fio
+      ansible.builtin.command:
+        cmd:
+          - ./configure
+          - --prefix={{ fio_install_prefix }}
+          - --extra-cflags=-I{{ fio_install_prefix }}/include -L{{ fio_install_prefix }}/lib64
+        chdir: "{{ git_base_dir }}/{{ fio_dest_name }}"
+      become: false
+      when: not fio_dir_stat.stat.exists
+
+    - name: Install fio
+      ansible.builtin.command:
+        cmd: make install
+        chdir: "{{ git_base_dir }}/{{ fio_dest_name }}"
+      when: not fio_dir_stat.stat.exists
 
     - name: Install Ganesha development dependencies
       ansible.builtin.dnf:
