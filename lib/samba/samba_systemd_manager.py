@@ -25,7 +25,9 @@ class SambaSystemdManager(SambaManager):
         self._provisioned = True
 
     def cleanup_samba(self):
+        print("Cleaning up SMB shares and stopping Samba service...")
         for host_name in self.sambas:
+            self._write_empty_smb_conf(host_name)
             self.executor.run_remote(
                 host_name,
                 "sudo systemctl stop smbd nmbd 2>/dev/null || "
@@ -39,6 +41,28 @@ class SambaSystemdManager(SambaManager):
                     f"sudo umount -f {mount_path} || sudo umount -l {mount_path} || true",
                 )
         self._provisioned = False
+
+    def _write_empty_smb_conf(self, host_name):
+        """Remove share definitions by writing a global-only smb.conf."""
+        workgroup = self.config.samba_workgroup
+        config_content = (
+            "[global]\n"
+            f"   workgroup = {workgroup}\n"
+            "   server string = Ceph Samba\n"
+            "   security = user\n"
+            "   map to guest = Bad User\n"
+            "   load printers = no\n"
+            "   printing = bsd\n"
+            "   disable spoolss = yes\n"
+        )
+        config_path = self.config.samba_config_path
+        escaped = config_content.replace("'", "'\\''")
+        self.executor.run_remote(host_name, "sudo mkdir -p /etc/samba")
+        self.executor.run_remote(
+            host_name,
+            f"printf '{escaped}' | sudo tee {config_path} > /dev/null",
+        )
+        self.executor.run_remote(host_name, f"sudo chmod 0644 {config_path}")
 
     def _mount_filesystems(self, host_name):
         admin_host = self.admin

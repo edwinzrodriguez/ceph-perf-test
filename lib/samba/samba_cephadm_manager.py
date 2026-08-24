@@ -139,6 +139,7 @@ class SambaCephadmManager(SambaManager):
         self._provisioned = True
 
     def cleanup_samba(self):
+        print("Cleaning up SMB shares and service...")
         self._provisioned = False
         cluster_id = self.config.samba_cluster_id
         share_ids = set()
@@ -159,6 +160,8 @@ class SambaCephadmManager(SambaManager):
         cleanup_doc = self._build_cleanup_resources(share_ids)
         if cleanup_doc["resources"]:
             self._apply_resources(cleanup_doc, check=False)
+        print(f"Stopping SMB service smb.{cluster_id}...")
+        self._run_ceph(f"orch rm smb.{cluster_id} || true", check=False)
 
     def _wait_for_smb_running(self, cluster_id, timeout_iters=30, sleep_secs=10):
         for _ in range(timeout_iters):

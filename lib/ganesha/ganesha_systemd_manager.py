@@ -167,12 +167,17 @@ class GaneshaSystemdManager(GaneshaManager):
         self._provisioned = True
 
     def cleanup_ganesha(self):
-        print("Cleaning up Ganesha on ganesha nodes...")
+        print("Cleaning up Ganesha on ganesha nodes (stopping NFS server)...")
         pid_path = self.config.ganesha_pid_path
         for host_name in self.ganeshas:
             # Kill using pid file
             cmd = f"if [ -f {pid_path} ]; then sudo kill $(cat {pid_path}) || true; sudo rm -f {pid_path}; fi"
             self.executor.run_remote(host_name, cmd)
+            # Kill any remaining ganesha.nfsd processes not tracked by the pid file
+            self.executor.run_remote(
+                host_name,
+                "pids=$(pgrep -f ganesha.nfsd 2>/dev/null); if [ -n \"$pids\" ]; then sudo kill -9 $pids || true; fi",
+            )
             # Also cleanup the asok just in case
             self.executor.run_remote(
                 host_name, f"sudo rm -f /var/run/ceph/ganesha-{host_name}.asok"

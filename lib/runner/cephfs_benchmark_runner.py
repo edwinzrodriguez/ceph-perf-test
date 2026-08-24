@@ -318,6 +318,7 @@ class BenchRunner:
                     for fs in fs_names:
                         cephfs_manager.stop_lockstat(fs)
                 mount_manager.unmount_clients()
+                self._cleanup_export_manager(export_manager)
                 sys.exit(1)
 
             if mds_lockstat_active:
@@ -327,9 +328,22 @@ class BenchRunner:
             mount_manager.unmount_clients()
 
         # Final cleanup/collection (if applicable)
-        self.post_run_cleanup(config, fs_names, workload_runner)
+        self.post_run_cleanup(
+            config, fs_names, workload_runner, export_manager=export_manager
+        )
 
-    def post_run_cleanup(self, config, fs_names, workload_runner):
-        # MDS lockstat is now stopped per-iteration inside run(); nothing to do
-        # here. Left as a hook for subclasses to override.
-        pass
+    def _cleanup_export_manager(self, export_manager):
+        if export_manager is None:
+            return
+        from lib.ganesha.ganesha_manager import GaneshaManager
+        from lib.samba.samba_manager import SambaManager
+
+        if isinstance(export_manager, GaneshaManager):
+            print("Cleaning up NFS exports and stopping Ganesha...")
+            export_manager.cleanup_ganesha()
+        elif isinstance(export_manager, SambaManager):
+            print("Cleaning up SMB shares and stopping Samba...")
+            export_manager.cleanup_samba()
+
+    def post_run_cleanup(self, config, fs_names, workload_runner, export_manager=None):
+        self._cleanup_export_manager(export_manager)

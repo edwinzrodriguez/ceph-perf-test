@@ -245,21 +245,37 @@ class GaneshaCephadmManager(GaneshaManager):
         self._provisioned = True
 
     def cleanup_ganesha(self):
+        print("Cleaning up Ganesha NFS exports and service...")
         self._provisioned = False
         sid = self.config.ganesha_service_id
         ceph_bin = self.config.ganesha_ceph_binary_path
         exps = self.safe_json_load(
             self.executor.run_remote(
-                self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} nfs export ls {sid} --format json"
-            )
-        )
-        for e in exps:
-            self.executor.run_remote(
                 self.admin,
-                f"sudo {ceph_bin} {self._get_ceph_args()} nfs export rm {sid} {e.get('path') if isinstance(e, dict) else e}",
-            )
+                self._sudo_with_ganesha_env(
+                    f"{ceph_bin} {self._get_ceph_args()} nfs export ls {sid} --format json"
+                ),
+            ),
+            default=[],
+        )
+        if isinstance(exps, list):
+            for e in exps:
+                path = e.get("path") if isinstance(e, dict) else e
+                if not path:
+                    continue
+                print(f"Removing NFS export {path} from cluster {sid}...")
+                self.executor.run_remote(
+                    self.admin,
+                    self._sudo_with_ganesha_env(
+                        f"{ceph_bin} {self._get_ceph_args()} nfs export rm {sid} {path} || true"
+                    ),
+                )
+        print(f"Stopping NFS service nfs.{sid}...")
         self.executor.run_remote(
-            self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} orch rm nfs.{sid} || true"
+            self.admin,
+            self._sudo_with_ganesha_env(
+                f"{ceph_bin} {self._get_ceph_args()} orch rm nfs.{sid} || true"
+            ),
         )
 
     def setup_ganesha_config(self):
