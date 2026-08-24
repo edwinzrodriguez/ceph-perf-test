@@ -92,6 +92,13 @@ inventory:
       ansible_ssh_user: "root"
       private_ip: 10.241.64.68
       ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+  sambas:
+    client-000:
+      ansible_ssh_host: 169.63.179.214
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      private_ip: 10.241.64.70
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
 
 fs_name: "perf_test_fs"
 # CephFSCephadmManager (or legacy CephFSManager) deploys MDS via `ceph orch`.
@@ -115,6 +122,8 @@ env_vars:
 
 mount_nfs:
   mount_options: "nfsvers=4.1,proto=tcp,sec=sys"
+mount_smb:
+  mount_options: "vers=3.0,cache=strict,file_mode=0664,dir_mode=0775,noperm"
 num_filesystems: 1
 mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec (cephadm only)
 
@@ -181,6 +190,26 @@ ganesha:
     enabled: true
     path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
     threshold: 0
+
+samba:
+  enabled: false
+  cluster_id: "samba"
+  # type = systemd|cephadm
+  type: "cephadm"
+  username: "cephuser"
+  password: "cephpass"
+  workgroup: "WORKGROUP"
+  clustering: "never"
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  user_id: "admin"
+  keyring_path: "/etc/ceph/ceph.client.admin.keyring"
+  samba_resources_path: "/cephfs_perf/samba/resources.yaml"
+  subvolume_group: "smb"
+  subvolume_mode: "0777"
+  # systemd-only: local ceph mount + smb.conf paths
+  mount_base: "/srv/samba"
+  config_path: "/etc/samba/smb.conf"
+  # env_vars: {}
 
 # SpecStorage configuration
 specstorage:

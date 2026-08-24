@@ -401,11 +401,15 @@ class CephFSManager(FSManager):
                 f"(load point {loadpoint})"
             )
 
-    def rebuild_filesystem(self, settings, ganesha_manager=None, results_dir=None):
+    def rebuild_filesystem(
+        self, settings, ganesha_manager=None, samba_manager=None, results_dir=None
+    ):
         self._run_ceph(self.admin, "config set mon mon_allow_pool_delete true")
         self._run_ceph(self.admin, "config set global mon_max_pg_per_osd 1000")
         if self.config.ganesha_enabled and ganesha_manager:
             ganesha_manager.cleanup_ganesha()
+        if self.config.samba_enabled and samba_manager:
+            samba_manager.cleanup_samba()
         for fs in self.get_fs_names():
             self._remove_mds_service(fs)
             # Give MDS processes time to drop mon sessions before fail/rm.
@@ -882,7 +886,7 @@ class CephFSManager(FSManager):
         )
 
     def distribute_keys_and_config(self):
-        targets = self.config.clients + self.config.ganeshas
+        targets = self.config.clients + self.config.ganeshas + self.config.sambas
         for t in targets:
             self.executor.run_remote(t, "sudo mkdir -p /etc/ceph")
             u, h, p = self.executor.get_ssh_details(t)

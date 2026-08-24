@@ -19,9 +19,12 @@ from lib.fs.cephfs_systemd_manager import CephFSSystemdManager
 from lib.fs.ceph_pool_manager import CephPoolManager
 from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
 from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
+from lib.samba.samba_cephadm_manager import SambaCephadmManager
+from lib.samba.samba_systemd_manager import SambaSystemdManager
 from lib.mount.mount_fuse_manager import MountFuseManager
 from lib.mount.mount_kernel_manager import MountKernelManager
 from lib.mount.mount_nfs_manager import MountNfsManager
+from lib.mount.mount_smb_manager import MountSmbManager
 
 
 class BenchRunner:
@@ -41,6 +44,11 @@ class BenchRunner:
             help="Enable Ganesha and specify the type",
         )
         self.parser.add_argument(
+            "--samba",
+            choices=["cephadm", "systemd"],
+            help="Enable Samba and specify the type",
+        )
+        self.parser.add_argument(
             "--mount-manager",
             choices=[
                 "MountKernelManager",
@@ -56,6 +64,8 @@ class BenchRunner:
 
         if "ganesha" not in config_dict:
             config_dict["ganesha"] = {}
+        if "samba" not in config_dict:
+            config_dict["samba"] = {}
 
         # YAML ``ganesha.enabled`` is the source of truth for kernel vs NFS
         # mounts. ``--ganesha TYPE`` is a convenience override that enables
@@ -64,6 +74,10 @@ class BenchRunner:
         if args.ganesha:
             config_dict["ganesha"]["enabled"] = True
             config_dict["ganesha"]["type"] = args.ganesha
+
+        if args.samba:
+            config_dict["samba"]["enabled"] = True
+            config_dict["samba"]["type"] = args.samba
 
         if args.mount_manager:
             config_dict["mount_manager_type"] = args.mount_manager
@@ -99,15 +113,32 @@ class BenchRunner:
         raise ValueError(f"Invalid fs_manager_type: {config.fs_manager_type}")
 
     def get_mount_and_ganesha(self, executor, config, cephfs_manager):
-        """Return (mount_manager, ganesha_manager). Subclasses may override to
+        """Return (mount_manager, export_manager). Subclasses may override to
         force a specific mount manager (e.g. StubMountManager for rados bench).
 
         Selection:
+          - ``samba.enabled`` (YAML, or forced true by ``--samba``) →
+            MountSmbManager + Samba manager
           - ``ganesha.enabled`` (YAML, or forced true by ``--ganesha``) →
             MountNfsManager + Ganesha manager
           - else ``mount_manager_type`` (YAML, or ``--mount-manager``) selects
             StubMountManager, MountFuseManager, or MountKernelManager
         """
+        if config.samba_enabled:
+            if config.samba_type == "systemd":
+                export_manager = SambaSystemdManager(
+                    executor, config, cephfs_manager
+                )
+            elif config.samba_type == "cephadm":
+                export_manager = SambaCephadmManager(
+                    executor, config, cephfs_manager
+                )
+            else:
+                raise ValueError(f"Invalid Samba type: {config.samba_type}")
+            print(
+                f"Using MountSmbManager (samba.enabled=true, type={config.samba_type})"
+            )
+            return MountSmbManager(executor, config, cephfs_manager), export_manager
         if config.ganesha_enabled:
             if config.ganesha_type == "systemd":
                 ganesha_manager = GaneshaSystemdManager(
@@ -145,7 +176,7 @@ class BenchRunner:
         cephfs_manager = self.get_fs_manager(executor, config)
         fs_names = cephfs_manager.get_fs_names()
 
-        mount_manager, ganesha_manager = self.get_mount_and_ganesha(
+        mount_manager, export_manager = self.get_mount_and_ganesha(
             executor, config, cephfs_manager
         )
         config.set_mount_display_name(mount_manager.display_name())
@@ -175,42 +206,59 @@ class BenchRunner:
             else:
                 ranges.append(parsed_r)
 
-        # Only expand / provision Ganesha when this runner actually created a
-        # manager. Subclasses such as rados/rbd force StubMount + None even if
-        # --ganesha was passed (or set in the shared YAML).
+        # Only expand / provision export servers when this runner actually
+        # created a manager. Subclasses such as rados/rbd force StubMount + None
+        # even if --ganesha or --samba was passed (or set in the shared YAML).
         ganesha_keys = []
         ganesha_ranges = []
-        if ganesha_manager is not None:
-            ganesha_settings_raw = config.get("ganesha", {})
-            # Relevant CEPH FSAL options that can be iterated
-            for k in [
-                "worker_threads",
-                "umask",
-                "client_oc",
-                "syncdataonly",
-                "async",
-                "zerocopy",
-                "client_oc_size",
-                "msgr_workers",
-                "rpc_ioq_thrdmin",
-                "rpc_ioq_thrdmax",
-            ]:
-                if k in ganesha_settings_raw:
-                    val = ganesha_settings_raw[k]
-                    if isinstance(val, list):
-                        ganesha_keys.append(k)
-                        ganesha_ranges.append(val)
+        samba_keys = []
+        samba_ranges = []
+        if export_manager is not None:
+            from lib.ganesha.ganesha_manager import GaneshaManager
+            from lib.samba.samba_manager import SambaManager
 
-        combined_keys = keys + ganesha_keys
-        combined_ranges = ranges + ganesha_ranges
+            if isinstance(export_manager, GaneshaManager):
+                ganesha_settings_raw = config.get("ganesha", {})
+                # Relevant CEPH FSAL options that can be iterated
+                for k in [
+                    "worker_threads",
+                    "umask",
+                    "client_oc",
+                    "syncdataonly",
+                    "async",
+                    "zerocopy",
+                    "client_oc_size",
+                    "msgr_workers",
+                    "rpc_ioq_thrdmin",
+                    "rpc_ioq_thrdmax",
+                ]:
+                    if k in ganesha_settings_raw:
+                        val = ganesha_settings_raw[k]
+                        if isinstance(val, list):
+                            ganesha_keys.append(k)
+                            ganesha_ranges.append(val)
+            elif isinstance(export_manager, SambaManager):
+                samba_settings_raw = config.get("samba", {})
+                for k in ["clustering", "workgroup"]:
+                    if k in samba_settings_raw:
+                        val = samba_settings_raw[k]
+                        if isinstance(val, list):
+                            samba_keys.append(k)
+                            samba_ranges.append(val)
+
+        combined_keys = keys + ganesha_keys + samba_keys
+        combined_ranges = ranges + ganesha_ranges + samba_ranges
 
         for values in itertools.product(*combined_ranges):
             all_settings = dict(zip(combined_keys, values))
             current_settings = {k: all_settings[k] for k in keys}
             current_ganesha_settings = {k: all_settings[k] for k in ganesha_keys}
+            current_samba_settings = {k: all_settings[k] for k in samba_keys}
 
             if current_ganesha_settings:
                 config["ganesha"].update(current_ganesha_settings)
+            if current_samba_settings:
+                config["samba"].update(current_samba_settings)
 
             print(f"\n--- Starting Test Iteration: {all_settings} ---")
 
@@ -218,8 +266,21 @@ class BenchRunner:
                 current_settings, shared_timestamp
             )
 
+            from lib.ganesha.ganesha_manager import GaneshaManager
+            from lib.samba.samba_manager import SambaManager
+
+            ganesha_manager = (
+                export_manager if isinstance(export_manager, GaneshaManager) else None
+            )
+            samba_manager = (
+                export_manager if isinstance(export_manager, SambaManager) else None
+            )
+
             cephfs_manager.rebuild_filesystem(
-                current_settings, ganesha_manager, results_dir
+                current_settings,
+                ganesha_manager=ganesha_manager,
+                samba_manager=samba_manager,
+                results_dir=results_dir,
             )
             cephfs_manager.apply_fs_settings(current_settings)
 
@@ -227,6 +288,8 @@ class BenchRunner:
                 ganesha_manager.provision_ganesha(
                     use_custom=True, results_dir=results_dir
                 )
+            if samba_manager is not None:
+                samba_manager.provision_samba(results_dir=results_dir)
 
             mount_manager.mount()
 

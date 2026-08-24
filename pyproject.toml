@@ -15,7 +15,7 @@ dependencies = [
 
 [tool.setuptools]
 py-modules = ["cephfs_perf_lib", "cephfs_fio_runner", "cephfs_perf_runner", "cephfs_sfs2020_runner", "cephfs_tool_bench_runner"]
-packages = ["lib", "lib.fs", "lib.ganesha", "lib.mount", "lib.runner", "lib.workload"]
+packages = ["lib", "lib.fs", "lib.ganesha", "lib.samba", "lib.mount", "lib.runner", "lib.workload"]
 
 [project.scripts]
 cephfs-fio-runner = "cephfs_fio_runner:main"

@@ -139,7 +139,9 @@ class CephPoolManager(FSManager):
         except Exception:
             return 0
 
-    def rebuild_filesystem(self, settings, ganesha_manager=None, results_dir=None):
+    def rebuild_filesystem(
+        self, settings, ganesha_manager=None, samba_manager=None, results_dir=None
+    ):
         self._run_ceph(self.admin, "config set mon mon_allow_pool_delete true")
         self._run_ceph(self.admin, "config set global mon_max_pg_per_osd 1000")
 

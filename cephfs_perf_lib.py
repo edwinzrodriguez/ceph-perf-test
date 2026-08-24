@@ -67,7 +67,9 @@ class FSManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def rebuild_filesystem(self, settings, ganesha_manager=None, results_dir=None):
+    def rebuild_filesystem(
+        self, settings, ganesha_manager=None, samba_manager=None, results_dir=None
+    ):
         """Rebuilds the filesystem with the specified settings."""
         pass
 
@@ -193,7 +195,9 @@ class StubFSManager(FSManager):
     def stop_fs_logging(self, loadpoint, results_dir=None):
         pass
 
-    def rebuild_filesystem(self, settings, ganesha_manager=None, results_dir=None):
+    def rebuild_filesystem(
+        self, settings, ganesha_manager=None, samba_manager=None, results_dir=None
+    ):
         pass
 
     def get_fs_names(self):
@@ -434,6 +438,10 @@ class PerformanceTestConfig:
         return [h["name"] for h in self.hosts_meta.get("ganeshas", [])]
 
     @property
+    def sambas(self):
+        return [h["name"] for h in self.hosts_meta.get("sambas", [])]
+
+    @property
     def admin_host(self):
         # The first 'mons' host is used as the admin host to drive tests
         return self.mons[0] if self.mons else None
@@ -585,6 +593,84 @@ class PerformanceTestConfig:
     @property
     def ganesha_perf_record(self):
         return self._config.get("ganesha", {}).get("perf_record", False)
+
+    @property
+    def samba_enabled(self):
+        return self._config.get("samba", {}).get("enabled", False)
+
+    @property
+    def samba_type(self):
+        return self._config.get("samba", {}).get("type", "cephadm")
+
+    @property
+    def samba_cluster_id(self):
+        return self._config.get("samba", {}).get("cluster_id", "samba")
+
+    @property
+    def samba_clustering(self):
+        return self._config.get("samba", {}).get("clustering", "never")
+
+    @property
+    def samba_share_prefix(self):
+        return self._config.get("samba", {}).get("share_prefix", "")
+
+    @property
+    def samba_username(self):
+        return self._config.get("samba", {}).get("username", "cephuser")
+
+    @property
+    def samba_password(self):
+        return self._config.get("samba", {}).get("password", "cephpass")
+
+    @property
+    def samba_workgroup(self):
+        return self._config.get("samba", {}).get("workgroup", "WORKGROUP")
+
+    @property
+    def samba_mount_base(self):
+        return self._config.get("samba", {}).get("mount_base", "/srv/samba")
+
+    @property
+    def samba_config_path(self):
+        return self._config.get("samba", {}).get("config_path", "/etc/samba/smb.conf")
+
+    @property
+    def samba_user_id(self):
+        user_id = self._config.get("samba", {}).get("user_id")
+        if user_id:
+            return user_id
+        return self.ceph_user_id
+
+    @property
+    def samba_keyring_path(self):
+        keyring = self._config.get("samba", {}).get("keyring_path")
+        if keyring:
+            return keyring
+        return self.ceph_keyring_path
+
+    @property
+    def samba_env_vars(self):
+        return self._config.get("samba", {}).get("env_vars", {})
+
+    @property
+    def samba_ceph_binary_path(self):
+        return self.expand_env(
+            self._config.get("samba", {}).get("ceph_binary_path", "/usr/bin/ceph")
+        )
+
+    @property
+    def samba_resources_path(self):
+        return self._config.get(
+            "samba", {}
+        ).get("samba_resources_path", "/cephfs_perf/samba/resources.yaml")
+
+    @property
+    def samba_subvolume_group(self):
+        return self._config.get("samba", {}).get("subvolume_group", "smb")
+
+    @property
+    def samba_subvolume_mode(self):
+        return self._config.get("samba", {}).get("subvolume_mode", "0777")
 
     @property
     def fio(self):
