@@ -271,7 +271,7 @@ fio:
       ioengine: ["libaio"]
       direct: [1, 0]
 #      buffered: 0
-      create_serialize: 0
+      create_serialize: 1
       threads: [32, 16, 8, 1]
       extra_args: ""
 
@@ -404,6 +404,7 @@ rbd:
       block-size: ["4MiB", "256KiB"]
       iodepth: [8]
       readwrite: ["randwrite", "randread"]
+      create_serialize: 1
       direct: [1]
       # Do NOT set create_serialize: 0 for rbd. fio's rbd ioengine races on
       # concurrent connect when numjobs > 1 and setup runs inside each thread
