@@ -1,0 +1,137 @@
+- name: Build NFS-Ganesha from source
+  hosts: mdss clients ganeshas
+  become: true
+  vars_files:
+    - ceph-build-vars.yml
+  tasks:
+
+    - name: Install Ganesha development dependencies
+      ansible.builtin.dnf:
+        name:
+          - libacl-devel
+          - libnsl2-devel
+          - procps-ng
+          - procps-ng-devel
+        state: present
+
+    - name: Check if Ganesha source directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+      register: ganesha_source_stat
+      become: false
+
+    - name: Check if Ganesha build directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      register: ganesha_build_stat
+      become: false
+
+    - name: Clone NFS-Ganesha repository (V9.7 branch)
+      ansible.builtin.git:
+        repo: "{{ ganesha_repo_url }}"
+        dest: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+        version: "{{ ganesha_version }}"
+#        single_branch: yes
+        recursive: yes
+      become: false
+      when: not ganesha_source_stat.stat.exists
+
+    - name: Update Ganesha submodules
+      ansible.builtin.command:
+        cmd: git submodule update --init --recursive
+        chdir: "{{ git_base_dir }}/{{ ganesha_dest_name }}"
+      become: false
+      when: not ganesha_source_stat.stat.exists
+
+    - name: Create Ganesha build directory
+      ansible.builtin.file:
+        path: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+        state: directory
+        mode: '0755'
+      become: false
+      when: not ganesha_build_stat.stat.exists
+
+    - name: Run cmake for NFS-Ganesha
+      ansible.builtin.command:
+        cmd: "cmake -GNinja -DUSE_TRACEFLOW=OFF -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
+        chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      become: false
+      when: not ganesha_build_stat.stat.exists
+
+    - name: Build Ganesha with ninja
+      ansible.builtin.command:
+        cmd: ninja
+        chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      become: false
+      when: not ganesha_build_stat.stat.exists
+
+    - name: Install Ganesha with ninja
+      ansible.builtin.command:
+        cmd: ninja install
+        chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
+      when: not ganesha_build_stat.stat.exists
+
+    - name: Create Ganesha recovery directory
+      ansible.builtin.file:
+        path: "{{ ganesha_install_prefix }}/var/lib/nfs/ganesha"
+        state: directory
+        mode: '0755'
+
+    - name: Ensure Ganesha config and log directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ ganesha_install_prefix }}/etc/ganesha"
+        - /var/log
+
+
+    # Minimal config so the unit can start after install. Real EXPORT blocks
+    # are written later by the perf framework (GaneshaSystemdManager).
+    - name: Create minimal ganesha.conf if missing
+      ansible.builtin.copy:
+        dest: "{{ ganesha_install_prefix }}/etc/ganesha/ganesha.conf"
+        content: |
+          NFS_CORE_PARAM {
+              Enable_NLM = false;
+              Enable_RQUOTA = false;
+              Protocols = 4;
+          }
+          EXPORT_DEFAULTS {
+              Access_Type = none;
+          }
+        mode: '0644'
+        force: false
+
+    - name: Create nfs-ganesha systemd service file
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/nfs-ganesha.service
+        content: |
+          [Unit]
+          Description=NFS-Ganesha-Server
+          After=network.target
+
+          [Service]
+          Type=forking
+          Environment=LD_LIBRARY_PATH={{ ganesha_install_prefix }}/lib64:{{ ganesha_install_prefix }}/lib
+          # Use /run (not legacy /var/run) and pass -p so the daemon writes
+          # the PID file Type=forking expects after the parent exits.
+          PIDFile=/run/ganesha.pid
+          ExecStart={{ ganesha_install_prefix }}/bin/ganesha.nfsd -p /run/ganesha.pid -f {{ ganesha_install_prefix }}/etc/ganesha/ganesha.conf -L /var/log/ganesha.log
+          ExecReload=/bin/kill -HUP $MAINPID
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    - name: Disable nfs-ganesha service at boot but verify it starts
+      ansible.builtin.systemd:
+        name: nfs-ganesha
+        enabled: no
+        state: started
+        daemon_reload: yes

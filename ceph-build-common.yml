@@ -1,0 +1,109 @@
+- name: Common prerequisites for Ceph source builds
+  hosts: mdss clients ganeshas
+  become: true
+  vars_files:
+    - ceph-build-vars.yml
+  tasks:
+
+    - name: install epel-release RPMs
+      yum:
+        name:
+          - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+          - "https://dl.fedoraproject.org/pub/epel/epel-next-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+        state: present
+        update_cache: yes
+      when: ansible_distribution_major_version | int < 10
+
+    - name: install epel-release RPMs (RHEL 10+)
+      yum:
+        name:
+          - "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+        state: present
+        update_cache: yes
+      when: ansible_distribution_major_version | int >= 10
+
+    - name: Enable CRB for RHEL/CentOS Stream 9+
+      ansible.builtin.command:
+        cmd: crb enable
+      when: ansible_distribution_major_version | int >= 9
+      ignore_errors: yes
+
+    - name: Enable PowerTools for RHEL/CentOS 8
+      ansible.builtin.command:
+        cmd: dnf config-manager --set-enabled powertools
+      when: ansible_distribution_major_version == "8"
+      ignore_errors: yes
+
+    # Host images / prior tooling sometimes exclude thrift*, re2*, libarrow*,
+    # parquet-libs* from EPEL (e.g. OpenStack coexistence). Those packages are
+    # required by install-deps.sh and grpc-devel; clear the filters before deps.
+    - name: Clear EPEL package excludes that block Ceph build dependencies
+      ansible.builtin.shell: |
+        set -e
+        shopt -s nullglob
+        for f in /etc/yum.repos.d/epel*.repo; do
+          # Drop every exclude= line (duplicate keys are common in hand-edited repos)
+          sed -i '/^[[:space:]]*exclude[[:space:]]*=/d' "$f"
+        done
+      args:
+        executable: /bin/bash
+      ignore_errors: yes
+
+    - name: Install Development Tools group
+      ansible.builtin.dnf:
+        name: "@Development Tools"
+        state: present
+        disable_excludes: all
+
+    - name: Create git directory
+      ansible.builtin.file:
+        path: "{{ git_base_dir }}"
+        state: directory
+        mode: '0755'
+      become: false
+
+    - name: Check if libbacktrace directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/libbacktrace"
+      register: libbacktrace_dir_stat
+      become: false
+
+    - name: Clone libbacktrace repository
+      ansible.builtin.git:
+        repo: "https://github.com/ianlancetaylor/libbacktrace.git"
+        dest: "{{ git_base_dir }}/libbacktrace"
+      become: false
+      when: not libbacktrace_dir_stat.stat.exists
+
+    - name: Configure libbacktrace
+      ansible.builtin.command:
+        cmd: ./configure --prefix={{ ceph_install_prefix }} --with-pic
+        chdir: "{{ git_base_dir }}/libbacktrace"
+      become: false
+      when: not libbacktrace_dir_stat.stat.exists
+
+    - name: Build libbacktrace
+      ansible.builtin.command:
+        cmd: make
+        chdir: "{{ git_base_dir }}/libbacktrace"
+      become: false
+      when: not libbacktrace_dir_stat.stat.exists
+
+    - name: Install libbacktrace
+      ansible.builtin.command:
+        cmd: make install
+        chdir: "{{ git_base_dir }}/libbacktrace"
+      when: not libbacktrace_dir_stat.stat.exists
+
+    - name: Create ld.so.conf.d entry for Ceph install prefix
+      ansible.builtin.copy:
+        dest: /etc/ld.so.conf.d/ceph-install-prefix.conf
+        content: |
+          {{ ceph_install_prefix }}/lib64/ceph
+          {{ ceph_install_prefix }}/lib64
+          {{ ceph_install_prefix }}/lib
+        mode: '0644'
+
+    - name: Run ldconfig for Ceph install prefix
+      ansible.builtin.command:
+        cmd: ldconfig

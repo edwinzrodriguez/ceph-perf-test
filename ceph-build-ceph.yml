@@ -1,0 +1,179 @@
+- name: Build Ceph from source
+  hosts: mdss clients ganeshas
+  become: true
+  vars_files:
+    - ceph-build-vars.yml
+  tasks:
+
+    - name: Check if Ceph repository exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ceph_dest_name }}"
+      register: ceph_repo_stat
+      become: false
+
+    - name: Clone Ceph repository (tentacle branch)
+      ansible.builtin.git:
+        repo: "{{ ceph_repo_url }}"
+        dest: "{{ git_base_dir }}/{{ ceph_dest_name }}"
+        version: "{{ ceph_version }}"
+#        single_branch: yes
+        recursive: yes
+      become: false
+      when: not ceph_repo_stat.stat.exists
+
+    - name: Create temporary patch file
+      ansible.builtin.copy:
+        dest: "/tmp/pathfix.patch"
+        content: |
+          --- ceph.spec.in
+          +++ ceph.spec.in
+          @@ -523,9 +523,6 @@ BuildRequires:  libcryptopp-devel
+           BuildRequires:  libnuma-devel
+           %endif
+           %endif
+          -%if 0%{?rhel} >= 8
+          -BuildRequires:  /usr/bin/pathfix.py
+          -%endif
+           
+           %description
+           Ceph is a massively scalable, open-source, distributed storage system that runs
+        mode: '0644'
+
+    - name: Apply pathfix patch to ceph.spec.in
+      ansible.builtin.patch:
+        src: "/tmp/pathfix.patch"
+        dest: "{{ git_base_dir }}/{{ ceph_dest_name }}/ceph.spec.in"
+        remote_src: yes
+
+    - name: Remove temporary patch file
+      ansible.builtin.file:
+        path: "/tmp/pathfix.patch"
+        state: absent
+
+    - name: Ensure python3-setuptools is installed
+      ansible.builtin.dnf:
+        name: python3-setuptools
+        state: present
+        disable_excludes: all
+
+    # Re-clear excludes immediately before install-deps: some host images or a
+    # previous partial run leave thrift*/re2*/libarrow* filtered out of EPEL.
+    - name: Re-clear EPEL excludes before install-deps.sh
+      ansible.builtin.shell: |
+        set -e
+        shopt -s nullglob
+        for f in /etc/yum.repos.d/epel*.repo; do
+          sed -i '/^[[:space:]]*exclude[[:space:]]*=/d' "$f"
+        done
+      args:
+        executable: /bin/bash
+      ignore_errors: yes
+
+    - name: Run install-deps.sh
+      ansible.builtin.command:
+        cmd: ./install-deps.sh
+        chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}"
+      environment:
+        # Some versions of install-deps.sh might need non-interactive flags or sudo
+        SUDO: "sudo"
+      ignore_errors: yes
+
+    - name: Install additional development dependencies
+      ansible.builtin.dnf:
+        name:
+          - cmake
+          - boost-random
+          - nss-devel
+          - keyutils-libs-devel
+          - libatomic
+          - libibverbs-devel
+          - librdmacm-devel
+          - ninja-build
+          - openldap-devel
+          - numactl-devel
+          - krb5-devel
+          - openssl-devel
+          - CUnit-devel
+          - python3-devel
+          - python3-prettytable
+          - python3-pyyaml
+          - python3-sphinx
+          - lz4-devel
+          - rdma-core-devel
+          - systemd-devel
+          - libblkid-devel
+          - libaio-devel
+          - cryptsetup-devel
+          - libnbd-devel
+          - libcurl-devel
+          - libcap-devel
+          - libcap-ng-devel
+          - fmt-devel
+          - "pkgconfig(libudev)"
+          - libnl3-devel
+          - liboath-devel
+          - libtool
+          - libxml2-devel
+          - make
+          - ncurses-devel
+          - libicu-devel
+          - patch
+          - perl
+          - pkgconfig
+          - procps
+          - python3
+          - python3-setuptools
+          - python3-Cython
+          - snappy-devel
+          - sqlite-devel
+          - "pkgconfig(udev)"
+          - valgrind-devel
+          - which
+          - xfsprogs-devel
+          - xmlstarlet
+          - nasm
+          - lua-devel
+          - lmdb-devel
+          - expat-devel
+          - gperftools-devel
+          - lttng-ust-devel
+          - libbabeltrace-devel
+          - thrift-devel
+          - re2-devel
+          - gperf
+          - librabbitmq-devel
+          - librdkafka-devel
+          - protobuf-c
+          - protobuf-devel
+          - fuse-devel
+          - libaio-devel
+          - grpc-devel
+        state: present
+        # Host epel.repo may still filter thrift*/re2* etc.; override for this txn
+        disable_excludes: all
+
+    - name: Check if Ceph build directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ ceph_dest_name }}/build"
+      register: ceph_build_stat
+      become: false
+
+    - name: Run do_cmake.sh
+      ansible.builtin.command:
+        cmd: "./do_cmake.sh -DUSE_TRACEFLOW=OFF -DCMAKE_INSTALL_PREFIX={{ ceph_install_prefix }} -DCMAKE_BUILD_TYPE=RelWithDebInfo"
+        chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}"
+      become: false
+      when: not ceph_build_stat.stat.exists
+
+    - name: Build with ninja
+      ansible.builtin.command:
+        cmd: ninja
+        chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}/build"
+      become: false
+      when: not ceph_build_stat.stat.exists
+
+    - name: Install with ninja
+      ansible.builtin.command:
+        cmd: ninja install
+        chdir: "{{ git_base_dir }}/{{ ceph_dest_name }}/build"
+      when: not ceph_build_stat.stat.exists

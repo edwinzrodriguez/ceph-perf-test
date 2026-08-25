@@ -1,0 +1,5 @@
+---
+- import_playbook: ceph-build-common.yml
+- import_playbook: ceph-build-ceph.yml
+- import_playbook: ceph-build-fio.yml
+- import_playbook: ceph-build-ganesha.yml
