@@ -673,6 +673,30 @@ class PerformanceTestConfig:
         return self._config.get("samba", {}).get("subvolume_mode", "0777")
 
     @property
+    def samba_ceph_vfs(self):
+        return self._config.get("samba", {}).get("ceph_vfs", False)
+
+    @property
+    def samba_ceph_conf_dir(self):
+        return self._config.get("samba", {}).get("ceph_conf_dir", "/etc/ceph")
+
+    @property
+    def samba_client_log_level(self):
+        return self._config.get("samba", {}).get("client_log_level", 1)
+
+    @property
+    def samba_finisher_log_level(self):
+        return self._config.get("samba", {}).get("finisher_log_level")
+
+    @property
+    def samba_client_oc_size(self):
+        return self._config.get("samba", {}).get("client_oc_size")
+
+    @property
+    def samba_msgr_workers(self):
+        return self._config.get("samba", {}).get("msgr_workers")
+
+    @property
     def fio(self):
         return self._config.get("fio")
 

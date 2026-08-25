@@ -209,7 +209,14 @@ samba:
   # systemd-only: local ceph mount + smb.conf paths
   mount_base: "/srv/samba"
   config_path: "/etc/samba/smb.conf"
-  # env_vars: {}
+  # systemd-only: use Samba vfs_ceph instead of kernel-mounted share paths
+  ceph_vfs: true
+  ceph_conf_dir: "/etc/ceph"
+#  client_log_level: 1
+#  finisher_log_level: 10
+  client_oc_size: "16GiB"
+  msgr_workers: 8
+#  env_vars: {}
 
 # SpecStorage configuration
 specstorage:
