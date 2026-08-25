@@ -95,15 +95,4 @@
         chdir: "{{ git_base_dir }}/libbacktrace"
       when: not libbacktrace_dir_stat.stat.exists
 
-    - name: Create ld.so.conf.d entry for Ceph install prefix
-      ansible.builtin.copy:
-        dest: /etc/ld.so.conf.d/ceph-install-prefix.conf
-        content: |
-          {{ ceph_install_prefix }}/lib64/ceph
-          {{ ceph_install_prefix }}/lib64
-          {{ ceph_install_prefix }}/lib
-        mode: '0644'
 
-    - name: Run ldconfig for Ceph install prefix
-      ansible.builtin.command:
-        cmd: ldconfig
