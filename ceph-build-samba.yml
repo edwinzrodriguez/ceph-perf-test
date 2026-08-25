@@ -1,0 +1,44 @@
+- name: Build Samba from source
+  hosts: mdss clients ganeshas
+  become: true
+  vars_files:
+    - ceph-build-vars.yml
+  tasks:
+
+    - name: Check if Samba source directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ samba_dest_name }}"
+      register: samba_dir_stat
+      become: false
+
+    - name: Clone Samba repository
+      ansible.builtin.git:
+        repo: "{{ samba_repo_url }}"
+        dest: "{{ git_base_dir }}/{{ samba_dest_name }}"
+        version: "{{ samba_version }}"
+      become: false
+      when: not samba_dir_stat.stat.exists
+
+    - name: Configure Samba
+      ansible.builtin.command:
+        cmd:
+          - ./configure
+          - --prefix={{ samba_install_prefix }}
+          - --enable-cephfs
+          - --enable-fhs
+        chdir: "{{ git_base_dir }}/{{ samba_dest_name }}"
+      become: false
+      when: not samba_dir_stat.stat.exists
+
+    - name: Build Samba
+      ansible.builtin.make:
+        chdir: "{{ git_base_dir }}/{{ samba_dest_name }}"
+        jobs: "{{ ansible_facts.processor_vcpus }}"
+      become: false
+      when: not samba_dir_stat.stat.exists
+
+    - name: Install Samba
+      ansible.builtin.make:
+        chdir: "{{ git_base_dir }}/{{ samba_dest_name }}"
+        target: install
+      when: not samba_dir_stat.stat.exists
