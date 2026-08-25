@@ -239,7 +239,7 @@ class BenchRunner:
                             ganesha_ranges.append(val)
             elif isinstance(export_manager, SambaManager):
                 samba_settings_raw = config.get("samba", {})
-                for k in ["clustering", "workgroup"]:
+                for k in ["clustering", "workgroup", "client_oc_size", "msgr_workers"]:
                     if k in samba_settings_raw:
                         val = samba_settings_raw[k]
                         if isinstance(val, list):

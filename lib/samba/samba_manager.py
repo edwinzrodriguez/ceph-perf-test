@@ -22,6 +22,16 @@ class SambaManager(abc.ABC):
         pass
 
     @staticmethod
+    def get_samba_ceph_vfs_config_str(settings):
+        return CommonUtils.get_samba_ceph_vfs_config_str(settings)
+
+    @staticmethod
+    def get_samba_ceph_vfs_path_parts(config=None, settings=None):
+        return CommonUtils.get_samba_ceph_vfs_path_parts(
+            config=config, settings=settings
+        )
+
+    @staticmethod
     def get_samba_config_str(settings):
         parts = []
         if "clustering" in settings:
@@ -32,7 +42,28 @@ class SambaManager(abc.ABC):
             parts.append(
                 f"{CommonUtils.get_short_name('Samba Workgroup')}{settings['workgroup']}"
             )
+        vfs_part = CommonUtils.get_samba_ceph_vfs_config_str(settings)
+        if vfs_part:
+            parts.append(vfs_part)
         return "_".join(parts)
+
+    @staticmethod
+    def samba_payload_keys():
+        """Config property names copied into workload settings payloads."""
+        return [
+            "samba_enabled",
+            "samba_type",
+            "samba_ceph_vfs",
+            "samba_clustering",
+            "samba_workgroup",
+            "samba_client_oc_size",
+            "samba_msgr_workers",
+            "samba_client_log_level",
+            "samba_finisher_log_level",
+            "samba_user_id",
+            "samba_keyring_path",
+            "samba_ceph_binary_path",
+        ]
 
     def safe_json_load(self, raw, default=None):
         return FSManager.safe_json_load(self, raw, default)

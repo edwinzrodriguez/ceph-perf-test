@@ -80,6 +80,14 @@ class FioWorkloadRunner(WorkloadRunner):
             if val is not None:
                 payload[k] = val
 
+        if self.config.samba_enabled:
+            from lib.samba.samba_manager import SambaManager
+
+            for k in SambaManager.samba_payload_keys():
+                val = getattr(self.config, k, None)
+                if val is not None:
+                    payload[k] = val
+
         loadpoints = fio_cfg.get("loadpoints", [])
         if isinstance(loadpoints, dict):
             loadpoints = [loadpoints]
@@ -330,9 +338,19 @@ class FioWorkloadRunner(WorkloadRunner):
             if g_str:
                 g_p = "_" + g_str
 
+        s_p = ""
+        if self.config.samba_enabled and self.config.samba_ceph_vfs:
+            from lib.samba.samba_manager import SambaManager
+
+            s_str = SambaManager.get_samba_ceph_vfs_config_str(
+                self.config.get("samba", {})
+            )
+            if s_str:
+                s_p = "_" + s_str
+
         return os.path.join(
             base,
-            f"{ts}_{self.get_name()}_{fs_p}_{mds_p}{CommonUtils.mount_name_suffix(self.config)}{g_p}",
+            f"{ts}_{self.get_name()}_{fs_p}_{mds_p}{CommonUtils.mount_name_suffix(self.config)}{g_p}{s_p}",
         )
 
     def prepare_storage(self):

@@ -1002,6 +1002,18 @@ class CommonUtils:
             "Ganesha Keyring Path": "gkp",
             "Ganesha Ceph Binary Path": "gcbp",
             "Ganesha Enabled": "ge",
+            "Samba Clustering": "scl",
+            "Samba Workgroup": "swg",
+            "Samba Ceph VFS": "scv",
+            "Samba Client Object Cache Size": "socs",
+            "Samba Msgr Workers": "smw",
+            "Samba Client Log Level": "scll",
+            "Samba Finisher Log Level": "sfll",
+            "Samba Enabled": "se",
+            "Samba Type": "st",
+            "Samba User ID": "suid",
+            "Samba Keyring Path": "skp",
+            "Samba Ceph Binary Path": "scbp",
             "Workload Runner": "wr",
             "Fio Threads": "ft",
             "Msgr Workers": "mw",
@@ -1012,6 +1024,66 @@ class CommonUtils:
             "Max Object Size": "maxos",
         }
         return name_map.get(var_name, var_name.replace(" ", "_").replace("/", "_"))
+
+    @staticmethod
+    def get_samba_ceph_vfs_config_str(settings):
+        """Encode vfs_ceph client params for result directory names."""
+        if not settings.get("ceph_vfs"):
+            return ""
+        parts = []
+        if settings.get("client_oc_size") is not None:
+            size_str = CommonUtils.format_si_units(
+                CommonUtils.parse_si_unit(settings["client_oc_size"])
+            )
+            parts.append(
+                f"{CommonUtils.get_short_name('Samba Client Object Cache Size')}{size_str}"
+            )
+        if settings.get("msgr_workers") is not None:
+            parts.append(
+                f"{CommonUtils.get_short_name('Samba Msgr Workers')}{settings['msgr_workers']}"
+            )
+        return "_".join(parts)
+
+    @staticmethod
+    def get_samba_ceph_vfs_path_parts(config=None, settings=None):
+        """Short-encoded path parts for loadpoint result filenames."""
+        ceph_vfs = False
+        oc_size = None
+        msgr = None
+
+        if config is not None:
+            ceph_vfs = bool(
+                getattr(config, "samba_enabled", False)
+                and getattr(config, "samba_ceph_vfs", False)
+            )
+            oc_size = getattr(config, "samba_client_oc_size", None)
+            msgr = getattr(config, "samba_msgr_workers", None)
+        if settings:
+            if settings.get("samba_ceph_vfs") or settings.get("ceph_vfs"):
+                ceph_vfs = True
+            if settings.get("samba_client_oc_size") is not None:
+                oc_size = settings["samba_client_oc_size"]
+            elif settings.get("client_oc_size") is not None:
+                oc_size = settings["client_oc_size"]
+            if settings.get("samba_msgr_workers") is not None:
+                msgr = settings["samba_msgr_workers"]
+            elif settings.get("msgr_workers") is not None:
+                msgr = settings["msgr_workers"]
+
+        if not ceph_vfs:
+            return []
+
+        parts = []
+        if oc_size is not None:
+            parts.append(
+                f"{CommonUtils.get_short_name('Samba Client Object Cache Size')}"
+                f"{CommonUtils.format_si_units(oc_size)}"
+            )
+        if msgr is not None:
+            parts.append(
+                f"{CommonUtils.get_short_name('Samba Msgr Workers')}{msgr}"
+            )
+        return parts
 
     @staticmethod
     def format_si_units(value):
@@ -1100,6 +1172,18 @@ class CommonUtils:
             "ganesha_keyring_path": "Ganesha Keyring Path",
             "ganesha_ceph_binary_path": "Ganesha Ceph Binary Path",
             "ganesha_enabled": "Ganesha Enabled",
+            "samba_enabled": "Samba Enabled",
+            "samba_type": "Samba Type",
+            "samba_ceph_vfs": "Samba Ceph VFS",
+            "samba_clustering": "Samba Clustering",
+            "samba_workgroup": "Samba Workgroup",
+            "samba_client_oc_size": "Samba Client Object Cache Size",
+            "samba_msgr_workers": "Samba Msgr Workers",
+            "samba_client_log_level": "Samba Client Log Level",
+            "samba_finisher_log_level": "Samba Finisher Log Level",
+            "samba_user_id": "Samba User ID",
+            "samba_keyring_path": "Samba Keyring Path",
+            "samba_ceph_binary_path": "Samba Ceph Binary Path",
             "threads_fio": "Fio Threads",
             "msgr_workers": "Msgr Workers",
             "min-object-size": "Min Object Size",
@@ -1149,6 +1233,34 @@ class CommonUtils:
                         name = name_map.get(k, k)
                         params[name] = format_val(val)
 
+        samba_keys = [
+            "samba_enabled",
+            "samba_type",
+            "samba_ceph_vfs",
+            "samba_clustering",
+            "samba_workgroup",
+            "samba_client_oc_size",
+            "samba_msgr_workers",
+            "samba_client_log_level",
+            "samba_finisher_log_level",
+            "samba_user_id",
+            "samba_keyring_path",
+            "samba_ceph_binary_path",
+        ]
+
+        for k in samba_keys:
+            if k in settings:
+                name = name_map.get(k, k)
+                params[name] = format_val(settings[k])
+
+        if config and config.samba_enabled:
+            for k in samba_keys:
+                if k not in settings:
+                    val = getattr(config, k, None)
+                    if val is not None:
+                        name = name_map.get(k, k)
+                        params[name] = format_val(val)
+
         # Add loadpoint-specific settings (overriding globals if necessary)
         if lp_cfg:
             for k, v in lp_cfg.items():
@@ -1188,6 +1300,18 @@ class CommonUtils:
             "ganesha_user_id",
             "ganesha_keyring_path",
             "ganesha_ceph_binary_path",
+            "samba_enabled",
+            "samba_type",
+            "samba_ceph_vfs",
+            "samba_clustering",
+            "samba_workgroup",
+            "samba_client_oc_size",
+            "samba_msgr_workers",
+            "samba_client_log_level",
+            "samba_finisher_log_level",
+            "samba_user_id",
+            "samba_keyring_path",
+            "samba_ceph_binary_path",
             "workload_dir",
             "run_name",
             "num_filesystems",
@@ -1262,6 +1386,13 @@ class CommonUtils:
             if g_parts:
                 g_p = "-" + "-".join(g_parts)
 
+        s_p = ""
+        s_parts = CommonUtils.get_samba_ceph_vfs_path_parts(
+            config=config, settings=settings
+        )
+        if s_parts:
+            s_p = "-" + "-".join(s_parts)
+
         lp_str = f"lp{int(lp):02d}" if lp is not None else "lp00"
 
         parts = []
@@ -1315,7 +1446,7 @@ class CommonUtils:
             # elif "ramp_time" in settings:
             #     parts.append(f"rt{settings['ramp_time']}")
 
-        options = mds_p + CommonUtils.mount_name_suffix(config, sep="-", settings=settings) + g_p
+        options = mds_p + CommonUtils.mount_name_suffix(config, sep="-", settings=settings) + g_p + s_p
         if parts:
             options += f"_{'_'.join(parts)}"
 
