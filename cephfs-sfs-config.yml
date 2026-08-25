@@ -320,6 +320,31 @@
         cmd: cd /cephfs_perf/sfs2020/SPECstorage2020 && python3 SM2020 --install-dir=/SPEC2020
       ignore_errors: yes
 
+- hosts: sambas
+  become: true
+  tasks:
+    - name: Install Samba repository (CentOS)
+      ansible.builtin.dnf:
+        name: centos-release-samba424
+        state: present
+        update_cache: yes
+      when: ansible_distribution == 'CentOS'
+
+    - name: Install Samba packages (CentOS)
+      ansible.builtin.dnf:
+        name:
+          - samba
+          - samba-client
+          - samba-vfs-cephfs
+          - samba-vfs-iouring
+          - ctdb-ceph-mutex
+          - nss-altfiles
+          - python3-samba
+          - python3-pyxattr
+        state: present
+        update_cache: yes
+      when: ansible_distribution == 'CentOS'
+
 - hosts: mons
   become: true
   tasks:
