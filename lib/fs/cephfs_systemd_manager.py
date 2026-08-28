@@ -16,8 +16,8 @@ class CephFSSystemdManager(CephFSManager):
     Configuration (under ``mds:`` in the YAML settings file)::
 
         mds:
-          binary_path: /usr/local/bin/ceph-mds
-          ceph_binary_path: /usr/local/bin/ceph   # optional, defaults to ceph
+          binary_path: ${CEPH_INSTALL_PREFIX}/bin/ceph-mds
+          ceph_binary_path: ${CEPH_INSTALL_PREFIX}/bin/ceph   # optional; default bare ceph on PATH
           data_dir: /var/lib/ceph/mds             # keyring parent dir
           log_dir: /var/log/ceph
           run_dir: /var/run/ceph
@@ -30,17 +30,13 @@ class CephFSSystemdManager(CephFSManager):
         return self.config.get("mds", {}) or {}
 
     def _binary_path(self):
-        # Expand ${CEPH_INSTALL_PREFIX} etc. from top-level env_vars
-        return self.config.expand_env(
-            self._mds_cfg().get("binary_path", "/usr/local/bin/ceph-mds")
-        )
-
-    def _ceph_binary(self):
-        # Prefer mds.ceph_binary_path; fall back to base CephFSManager resolution
-        path = self._mds_cfg().get("ceph_binary_path")
+        path = self._mds_cfg().get("binary_path")
         if path:
             return self.config.expand_env(path)
-        return self._ceph_bin()
+        return "ceph-mds"
+
+    def _ceph_binary(self):
+        return self.config.resolve_ceph_binary("mds")
 
     def _data_dir(self):
         return self._mds_cfg().get("data_dir", "/var/lib/ceph/mds")

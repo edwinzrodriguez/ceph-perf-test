@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import shlex
@@ -39,23 +40,8 @@ class CephFSManager(FSManager):
         return self.config.env_vars
 
     def _ceph_bin(self):
-        """Resolved path to the ceph CLI.
-
-        Preference order:
-          1. mds.ceph_binary_path
-          2. ganesha.ceph_binary_path
-          3. ${CEPH_INSTALL_PREFIX}/bin/ceph  (from env_vars)
-          4. /usr/local/bin/ceph
-        """
-        mds_cfg = self.config.get("mds", {}) or {}
-        if mds_cfg.get("ceph_binary_path"):
-            return self.config.expand_env(mds_cfg["ceph_binary_path"])
-        ganesha_cfg = self.config.get("ganesha", {}) or {}
-        if ganesha_cfg.get("ceph_binary_path"):
-            return self.config.expand_env(ganesha_cfg["ceph_binary_path"])
-        known = CommonUtils.expand_env_vars_map(self._ceph_env())
-        prefix = known.get("CEPH_INSTALL_PREFIX") or "/usr/local"
-        return f"{prefix}/bin/ceph"
+        """Resolved path to the ceph CLI (see ``PerformanceTestConfig.resolve_ceph_binary``)."""
+        return self.config.resolve_ceph_binary()
 
     def _ceph_cmd(self, args, sudo=True):
         """Build a shell command that runs the ceph CLI with env_vars applied.
@@ -490,6 +476,7 @@ class CephFSManager(FSManager):
             # Ensure ranks are eligible (fs fail leaves joinable=false; new FS
             # should already be joinable, but force it for recreate safety).
             self._run_ceph(self.admin, f"fs set {fs} joinable true || true")
+            self._apply_mds_startup_settings(settings)
             self._deploy_mds(fs, settings)
             self._wait_for_mds_active(fs)
             self._configure_mds_logging()
@@ -569,6 +556,13 @@ class CephFSManager(FSManager):
     def get_fs_names(self):
         return self.fs_names
 
+    # Daemon options that must be in place before MDS processes start.
+    _MDS_STARTUP_SETTINGS = frozenset({"mds_dispatch_engine"})
+    # Options applied via ceph.conf because they are read at MDS startup and
+    # may not exist in the monitor config schema (e.g. wip builds on cephadm).
+    _MDS_CONF_ONLY_SETTINGS = frozenset({"mds_dispatch_engine"})
+    _MDS_DISPATCH_ENGINE_VALUES = frozenset({"classic", "reactor"})
+
     # `ceph fs set` only accepts filesystem-map fields. MDS daemon options
     # (mds_cache_memory_limit, etc.) go through `ceph config set mds`.
     _FS_SET_VARS = frozenset(
@@ -595,6 +589,115 @@ class CephFSManager(FSManager):
         }
     )
 
+    def _mds_conf_settings_keys(self):
+        """Return mds_settings keys applied via ``[mds]`` in ceph.conf."""
+        mds_cfg = self.config.get("mds", {}) or {}
+        keys = set(mds_cfg.get("conf_settings") or [])
+        if self._mds_dispatch_engine_via_conf():
+            keys.add("mds_dispatch_engine")
+        return {self._mds_option_key(k) for k in keys}
+
+    def _mds_dispatch_engine_via_conf(self):
+        """True when mds_dispatch_engine should be written to ceph.conf.
+
+        Default is ceph.conf because ``ceph config set`` is validated by the
+        monitors, which may run an older cephadm image that does not know wip
+        options even when the host-installed ``ceph`` / ``ceph-mds`` binaries
+        do. Set ``mds.dispatch_engine_via: ceph-config`` when mons support it.
+        """
+        mds_cfg = self.config.get("mds", {}) or {}
+        via = str(mds_cfg.get("dispatch_engine_via", "ceph.conf")).lower()
+        return via in ("ceph.conf", "conf", "file")
+
+    @staticmethod
+    def _mds_option_key(setting_key):
+        return setting_key if setting_key.startswith("mds_") else f"mds_{setting_key}"
+
+    def _validate_mds_dispatch_engine(self, value):
+        normalized = str(value).strip().lower()
+        if normalized not in self._MDS_DISPATCH_ENGINE_VALUES:
+            raise ValueError(
+                "mds_dispatch_engine must be 'classic' or 'reactor', "
+                f"got {value!r}"
+            )
+        return normalized
+
+    def _mds_conf_hosts(self):
+        hosts = []
+        for host in [self.admin] + list(self.mdss):
+            if host not in hosts:
+                hosts.append(host)
+        return hosts
+
+    def _write_ceph_conf_on_host(self, host, conf_path, content):
+        encoded = base64.b64encode(content.encode()).decode()
+        self.executor.run_remote(
+            host,
+            f"echo {encoded} | base64 -d | sudo tee {conf_path} > /dev/null",
+            check=True,
+        )
+        self.executor.run_remote(host, f"sudo chmod 0644 {conf_path}")
+
+    def _apply_mds_conf_file_settings(self, settings):
+        """Write selected mds_settings into ``[mds]`` in ceph.conf."""
+        conf_keys = self._mds_conf_settings_keys()
+        if not conf_keys:
+            return
+        conf_path = self.config.ceph_conf_path
+        options = {}
+        for k, v in settings.items():
+            if k == "cpus":
+                continue
+            key = self._mds_option_key(k)
+            if key not in conf_keys:
+                continue
+            val = CommonUtils.format_si_units(v)
+            if key == "mds_dispatch_engine":
+                val = self._validate_mds_dispatch_engine(val)
+            options[key] = val
+        if not options:
+            return
+        for host in self._mds_conf_hosts():
+            try:
+                raw = self.executor.run_remote(
+                    host, f"sudo cat {conf_path} 2>/dev/null || true"
+                )
+            except Exception:
+                raw = ""
+            updated = CommonUtils.update_ceph_conf_section(raw, "mds", options)
+            self._write_ceph_conf_on_host(host, conf_path, updated)
+            print(
+                f"[{host}] Updated {conf_path} [mds]: "
+                + ", ".join(f"{k}={v}" for k, v in sorted(options.items()))
+            )
+
+    def _apply_mds_startup_settings(self, settings):
+        """Apply MDS options that must be set before daemons start."""
+        if not settings:
+            return
+        self._apply_mds_conf_file_settings(settings)
+        conf_keys = self._mds_conf_settings_keys()
+        for k, v in settings.items():
+            if k == "cpus" or k in self._FS_SET_VARS:
+                continue
+            key = self._mds_option_key(k)
+            if key not in self._MDS_STARTUP_SETTINGS or key in conf_keys:
+                continue
+            val = CommonUtils.format_si_units(v)
+            if key == "mds_dispatch_engine":
+                val = self._validate_mds_dispatch_engine(val)
+            self._run_ceph(
+                self.admin, f"config set mds {key} {val}", check=True
+            )
+
+    def _skip_mds_setting_in_apply(self, setting_key):
+        if setting_key == "cpus" or setting_key in self._FS_SET_VARS:
+            return False
+        key = self._mds_option_key(setting_key)
+        if key in self._mds_conf_settings_keys():
+            return True
+        return key in self._MDS_STARTUP_SETTINGS
+
     def apply_fs_settings(self, settings):
         """Apply mds_settings to the cluster.
 
@@ -607,7 +710,7 @@ class CephFSManager(FSManager):
         """
         fs_set_pending = {}
         for k, v in settings.items():
-            if k == "cpus":
+            if self._skip_mds_setting_in_apply(k):
                 continue
             val = CommonUtils.format_si_units(v)
             if k in self._FS_SET_VARS:
@@ -615,7 +718,9 @@ class CephFSManager(FSManager):
                 continue
             # Settings keys are already mds_* (e.g. mds_cache_memory_limit);
             # do not double-prefix with mds_.
-            key = k if k.startswith("mds_") else f"mds_{k}"
+            key = self._mds_option_key(k)
+            if key == "mds_dispatch_engine":
+                val = self._validate_mds_dispatch_engine(val)
             self._run_ceph(
                 self.admin, f"config set mds {key} {val}", check=True
             )
@@ -633,8 +738,11 @@ class CephFSManager(FSManager):
         for k, v in settings.items():
             if k == "cpus" or k in self._FS_SET_VARS:
                 continue
-            key = k if k.startswith("mds_") else f"mds_{k}"
-            expected[key] = CommonUtils.format_si_units(v)
+            key = self._mds_option_key(k)
+            val = CommonUtils.format_si_units(v)
+            if key == "mds_dispatch_engine":
+                val = self._validate_mds_dispatch_engine(val)
+            expected[key] = val
         return expected
 
     def _extract_json_object(self, raw):

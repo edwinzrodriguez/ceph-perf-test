@@ -46,12 +46,14 @@ Settings for local `ceph-mds` processes when `fs_manager_type` is `CephFSSystemd
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `binary_path` | string | `/usr/local/bin/ceph-mds` | Path to the `ceph-mds` executable |
-| `ceph_binary_path` | string | `ceph` | Path to the `ceph` CLI (auth, config) |
+| `ceph_binary_path` | string | `ceph` | Path to the `ceph` CLI (auth, config). Use `${CEPH_INSTALL_PREFIX}/bin/ceph` or omit to rely on PATH from `env_vars` |
 | `data_dir` | string | `/var/lib/ceph/mds` | Parent directory for MDS keyrings (`ceph-<id>/keyring`) |
 | `log_dir` | string | `/var/log/ceph` | Directory for MDS log files |
 | `run_dir` | string | `/var/run/ceph` | Directory for PID and admin-socket files |
 | `env_vars` | map | `{}` | Environment variables exported when starting `ceph-mds` (merged over defaults `ENABLE_LOCKSTAT` and `CEPH_CONF`) |
 | `mds_yaml_path` | string | `/cephfs_perf/mds.yaml` | Path to MDS cephadm spec file |
+| `conf_settings` | list | `[]` | Additional `mds_settings` keys written to the `[mds]` section of `ceph.conf` instead of `ceph config set mds` |
+| `dispatch_engine_via` | string | `ceph.conf` | How to apply `mds_dispatch_engine`: `ceph.conf` (default) or `ceph-config`. Use `ceph-config` only when monitors know the option (e.g. vstart / uniform wip builds) |
 
 ---
 
@@ -498,6 +500,22 @@ MDS parameters swept across the test matrix. Each key maps to a single value or 
 | `mds_cache_trim_threshold` | string or list | `[64Ki, 128Ki]` | Cache trim threshold |
 | `mds_cache_reservation` | int or list | `[5, 10]` | Cache reservation percentage |
 | `mds_log_max_segments` | int or list | `[30, 60]` | Maximum MDS log segments |
+| `mds_dispatch_engine` | string or list | `[classic, reactor]` | MDS dispatch engine (`classic` or `reactor`). Applied before MDS daemons start via `[mds]` in `ceph.conf` by default (monitors on cephadm clusters often reject `ceph config set` for wip-only options). Set `mds.dispatch_engine_via: ceph-config` when mons support the option. |
+
+```yaml
+mds_settings:
+  mds_dispatch_engine: [classic, reactor]
+```
+
+For vstart / clusters where monitors run the same wip build as clients:
+
+```yaml
+mds:
+  dispatch_engine_via: ceph-config
+
+mds_settings:
+  mds_dispatch_engine: [classic, reactor]
+```
 
 ---
 

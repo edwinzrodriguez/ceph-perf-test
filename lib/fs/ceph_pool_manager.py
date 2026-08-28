@@ -81,26 +81,13 @@ class CephPoolManager(FSManager):
         return self.config.get_merged_env_vars(self._section_cfg().get("env_vars"))
 
     def _ceph_bin(self):
-        cfg = self._section_cfg()
-        if cfg.get("ceph_binary_path"):
-            return self.config.expand_env(cfg["ceph_binary_path"])
-        mds_cfg = self.config.get("mds", {}) or {}
-        if mds_cfg.get("ceph_binary_path"):
-            return self.config.expand_env(mds_cfg["ceph_binary_path"])
-        ganesha_cfg = self.config.get("ganesha", {}) or {}
-        if ganesha_cfg.get("ceph_binary_path"):
-            return self.config.expand_env(ganesha_cfg["ceph_binary_path"])
-        known = CommonUtils.expand_env_vars_map(self._ceph_env())
-        prefix = known.get("CEPH_INSTALL_PREFIX") or "/usr/local"
-        return f"{prefix}/bin/ceph"
+        return self.config.resolve_ceph_binary(self.section)
 
     def _rbd_bin(self):
         cfg = self._section_cfg()
         if cfg.get("rbd_executable_path"):
             return self.config.expand_env(cfg["rbd_executable_path"])
-        known = CommonUtils.expand_env_vars_map(self._ceph_env())
-        prefix = known.get("CEPH_INSTALL_PREFIX") or "/usr/local"
-        return f"{prefix}/bin/rbd"
+        return "rbd"
 
     def _ceph_cmd(self, args, sudo=True):
         cmd = f"{self._ceph_bin()} {args}".strip()

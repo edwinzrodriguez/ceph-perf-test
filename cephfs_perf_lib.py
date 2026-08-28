@@ -560,6 +560,26 @@ class PerformanceTestConfig:
         )
         return CommonUtils.expand_env_value(value, known)
 
+    def resolve_ceph_binary(self, section=None):
+        """Resolve the ``ceph`` CLI for cluster commands.
+
+        Honors ``ceph_binary_path`` from *section*, then ``mds``, then
+        ``ganesha``, expanding ``${CEPH_INSTALL_PREFIX}`` etc. from env_vars.
+        When unset, returns bare ``ceph`` so PATH from env_vars selects the
+        build under test.
+        """
+        candidates = []
+        if section:
+            candidates.append((self.get(section) or {}).get("ceph_binary_path"))
+        mds_cfg = self.get("mds", {}) or {}
+        candidates.append(mds_cfg.get("ceph_binary_path"))
+        ganesha_cfg = self.get("ganesha", {}) or {}
+        candidates.append(ganesha_cfg.get("ceph_binary_path"))
+        for path in candidates:
+            if path:
+                return self.expand_env(path)
+        return "ceph"
+
     @property
     def ganesha_env_vars(self):
         return self._config.get("ganesha", {}).get("env_vars", {})
@@ -970,6 +990,7 @@ class CommonUtils:
         """Map a human-readable parameter name to its short abbreviation."""
         name_map = {
             "MDS Cache Memory Limit": "m",
+            "MDS Dispatch Engine": "de",
             "Filesystem Name": "fs",
             "Number of Filesystems": "nf",
             "Mounts per Filesystem": "mpf",
@@ -1086,6 +1107,56 @@ class CommonUtils:
         return parts
 
     @staticmethod
+    def update_ceph_conf_section(text, section, options):
+        """Merge *options* into a ceph.conf-style ``[section]``.
+
+        Replaces existing keys in the section and appends the section when
+        missing. Other sections are left unchanged.
+        """
+        if text is None:
+            text = ""
+        if not text.endswith("\n"):
+            text += "\n"
+        lines = text.splitlines(keepends=True)
+        header = f"[{section}]"
+        start = None
+        end = len(lines)
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                if stripped.lower() == header.lower():
+                    start = i
+                elif start is not None:
+                    end = i
+                    break
+        option_lines = {k: f"    {k} = {v}\n" for k, v in options.items()}
+        if start is None:
+            new_section = [f"\n{header}\n"]
+            for k in sorted(options):
+                new_section.append(option_lines[k])
+            return text + "".join(new_section)
+
+        seen = set()
+        i = start + 1
+        while i < end:
+            stripped = lines[i].strip()
+            if not stripped or stripped.startswith("#"):
+                i += 1
+                continue
+            if "=" in stripped:
+                key = stripped.split("=", 1)[0].strip()
+                if key in options:
+                    lines[i] = option_lines[key]
+                    seen.add(key)
+            i += 1
+        insert_at = end
+        for k in sorted(options):
+            if k not in seen:
+                lines.insert(insert_at, option_lines[k])
+                insert_at += 1
+        return "".join(lines)
+
+    @staticmethod
     def format_si_units(value):
         try:
             val = int(value)
@@ -1137,6 +1208,7 @@ class CommonUtils:
         # Mapping of internal keys to human-readable names
         name_map = {
             "mds_cache_memory_limit": "MDS Cache Memory Limit",
+            "mds_dispatch_engine": "MDS Dispatch Engine",
             "fs_name": "Filesystem Name",
             "num_filesystems": "Number of Filesystems",
             "mounts_per_fs": "Mounts per Filesystem",

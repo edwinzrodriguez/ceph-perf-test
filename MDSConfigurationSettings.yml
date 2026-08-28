@@ -129,8 +129,8 @@ mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec (ceph
 
 # Local ceph-mds settings (used when fs_manager_type is CephFSSystemdManager)
 mds:
-  binary_path: "/usr/local/bin/ceph-mds"
-  ceph_binary_path: "/usr/local/bin/ceph"
+  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-mds"
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
   data_dir: "/var/lib/ceph/mds"
   log_dir: "/var/log/ceph"
   run_dir: "/var/run/ceph"
@@ -145,7 +145,7 @@ mds:
   perf_record_executable: "ceph-mds"
   perf_record_duration: 5
   logging:
-    enabled: true
+    enabled: false
     debug_mds: 5
     debug_ms: 1
 
@@ -156,7 +156,7 @@ ceph:
   fsid: "12345678-1234-1234-1234-123456789012"
 
 ganesha:
-  enabled: true
+  enabled: false
   service_id: "ganesha"
   # type = systemd|cephadm
   type: "systemd"
@@ -238,6 +238,7 @@ specstorage:
   benchmark: "SWBUILD"
   # loadpoints are either a starting value, or a sequence of ints
   loadpoints: [1]
+  loadpoints2: [1, 2, 4, 8, 12, 18, 24, 30, 36, 42, 48, 54, 60]
   # When loadpoints is a starting value, num_runs is how many loadpoints
   # are run, and increment is added to starting loadpoint between runs
   increment: 1
@@ -415,7 +416,7 @@ rbd:
 # Ranges for MDS settings (start, stop, step)
 mds_settings:
 #  max_mds: [1, 2, 1]
-  mds_cache_memory_limit: [128Gi]
+  mds_cache_memory_limit: [64Gi]
 #  mds_cache_memory_limit: [1Gi, 4Gi, 16Gi, 64Gi, 192Gi]
 #  cpus: [1, 2, 3, 4]
 #  mds_max_caps_per_client: [100k, 200k, 100k]
@@ -424,3 +425,7 @@ mds_settings:
 #  mds_cache_trim_threshold: [64Ki, 128Ki, 64Ki]
 ##  mds_cache_reservation: [5, 10, 5]
 ##  mds_log_max_segments: [30, 60, 30]
+  mds_dispatch_engine: [classic, reactor]
+# For vstart / uniform wip mons, use monitor config store instead of ceph.conf:
+#mds:
+#  dispatch_engine_via: ceph-config
