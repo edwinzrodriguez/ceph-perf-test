@@ -660,14 +660,24 @@ class CephFSManager(FSManager):
             options[key] = val
         return options
 
-    def _build_mds_settings_conf(self, options):
-        """Build an MDS-only config that includes the cluster ceph.conf."""
+    def _read_ceph_conf_on_host(self, host):
         cluster_conf = self.config.ceph_conf_path
-        lines = [f"@include {cluster_conf}", "", "[mds]"]
-        for key in sorted(options):
-            lines.append(f"    {key} = {options[key]}")
-        lines.append("")
-        return "\n".join(lines)
+        try:
+            return self.executor.run_remote(
+                host, f"sudo cat {cluster_conf} 2>/dev/null || true"
+            )
+        except Exception:
+            return ""
+
+    def _build_mds_settings_conf(self, cluster_conf_text, options):
+        """Build a standalone MDS config from cluster ceph.conf plus MDS options.
+
+        Ceph's config parser does not support ``@include``, so the cluster
+        ``ceph.conf`` content is merged into the MDS-only file instead.
+        """
+        return CommonUtils.update_ceph_conf_section(
+            cluster_conf_text, "mds", options
+        )
 
     def _mds_daemon_conf_path(self, settings):
         """Primary ``-c`` config path for ceph-mds (may include wip options)."""
@@ -681,12 +691,14 @@ class CephFSManager(FSManager):
         if not options:
             return
         conf_path = self._mds_settings_conf_path()
-        content = self._build_mds_settings_conf(options)
+        cluster_conf = self.config.ceph_conf_path
         for host in self._mds_conf_hosts():
+            cluster_conf_text = self._read_ceph_conf_on_host(host)
+            content = self._build_mds_settings_conf(cluster_conf_text, options)
             self._write_ceph_conf_on_host(host, conf_path, content)
             print(
-                f"[{host}] Wrote {conf_path} (includes "
-                f"{self.config.ceph_conf_path}): "
+                f"[{host}] Wrote {conf_path} (merged from "
+                f"{cluster_conf}): "
                 + ", ".join(f"{k}={v}" for k, v in sorted(options.items()))
             )
 

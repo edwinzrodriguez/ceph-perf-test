@@ -53,7 +53,7 @@ Settings for local `ceph-mds` processes when `fs_manager_type` is `CephFSSystemd
 | `env_vars` | map | `{}` | Environment variables exported when starting `ceph-mds` (merged over defaults `ENABLE_LOCKSTAT` and `CEPH_CONF`) |
 | `mds_yaml_path` | string | `/cephfs_perf/mds.yaml` | Path to MDS cephadm spec file |
 | `conf_settings` | list | `[]` | Additional `mds_settings` keys written to the MDS-only config file instead of `ceph config set mds` |
-| `conf_path` | string | `/etc/ceph/mds-settings.conf` | Path to the MDS-only config file (includes cluster `ceph.conf` via `@include`; not read by mon) |
+| `conf_path` | string | `/etc/ceph/mds-settings.conf` | Path to the MDS-only config file (a copy of cluster `ceph.conf` with MDS overrides merged in; not read by mon) |
 | `dispatch_engine_via` | string | `ceph.conf` | How to apply `mds_dispatch_engine`: `ceph.conf` (default, uses `conf_path`) or `ceph-config`. Use `ceph-config` only when monitors know the option (e.g. vstart / uniform wip builds) |
 
 ---
