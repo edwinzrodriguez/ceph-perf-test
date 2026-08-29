@@ -61,6 +61,16 @@ class CephFSCephadmManager(CephFSManager):
         }
         if settings and "cpus" in settings:
             spec["extra_container_args"].extend(["--cpus", str(settings["cpus"])])
+        mds_conf = self._mds_daemon_conf_path(settings)
+        if mds_conf != self.config.ceph_conf_path:
+            spec["extra_container_args"].extend(
+                [
+                    "-v",
+                    f"{mds_conf}:{mds_conf}:ro",
+                    "-e",
+                    f"CEPH_CONF={mds_conf}",
+                ]
+            )
         if has_sfs:
             spec["extra_container_args"].extend(["-v", "/cephfs_perf:/cephfs_perf"])
         with open("mds.yaml", "w") as f:

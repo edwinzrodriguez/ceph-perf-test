@@ -47,10 +47,10 @@ class CephFSSystemdManager(CephFSManager):
     def _run_dir(self):
         return self._mds_cfg().get("run_dir", "/var/run/ceph")
 
-    def _env_vars(self):
+    def _env_vars(self, settings=None):
         default_env = {
             "ENABLE_LOCKSTAT": "true",
-            "CEPH_CONF": self.config.ceph_conf_path,
+            "CEPH_CONF": self._mds_daemon_conf_path(settings),
         }
         user_env = self._mds_cfg().get("env_vars", {}) or {}
         # Top-level env_vars (CEPH_INSTALL_PREFIX, LD_LIBRARY_PATH, PATH) first,
@@ -150,7 +150,7 @@ class CephFSSystemdManager(CephFSManager):
     def _start_mds_process(self, host_name, mds_id, fs, settings=None):
         """Start a single ceph-mds process on host_name (similar to vstart run())."""
         binary = self._binary_path()
-        conf = self.config.ceph_conf_path
+        conf = self._mds_daemon_conf_path(settings)
         keyring = self._keyring_path(mds_id)
         pid_path = self._pid_path(mds_id)
         log_path = self._log_path(mds_id)
@@ -187,10 +187,10 @@ class CephFSSystemdManager(CephFSManager):
         # Point this MDS at the target filesystem (multi-FS friendly)
         self._run_ceph(
             self.admin,
-            f"-c {conf} config set mds.{mds_id} mds_join_fs {fs} || true",
+            f"-c {self.config.ceph_conf_path} config set mds.{mds_id} mds_join_fs {fs} || true",
         )
 
-        env = self._env_vars()
+        env = self._env_vars(settings)
 
         # Optional CPU pinning via taskset when mds_settings.cpus is set
         cpus = settings.get("cpus") if settings else None

@@ -590,7 +590,7 @@ class CephFSManager(FSManager):
     )
 
     def _mds_conf_settings_keys(self):
-        """Return mds_settings keys applied via ``[mds]`` in ceph.conf."""
+        """Return mds_settings keys written to the MDS-only config file."""
         mds_cfg = self.config.get("mds", {}) or {}
         keys = set(mds_cfg.get("conf_settings") or [])
         if self._mds_dispatch_engine_via_conf():
@@ -598,12 +598,12 @@ class CephFSManager(FSManager):
         return {self._mds_option_key(k) for k in keys}
 
     def _mds_dispatch_engine_via_conf(self):
-        """True when mds_dispatch_engine should be written to ceph.conf.
+        """True when mds_dispatch_engine should use the MDS-only config file.
 
-        Default is ceph.conf because ``ceph config set`` is validated by the
-        monitors, which may run an older cephadm image that does not know wip
-        options even when the host-installed ``ceph`` / ``ceph-mds`` binaries
-        do. Set ``mds.dispatch_engine_via: ceph-config`` when mons support it.
+        Default is a separate conf file because ``ceph config set`` is validated
+        by the monitors (which may not know wip options) and editing the shared
+        ``ceph.conf`` can break mon restarts. Set
+        ``mds.dispatch_engine_via: ceph-config`` when mons support the option.
         """
         mds_cfg = self.config.get("mds", {}) or {}
         via = str(mds_cfg.get("dispatch_engine_via", "ceph.conf")).lower()
@@ -638,12 +638,15 @@ class CephFSManager(FSManager):
         )
         self.executor.run_remote(host, f"sudo chmod 0644 {conf_path}")
 
-    def _apply_mds_conf_file_settings(self, settings):
-        """Write selected mds_settings into ``[mds]`` in ceph.conf."""
+    def _mds_settings_conf_path(self):
+        mds_cfg = self.config.get("mds", {}) or {}
+        return mds_cfg.get("conf_path", "/etc/ceph/mds-settings.conf")
+
+    def _mds_settings_conf_options(self, settings):
+        """Return ``{option: value}`` to place in the MDS-only config file."""
         conf_keys = self._mds_conf_settings_keys()
-        if not conf_keys:
-            return
-        conf_path = self.config.ceph_conf_path
+        if not conf_keys or not settings:
+            return {}
         options = {}
         for k, v in settings.items():
             if k == "cpus":
@@ -655,19 +658,35 @@ class CephFSManager(FSManager):
             if key == "mds_dispatch_engine":
                 val = self._validate_mds_dispatch_engine(val)
             options[key] = val
+        return options
+
+    def _build_mds_settings_conf(self, options):
+        """Build an MDS-only config that includes the cluster ceph.conf."""
+        cluster_conf = self.config.ceph_conf_path
+        lines = [f"@include {cluster_conf}", "", "[mds]"]
+        for key in sorted(options):
+            lines.append(f"    {key} = {options[key]}")
+        lines.append("")
+        return "\n".join(lines)
+
+    def _mds_daemon_conf_path(self, settings):
+        """Primary ``-c`` config path for ceph-mds (may include wip options)."""
+        if self._mds_settings_conf_options(settings):
+            return self._mds_settings_conf_path()
+        return self.config.ceph_conf_path
+
+    def _apply_mds_conf_file_settings(self, settings):
+        """Write MDS-only settings to a separate conf file (not ceph.conf)."""
+        options = self._mds_settings_conf_options(settings)
         if not options:
             return
+        conf_path = self._mds_settings_conf_path()
+        content = self._build_mds_settings_conf(options)
         for host in self._mds_conf_hosts():
-            try:
-                raw = self.executor.run_remote(
-                    host, f"sudo cat {conf_path} 2>/dev/null || true"
-                )
-            except Exception:
-                raw = ""
-            updated = CommonUtils.update_ceph_conf_section(raw, "mds", options)
-            self._write_ceph_conf_on_host(host, conf_path, updated)
+            self._write_ceph_conf_on_host(host, conf_path, content)
             print(
-                f"[{host}] Updated {conf_path} [mds]: "
+                f"[{host}] Wrote {conf_path} (includes "
+                f"{self.config.ceph_conf_path}): "
                 + ", ".join(f"{k}={v}" for k, v in sorted(options.items()))
             )
 
