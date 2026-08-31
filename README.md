@@ -501,7 +501,7 @@ MDS parameters swept across the test matrix. Each key maps to a single value or 
 | `mds_cache_trim_threshold` | string or list | `[64Ki, 128Ki]` | Cache trim threshold |
 | `mds_cache_reservation` | int or list | `[5, 10]` | Cache reservation percentage |
 | `mds_log_max_segments` | int or list | `[30, 60]` | Maximum MDS log segments |
-| `mds_dispatch_engine` | string or list | `[classic, reactor]` | MDS dispatch engine (`classic` or `reactor`). Applied before MDS daemons start via a separate MDS config file (default `/etc/ceph/mds-settings.conf`) that `@include`s the cluster `ceph.conf`, so mons are not affected. Set `mds.dispatch_engine_via: ceph-config` when mons support the option. |
+| `mds_dispatch_engine` | string or list | `[classic, reactor]` | MDS dispatch engine (`classic` or `reactor`). Applied before MDS daemons start via a separate MDS config file (default `/etc/ceph/mds-settings.conf`) that merges the cluster `ceph.conf` with MDS-only overrides, so mons are not affected. Set `mds.dispatch_engine_via: ceph-config` when mons support the option. |
 
 ```yaml
 mds_settings:
