@@ -62,6 +62,18 @@
         mode: '0755'
       become: false
 
+    - name: Create /cephfs_perf directory
+      ansible.builtin.file:
+        path: /cephfs_perf
+        state: directory
+        mode: '0755'
+
+    - name: Copy build-ceph-tentacle.sh to /cephfs_perf
+      ansible.builtin.copy:
+        src: build-ceph-tentacle.sh
+        dest: /cephfs_perf/build-ceph-tentacle.sh
+        mode: '0755'
+
     - name: Check if libbacktrace directory exists
       ansible.builtin.stat:
         path: "{{ git_base_dir }}/libbacktrace"
