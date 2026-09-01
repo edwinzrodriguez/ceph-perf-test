@@ -14,6 +14,7 @@ for i in "$@"; do
     fi
     if [ ! -e ~/git/$i ]; then
         pushd ~/git/ceph-tentacle
+        git fetch
         git worktree add ~/git/$i -b $i origin/$i
         popd
     fi
