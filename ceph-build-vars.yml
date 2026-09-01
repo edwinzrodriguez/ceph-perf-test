@@ -2,7 +2,7 @@
 git_base_dir: "{{ ansible_env.HOME }}/git"
 ceph_repo_url: "https://github.com/edwinzrodriguez/ceph.git"
 ceph_dest_name: "ceph-tentacle"
-ceph_version: "ceph-bench-tentacle"
+ceph_version: "ceph-bench-base"
 ceph_install_prefix: "/usr/local"
 ganesha_repo_url: "https://github.com/edwinzrodriguez/nfs-ganesha.git"
 ganesha_dest_name: "nfs-ganesha"
