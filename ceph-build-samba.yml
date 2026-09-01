@@ -5,6 +5,49 @@
     - ceph-build-vars.yml
   tasks:
 
+    - name: Install Samba build dependencies
+      ansible.builtin.dnf:
+        name:
+          - acl
+          - avahi-devel
+          - bind-utils
+          - cargo
+          - ccache
+          - chrpath
+          - clang-devel
+          - cups-devel
+          - dbus-devel
+          - gnutls-devel
+          - gnutls-utils
+          - gpgme-devel
+          - htop
+          - jansson-devel
+          - krb5-server
+          - krb5-workstation
+          - libarchive-devel
+          - libbsd-devel
+          - libpcap-devel
+          - libtasn1-devel
+          - libtasn1-tools
+          - libunwind-devel
+          - liburing-devel
+          - lsb_release
+          - mingw64-gcc
+          - pam-devel
+          - perl-Parse-Yapp
+          - python3-dns
+          - python3-gpg
+          - python3-iso8601
+          - python3-pyasn1
+          - python3-setproctitle
+          - quota-devel
+          - readline-devel
+          - rpcgen
+          - rpcsvc-proto-devel
+          - tree
+          - wget
+        state: present
+
     - name: Check if Samba source directory exists
       ansible.builtin.stat:
         path: "{{ git_base_dir }}/{{ samba_dest_name }}"
@@ -21,11 +64,7 @@
 
     - name: Configure Samba
       ansible.builtin.command:
-        cmd:
-          - ./configure
-          - --prefix={{ samba_install_prefix }}
-          - --enable-cephfs
-          - --enable-fhs
+        cmd: ./configure --prefix={{ samba_install_prefix }} --enable-cephfs --enable-fhs
         chdir: "{{ git_base_dir }}/{{ samba_dest_name }}"
       become: false
       when: not samba_dir_stat.stat.exists
