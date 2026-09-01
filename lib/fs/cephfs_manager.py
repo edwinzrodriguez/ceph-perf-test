@@ -561,6 +561,9 @@ class CephFSManager(FSManager):
     # Options applied via ceph.conf because they are read at MDS startup and
     # may not exist in the monitor config schema (e.g. wip builds on cephadm).
     _MDS_CONF_ONLY_SETTINGS = frozenset({"mds_dispatch_engine"})
+    _MDS_LOGGING_CONF_SETTINGS = frozenset(
+        {"mds_enable_op_tracker", "mds_op_complaint_time"}
+    )
     _MDS_DISPATCH_ENGINE_VALUES = frozenset({"classic", "reactor"})
 
     # `ceph fs set` only accepts filesystem-map fields. MDS daemon options
@@ -643,7 +646,7 @@ class CephFSManager(FSManager):
         return mds_cfg.get("conf_path", "/etc/ceph/mds-settings.conf")
 
     def _mds_settings_conf_options(self, settings):
-        """Return ``{option: value}`` to place in the MDS-only config file."""
+        """Return ``{option: value}`` from mds_settings for the MDS-only config file."""
         conf_keys = self._mds_conf_settings_keys()
         if not conf_keys or not settings:
             return {}
@@ -658,6 +661,26 @@ class CephFSManager(FSManager):
             if key == "mds_dispatch_engine":
                 val = self._validate_mds_dispatch_engine(val)
             options[key] = val
+        return options
+
+    def _mds_logging_conf_options(self):
+        """Return ``mds.logging`` options written into the MDS-only config file."""
+        logging_cfg = self._mds_logging_cfg()
+        options = {}
+        for key in self._MDS_LOGGING_CONF_SETTINGS:
+            if key not in logging_cfg:
+                continue
+            val = logging_cfg[key]
+            if isinstance(val, bool):
+                options[key] = "true" if val else "false"
+            else:
+                options[key] = CommonUtils.format_si_units(val)
+        return options
+
+    def _merged_mds_conf_options(self, settings):
+        """Merge mds_settings and mds.logging options for the MDS-only config file."""
+        options = dict(self._mds_settings_conf_options(settings or {}))
+        options.update(self._mds_logging_conf_options())
         return options
 
     def _read_ceph_conf_on_host(self, host):
@@ -681,13 +704,13 @@ class CephFSManager(FSManager):
 
     def _mds_daemon_conf_path(self, settings):
         """Primary ``-c`` config path for ceph-mds (may include wip options)."""
-        if self._mds_settings_conf_options(settings):
+        if self._merged_mds_conf_options(settings):
             return self._mds_settings_conf_path()
         return self.config.ceph_conf_path
 
     def _apply_mds_conf_file_settings(self, settings):
         """Write MDS-only settings to a separate conf file (not ceph.conf)."""
-        options = self._mds_settings_conf_options(settings)
+        options = self._merged_mds_conf_options(settings)
         if not options:
             return
         conf_path = self._mds_settings_conf_path()

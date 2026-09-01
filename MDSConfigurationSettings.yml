@@ -149,6 +149,8 @@ mds:
     enabled: false
     debug_mds: 5
     debug_ms: 1
+    mds_enable_op_tracker: true
+    mds_op_complaint_time: 30
 
 ceph:
   conf: "/etc/ceph/ceph.conf"
