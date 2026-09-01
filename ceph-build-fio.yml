@@ -29,7 +29,7 @@
 
     - name: Configure fio
       ansible.builtin.command:
-        cmd:
+        argv:
           - ./configure
           - --prefix={{ fio_install_prefix }}
           - --extra-cflags=-I{{ fio_install_prefix }}/include -L{{ fio_install_prefix }}/lib64
