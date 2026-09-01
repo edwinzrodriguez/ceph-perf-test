@@ -343,6 +343,8 @@
           - python3-pyxattr
         state: present
         update_cache: yes
+        enablerepo: centos-samba424
+        allowerasing: yes
       when: ansible_distribution == 'CentOS'
 
 - hosts: mons
