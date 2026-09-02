@@ -1,5 +1,5 @@
 - name: Build NFS-Ganesha from source
-  hosts: mdss clients ganeshas
+  hosts: all
   become: true
   vars_files:
     - ceph-build-vars.yml

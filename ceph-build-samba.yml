@@ -1,5 +1,5 @@
 - name: Build Samba from source
-  hosts: mdss clients ganeshas
+  hosts: all
   become: true
   vars_files:
     - ceph-build-vars.yml
@@ -31,13 +31,16 @@
           - libtasn1-tools
           - libunwind-devel
           - liburing-devel
+          - lmdb-devel
           - lsb_release
           - mingw64-gcc
+          - openldap-devel
           - pam-devel
           - perl-Parse-Yapp
           - python3-dns
           - python3-gpg
           - python3-iso8601
+          - python3-markdown
           - python3-pyasn1
           - python3-setproctitle
           - quota-devel
