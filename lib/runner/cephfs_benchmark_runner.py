@@ -225,6 +225,7 @@ class BenchRunner:
                     "umask",
                     "client_oc",
                     "syncdataonly",
+                    "client_fsync_to_rados",
                     "async",
                     "zerocopy",
                     "client_oc_size",

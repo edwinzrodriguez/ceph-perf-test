@@ -209,6 +209,9 @@ class GaneshaSystemdManager(GaneshaManager):
         if self.config.ganesha_syncdataonly is not None:
             val = "true" if self.config.ganesha_syncdataonly else "false"
             ceph_options += f"    syncdataonly = {val};\n"
+        if self.config.ganesha_client_fsync_to_rados is not None:
+            val = "true" if self.config.ganesha_client_fsync_to_rados else "false"
+            ceph_options += f"    client_fsync_to_rados = {val};\n"
         if self.config.ganesha_async is not None:
             val = "true" if self.config.ganesha_async else "false"
             ceph_options += f"    async = {val};\n"

@@ -499,6 +499,10 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("syncdataonly")
 
     @property
+    def ganesha_client_fsync_to_rados(self):
+        return self._config.get("ganesha", {}).get("client_fsync_to_rados")
+
+    @property
     def ganesha_async(self):
         return self._config.get("ganesha", {}).get("async")
 
@@ -1013,6 +1017,7 @@ class CommonUtils:
             "Ganesha Umask": "gum",
             "Ganesha Client Object Cache": "goc",
             "Ganesha Sync Data Only": "gsdo",
+            "Ganesha Client Fsync To Rados": "gcftr",
             "Ganesha Async": "gas",
             "Ganesha Zero Copy": "gzc",
             "Ganesha Client Object Cache Size": "gocs",
@@ -1234,6 +1239,7 @@ class CommonUtils:
             "ganesha_umask": "Ganesha Umask",
             "ganesha_client_oc": "Ganesha Client Object Cache",
             "ganesha_syncdataonly": "Ganesha Sync Data Only",
+            "ganesha_client_fsync_to_rados": "Ganesha Client Fsync To Rados",
             "ganesha_async": "Ganesha Async",
             "ganesha_zerocopy": "Ganesha Zero Copy",
             "ganesha_client_oc_size": "Ganesha Client Object Cache Size",
@@ -1280,6 +1286,7 @@ class CommonUtils:
             "ganesha_umask",
             "ganesha_client_oc",
             "ganesha_syncdataonly",
+            "ganesha_client_fsync_to_rados",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_msgr_workers",
@@ -1363,6 +1370,7 @@ class CommonUtils:
             "ganesha_umask",
             "ganesha_client_oc",
             "ganesha_syncdataonly",
+            "ganesha_client_fsync_to_rados",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
@@ -1423,6 +1431,8 @@ class CommonUtils:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(config.ganesha_client_oc)}")
             if config.ganesha_syncdataonly is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Sync Data Only')}{CommonUtils.format_config_value(config.ganesha_syncdataonly)}")
+            if config.ganesha_client_fsync_to_rados is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Fsync To Rados')}{CommonUtils.format_config_value(config.ganesha_client_fsync_to_rados)}")
             if config.ganesha_async is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(config.ganesha_async)}")
             if config.ganesha_zerocopy is not None:
@@ -1445,6 +1455,8 @@ class CommonUtils:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Object Cache')}{CommonUtils.format_config_value(settings['ganesha_client_oc'])}")
             if settings.get("ganesha_syncdataonly") is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Sync Data Only')}{CommonUtils.format_config_value(settings['ganesha_syncdataonly'])}")
+            if settings.get("ganesha_client_fsync_to_rados") is not None:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Client Fsync To Rados')}{CommonUtils.format_config_value(settings['ganesha_client_fsync_to_rados'])}")
             if settings.get("ganesha_async") is not None:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Async')}{CommonUtils.format_config_value(settings['ganesha_async'])}")
             if settings.get("ganesha_zerocopy") is not None:

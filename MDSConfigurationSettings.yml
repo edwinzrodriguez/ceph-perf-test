@@ -147,7 +147,7 @@ mds:
   perf_record_duration: 5
   logging:
     enabled: false
-    debug_mds: 5
+    debug_mds: 1
     debug_ms: 1
     mds_enable_op_tracker: true
     mds_op_complaint_time: 30
@@ -184,6 +184,7 @@ ganesha:
   client_oc: [false, true]
   syncdataonly: [false, true]
   async: [false, true]
+#  client_fsync_to_rados: [ true, false ]
   zerocopy: false
   client_oc_size: [ "16GiB" ]
   msgr_workers: [3, 8, 12]

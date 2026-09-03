@@ -54,6 +54,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             "ganesha_umask",
             "ganesha_client_oc",
             "ganesha_syncdataonly",
+            "ganesha_client_fsync_to_rados",
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_client_oc_size",

@@ -102,6 +102,7 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 | `client_oc` | bool or list | | Enable/disable client object cache |
 | `client_oc_size` | string or list | | Object cache size (e.g., `16GiB`, `1GiB`) |
 | `syncdataonly` | bool or list | | Enable/disable CEPH FSAL `syncdataonly` |
+| `client_fsync_to_rados` | bool or list | | Enable/disable CEPH FSAL `client_fsync_to_rados` |
 | `async` | bool or list | | Enable async FSAL operations |
 | `zerocopy` | bool or list | | Enable zero-copy I/O |
 | `umask` | int | | File creation umask |
