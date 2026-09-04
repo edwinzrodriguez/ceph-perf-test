@@ -451,3 +451,18 @@ class GaneshaCephadmManager(GaneshaManager):
                 f"{u}@{h}:{ypath}",
             ]
         )
+
+    def _stage_client_log(self, host_name):
+        container_log = self.client_log_path(host_name)
+        staged = f"/tmp/ganesha-ceph-client-{host_name}.log"
+        script = (
+            f"container=$(podman ps --format '{{{{.Names}}}}' | grep -E 'ganesha.*{host_name}|ganesha-{host_name}' | head -n 1); "
+            f"if [ -z \"$container\" ]; then echo MISSING; exit 0; fi; "
+            f"podman cp \"$container:{container_log}\" {staged} && "
+            f"podman exec \"$container\" truncate -s 0 {container_log} && "
+            f"echo {staged}"
+        )
+        result = self.executor.run_remote(host_name, script).strip()
+        if not result or result == "MISSING" or "Error" in result:
+            return None
+        return result.splitlines()[-1].strip()

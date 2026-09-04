@@ -190,3 +190,48 @@ class GaneshaManager(abc.ABC):
             print(f"[{host_name}] Failed to parse lockstat JSON: {e}")
             print(f"[{host_name}] lockstat dump output: {repr(output)}")
             return {"raw": output, "parse_error": str(e)}
+
+    def should_collect_client_logs(self):
+        ganesha_cfg = self.config.get("ganesha", {}) or {}
+        return (
+            "client_log_level" in ganesha_cfg
+            or "finisher_log_level" in ganesha_cfg
+        )
+
+    def client_log_path(self, host_name):
+        if self.config.get("ganesha", {}).get("type", "cephadm") == "systemd":
+            return (
+                f"/var/log/ceph/ganesha-ceph-{self.config.ganesha_user_id}.log"
+            )
+        return "/var/log/ganesha-ceph.log"
+
+    def _stage_client_log(self, host_name):
+        return self.client_log_path(host_name)
+
+    def collect_ganesha_client_logs(self, loadpoint, results_dir):
+        if not results_dir or not self.should_collect_client_logs():
+            return
+        lp_tag = f"{int(loadpoint):02d}"
+        for host_name in self.ganeshas:
+            src_log = self._stage_client_log(host_name)
+            if not src_log:
+                print(
+                    f"[{host_name}] Warning: Could not locate Ganesha Ceph client log; skipping"
+                )
+                continue
+            check = self.executor.run_remote(
+                host_name,
+                f"test -f {src_log} && echo EXISTS || echo MISSING",
+            ).strip()
+            if "EXISTS" not in check:
+                print(
+                    f"[{host_name}] Warning: Ganesha Ceph client log {src_log} not found; skipping"
+                )
+                continue
+            dest_log = f"ganesha_ceph_client_{host_name}_lp{lp_tag}.log"
+            print(
+                f"[{host_name}] Collecting Ganesha Ceph client log to {results_dir}/{dest_log}..."
+            )
+            self.fs_manager._copy_log_to_results(
+                host_name, src_log, dest_log, results_dir
+            )

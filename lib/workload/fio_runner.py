@@ -309,6 +309,13 @@ class FioWorkloadRunner(WorkloadRunner):
                             )
                             print(f"[{client}] Injecting lockstat results into {results_path}...")
                             self.executor.run_remote(self.admin, inject_cmd)
+                if ganesha_manager and ganesha_manager.should_collect_client_logs():
+                    print(
+                        f"Collecting Ganesha Ceph client logs for Load Point {current_lp}..."
+                    )
+                    ganesha_manager.collect_ganesha_client_logs(
+                        current_lp, results_dir
+                    )
 
         process.wait()
         for t in perf_threads:

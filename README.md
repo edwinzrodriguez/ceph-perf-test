@@ -121,7 +121,8 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `log_level` | string | | When set, writes a `LOG {}` block to `ganesha.conf` with per-component levels. NFS_V4 and FSAL are set to this level; other components use fixed levels (DEBUG for DISPATCH/SESSIONS/CLIENTID/STATE, INFO/EVENT for noisy subsystems). Disables the `-F -L STDOUT -N` command-line flags. Example values: `NIV_DEBUG`, `NIV_INFO`, `NIV_EVENT`. |
-| `client_log_level` | int | `1` | Ceph client `debug_client` level written to the per-host `ceph.conf` |
+| `client_log_level` | int | `1` | Ceph client `debug_client` level written to the per-host `ceph.conf`. When this key or `finisher_log_level` is set, the client log file is collected to the results directory at the end of each load point. |
+| `finisher_log_level` | int | | Ceph client `debug_finisher` level written to the per-host `ceph.conf`. When this key or `client_log_level` is set, the client log file is collected to the results directory at the end of each load point. |
 
 #### Environment Variables
 

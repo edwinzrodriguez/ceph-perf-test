@@ -174,6 +174,11 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                             self.save_json_to_results(
                                 f"{g_host}_lp{lp_tag}_ganesha_perf.json", dump, r_dir
                             )
+                if ganesha_manager and ganesha_manager.should_collect_client_logs():
+                    print(
+                        f"Collecting Ganesha Ceph client logs for Load Point {current_lp}..."
+                    )
+                    ganesha_manager.collect_ganesha_client_logs(current_lp, r_dir)
             if run_phase_started:
                 if mds_perf_record_enabled and not perf_triggered:
                     if "Run " in line and " percent complete" in line:
