@@ -25,6 +25,7 @@ class RbdWorkloadRunner(WorkloadRunner):
         cephfs_manager=None,
         ganesha_manager=None,
         results_dir=None,
+        mount_manager=None,
     ):
         cfg = self.config.rbd
         loadpoints = cfg.get("loadpoints", [])

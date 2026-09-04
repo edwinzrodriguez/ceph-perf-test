@@ -15,6 +15,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         cephfs_manager=None,
         ganesha_manager=None,
         results_dir=None,
+        mount_manager=None,
     ):
         cfg = self.config.cephfs_tool
         loadpoints = cfg.get("loadpoints", [])

@@ -18,6 +18,7 @@ class WorkloadRunner(abc.ABC):
         cephfs_manager=None,
         ganesha_manager=None,
         results_dir=None,
+        mount_manager=None,
     ):
         pass
 
