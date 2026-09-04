@@ -9,6 +9,16 @@ class MountManager(abc.ABC):
         self.clients = config.clients
         self.fs_names = fs_manager.get_fs_names()
 
+    def _mounts_per_fs(self):
+        if self.config.fio:
+            return self.config.fio.get("mounts_per_fs", 1)
+        return self.config.get("specstorage", {}).get("mounts_per_fs", 1)
+
+    def remount_clients(self):
+        """Unmount all test mounts, then mount again (clears client caches)."""
+        self.unmount_clients()
+        self.mount()
+
     def unmount_clients(self):
         for c in self.clients:
             mnts = (

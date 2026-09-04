@@ -40,7 +40,7 @@ class MountKernelManager(MountManager):
             raise RuntimeError(
                 f"Empty key from `ceph auth get-key client.0` on {admin_host}"
             )
-        mpfs = self.config.get("specstorage", {}).get("mounts_per_fs", 1)
+        mpfs = self._mounts_per_fs()
         for fs in self.fs_names:
             for c in self.clients:
                 for i in range(mpfs):

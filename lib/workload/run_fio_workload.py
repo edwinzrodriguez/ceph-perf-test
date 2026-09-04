@@ -64,6 +64,12 @@ def main():
         "--loadpoints", help="JSON string containing loadpoints configuration or path to JSON file (prefix with @)"
     )
     parser.add_argument("--runner-name", help="Name of the workload runner")
+    parser.add_argument(
+        "--first-loadpoint",
+        type=int,
+        default=1,
+        help="Number assigned to the first loadpoint in --loadpoints (default: 1)",
+    )
 
     args = parser.parse_args()
 
@@ -106,7 +112,7 @@ def main():
     workload_configs = loadpoints
 
     for idx, config in enumerate(workload_configs):
-        loadpoint = idx + 1
+        loadpoint = args.first_loadpoint + idx
         print(f"Starting Fio Load Point: {loadpoint}", flush=True)
 
         # Signal that a new load point is starting for external monitoring

@@ -264,6 +264,9 @@ fio:
   flamegraph_path: "/cephfs_perf/FlameGraph"
 #  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
   mounts_per_fs: 1
+  # Remount test directories on each client before every loadpoint and unmount
+  # after it completes, to clear client-side caches between runs.
+  remount_per_loadpoint: true
   gtod_reduce: 1
   ramp_time: 30
   loadpoints:

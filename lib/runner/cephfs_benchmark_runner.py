@@ -292,7 +292,12 @@ class BenchRunner:
             if samba_manager is not None:
                 samba_manager.provision_samba(results_dir=results_dir)
 
-            mount_manager.mount()
+            skip_initial_mount = (
+                hasattr(workload_runner, "remount_per_loadpoint_enabled")
+                and workload_runner.remount_per_loadpoint_enabled()
+            )
+            if not skip_initial_mount:
+                mount_manager.mount()
 
             workload_runner.prepare_storage()
 
@@ -312,6 +317,7 @@ class BenchRunner:
                     cephfs_manager=cephfs_manager,
                     ganesha_manager=ganesha_manager,
                     results_dir=results_dir,
+                    mount_manager=mount_manager,
                 )
             except Exception as e:
                 print(f"Workload execution failed: {e}")

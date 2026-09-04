@@ -7,7 +7,7 @@ class MountNfsManager(MountManager):
 
     def mount(self):
         gs = self.config.ganeshas
-        mpfs = self.config.get("specstorage", {}).get("mounts_per_fs", 1)
+        mpfs = self._mounts_per_fs()
         nfs_opts = self.config.get("mount_nfs", {}).get("mount_options", "nfsvers=4.1,proto=tcp")
         for fs in self.fs_names:
             for idx, c in enumerate(self.clients):

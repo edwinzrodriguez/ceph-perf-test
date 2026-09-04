@@ -5,11 +5,6 @@ class MountSmbManager(MountManager):
     def __init__(self, executor, config, fs_manager):
         super().__init__(executor, config, fs_manager)
 
-    def _mounts_per_fs(self):
-        if self.config.fio:
-            return self.config.fio.get("mounts_per_fs", 1)
-        return self.config.get("specstorage", {}).get("mounts_per_fs", 1)
-
     def _server_ip(self, host_name):
         return (
             self.config.all_hosts_meta.get(host_name, {}).get("private_ip")

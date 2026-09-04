@@ -9,6 +9,9 @@ from cephfs_perf_lib import CommonUtils
 
 
 class FioWorkloadRunner(WorkloadRunner):
+    def remount_per_loadpoint_enabled(self):
+        return bool(self.config.get("fio", {}).get("remount_per_loadpoint", False))
+
     def run_workload(
         self,
         settings,
@@ -16,9 +19,15 @@ class FioWorkloadRunner(WorkloadRunner):
         cephfs_manager=None,
         ganesha_manager=None,
         results_dir=None,
+        mount_manager=None,
     ):
         fio_cfg = self.config.fio
         run_cmd = fio_cfg.get("run_command", "/cephfs_perf/fio/run_fio_workload.py")
+        remount_per_lp = self.remount_per_loadpoint_enabled()
+        if remount_per_lp and mount_manager is None:
+            raise RuntimeError(
+                "fio.remount_per_loadpoint is enabled but no mount manager was provided"
+            )
         # MDS-side perf record gate lives on the FS manager (reads mds.perf_record).
         # fio.perf_record is no longer consulted for the MDS-target call.
         mds_perf_record_enabled = bool(
@@ -94,39 +103,93 @@ class FioWorkloadRunner(WorkloadRunner):
             loadpoints = [loadpoints]
         expanded_loadpoints = CommonUtils.expand_loadpoints(loadpoints)
 
+        if remount_per_lp:
+            batches = [
+                (lp_idx + 1, [lp_cfg])
+                for lp_idx, lp_cfg in enumerate(expanded_loadpoints)
+            ]
+        else:
+            batches = [(1, expanded_loadpoints)]
+
+        all_output = []
+        for first_loadpoint, batch_loadpoints in batches:
+            if remount_per_lp:
+                print(
+                    f"Remounting clients before Fio Load Point {first_loadpoint} "
+                    "(clearing client caches)..."
+                )
+                mount_manager.remount_clients()
+
+            batch_output = self._run_fio_batch(
+                run_cmd=run_cmd,
+                payload=payload,
+                mount_points=mount_points,
+                batch_loadpoints=batch_loadpoints,
+                first_loadpoint=first_loadpoint,
+                expanded_loadpoints=expanded_loadpoints,
+                mds_perf_record_enabled=mds_perf_record_enabled,
+                cephfs_manager=cephfs_manager,
+                ganesha_manager=ganesha_manager,
+                results_dir=results_dir,
+                settings=settings,
+            )
+            all_output.append(batch_output)
+
+            if remount_per_lp:
+                print(
+                    f"Unmounting clients after Fio Load Point {first_loadpoint}..."
+                )
+                mount_manager.unmount_clients()
+
+        return "".join(all_output)
+
+    def _run_fio_batch(
+        self,
+        run_cmd,
+        payload,
+        mount_points,
+        batch_loadpoints,
+        first_loadpoint,
+        expanded_loadpoints,
+        mds_perf_record_enabled,
+        cephfs_manager,
+        ganesha_manager,
+        results_dir,
+        settings,
+    ):
         settings_json = json.dumps(payload)
         mount_points_json = json.dumps(mount_points)
         clients_json = json.dumps(self.config.clients)
-        loadpoints_json = json.dumps(expanded_loadpoints)
+        loadpoints_json = json.dumps(batch_loadpoints)
 
         print(f"Running Fio Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
-        
+
         # To avoid "Argument list too long" errors when loadpoints JSON is very large,
         # we write JSON data to temporary files and pass file paths with @ prefix
-        
+
         # Create temporary file paths on remote host
-        tmp_settings = f"/tmp/fio_settings_{os.getpid()}.json"
-        tmp_mount_points = f"/tmp/fio_mount_points_{os.getpid()}.json"
-        tmp_clients = f"/tmp/fio_clients_{os.getpid()}.json"
-        tmp_loadpoints = f"/tmp/fio_loadpoints_{os.getpid()}.json"
-        
+        tmp_settings = f"/tmp/fio_settings_{os.getpid()}_{first_loadpoint}.json"
+        tmp_mount_points = f"/tmp/fio_mount_points_{os.getpid()}_{first_loadpoint}.json"
+        tmp_clients = f"/tmp/fio_clients_{os.getpid()}_{first_loadpoint}.json"
+        tmp_loadpoints = f"/tmp/fio_loadpoints_{os.getpid()}_{first_loadpoint}.json"
+
         # Write JSON files to remote host using base64 encoding to avoid shell escaping issues
         settings_b64 = base64.b64encode(settings_json.encode()).decode()
         mount_points_b64 = base64.b64encode(mount_points_json.encode()).decode()
         clients_b64 = base64.b64encode(clients_json.encode()).decode()
         loadpoints_b64 = base64.b64encode(loadpoints_json.encode()).decode()
-        
+
         setup_cmd = (
             f"echo '{settings_b64}' | base64 -d > {tmp_settings} && "
             f"echo '{mount_points_b64}' | base64 -d > {tmp_mount_points} && "
             f"echo '{clients_b64}' | base64 -d > {tmp_clients} && "
             f"echo '{loadpoints_b64}' | base64 -d > {tmp_loadpoints}"
         )
-        
+
         # Execute setup command to create temp files
         self.executor.run_remote(self.admin, setup_cmd)
-        
+
         # Now run the workload with file paths (@ prefix tells script to read from file)
         full_cmd = (
             f"python3 {run_cmd} "
@@ -134,10 +197,11 @@ class FioWorkloadRunner(WorkloadRunner):
             f"--mount-points '@{tmp_mount_points}' "
             f"--clients '@{tmp_clients}' "
             f"--loadpoints '@{tmp_loadpoints}' "
+            f"--first-loadpoint {first_loadpoint} "
             f"--runner-name '{self.get_name()}'; "
             f"rm -f {tmp_settings} {tmp_mount_points} {tmp_clients} {tmp_loadpoints}"
         )
-        
+
         print(f"[{self.admin}] Executing workload with temp files...")
         ssh_cmd = [
             "ssh",
@@ -149,10 +213,7 @@ class FioWorkloadRunner(WorkloadRunner):
             "bash -s",
         ]
 
-        processes = []
-        ganeshas = self.config.ganeshas
-
-        current_lp, run_phase_started = 0, False
+        current_lp, run_phase_started = first_loadpoint - 1, False
         perf_triggered, logging_triggered = False, False
         ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
         perf_threads = []

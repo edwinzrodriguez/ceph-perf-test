@@ -52,7 +52,7 @@ class MountFuseManager(MountManager):
         extra_opts = (fuse_cfg.get("mount_options") or "").strip()
         env_vars = self._fuse_env()
 
-        mpfs = self.config.get("specstorage", {}).get("mounts_per_fs", 1)
+        mpfs = self._mounts_per_fs()
         for fs in self.fs_names:
             for c in self.clients:
                 for i in range(mpfs):
