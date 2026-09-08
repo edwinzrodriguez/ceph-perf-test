@@ -74,10 +74,25 @@ def main():
         cmd.extend(["--results-dir", results_dir])
 
     print(f"Executing: {' '.join(cmd)}")
-    result = subprocess.run(cmd)
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    run_phase_started = False
+    for line in process.stdout:
+        if "Starting RUN phase" in line:
+            run_phase_started = True
+        elif not run_phase_started and "Run " in line and " percent complete" in line:
+            print("Starting RUN phase", flush=True)
+            run_phase_started = True
+        print(line, end="", flush=True)
+    result = process.wait()
 
-    if result.returncode != 0:
-        print(f"SPECSTORAGE failed with return code {result.returncode}")
+    if result != 0:
+        print(f"SPECSTORAGE failed with return code {result}")
         # For SFS2020, we don't necessarily have a list of clients in the same format
         # but we might have them in the config. For now, let's at least collect from localhost
         # and any hosts mentioned in settings if available.
@@ -97,7 +112,7 @@ def main():
                 return result.stdout
 
         CommonUtils.collect_journal_logs(SimpleExecutor(), hosts, results_dir)
-        sys.exit(result.returncode)
+        sys.exit(result)
 
     if results_dir:
         # Inject test parameters into sfssum_<run_name>.xml

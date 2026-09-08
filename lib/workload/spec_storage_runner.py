@@ -94,6 +94,43 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         perf_triggered, ganesha_perf_triggered, logging_triggered = False, False, False
         ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
         perf_threads = []
+
+        def on_run_phase_start(fallback=False):
+            nonlocal run_phase_started, logging_triggered
+            if run_phase_started:
+                return
+            run_phase_started = True
+            if fallback:
+                print(
+                    f"Detected RUN phase start from run progress "
+                    f"(Prime did not log 'Starting RUN phase') "
+                    f"for Load Point {current_lp}..."
+                )
+            if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
+                print(f"Resetting MDS lockstat for Load Point {current_lp}...")
+                cephfs_manager.reset_lockstat()
+            if cephfs_manager:
+                print(f"Resetting MDS perf counters for Load Point {current_lp}...")
+                cephfs_manager.reset_perf_counters()
+            if (
+                cephfs_manager
+                and cephfs_manager.is_mds_logging_enabled()
+                and not logging_triggered
+            ):
+                print(f"Triggering MDS logging for Load Point {current_lp}...")
+                cephfs_manager.start_fs_logging(current_lp)
+                logging_triggered = True
+            if ganesha_perf_enabled:
+                print(
+                    f"Resetting Ganesha perf counters for Load Point {current_lp}..."
+                )
+                for g_host in self.config.ganeshas:
+                    ganesha_manager.reset_ganesha_perf(g_host)
+                    if self.config.get("ganesha", {}).get("lockstat", {}).get(
+                        "enabled", False
+                    ):
+                        ganesha_manager.reset_lockstat(g_host)
+
         process = subprocess.Popen(
             ssh_cmd,
             stdout=subprocess.PIPE,
@@ -115,31 +152,13 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                 ) = (False, False, False, False)
                 print(f"Detected Starting tests... Load Point: {current_lp}")
             if "Starting RUN phase" in line:
-                run_phase_started = True
-                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                    print(f"Resetting MDS lockstat for Load Point {current_lp}...")
-                    cephfs_manager.reset_lockstat()
-                if cephfs_manager:
-                    print(
-                        f"Resetting MDS perf counters for Load Point {current_lp}..."
-                    )
-                    cephfs_manager.reset_perf_counters()
-                if (
-                    cephfs_manager
-                    and cephfs_manager.is_mds_logging_enabled()
-                    and not logging_triggered
-                ):
-                    print(f"Triggering MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.start_fs_logging(current_lp)
-                    logging_triggered = True
-                if ganesha_perf_enabled:
-                    print(
-                        f"Resetting Ganesha perf counters for Load Point {current_lp}..."
-                    )
-                    for g_host in self.config.ganeshas:
-                        ganesha_manager.reset_ganesha_perf(g_host)
-                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
-                            ganesha_manager.reset_lockstat(g_host)
+                on_run_phase_start()
+            elif (
+                not run_phase_started
+                and "Run " in line
+                and " percent complete" in line
+            ):
+                on_run_phase_start(fallback=True)
             if "Tests finished" in line:
                 r_dir = payload.get("results_dir")
                 if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
