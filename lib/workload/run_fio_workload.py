@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import argparse
+import re
 import subprocess
 import datetime
 import os
@@ -19,6 +20,78 @@ from cephfs_perf_lib import CommonUtils
 
 def snake_to_pascal(snake_str):
     return "".join(x.capitalize() for x in snake_str.split("_"))
+
+
+FIO_STATUS_RE = re.compile(
+    r"Jobs: \d+ \(f=\d+\): \[.*?\]\[(?P<percent>[\d\.-]+)%\](?:\[.*\])?\[eta (?P<eta>.*)\]"
+)
+
+
+def build_fio_command(
+    c,
+    mp,
+    loadpoint,
+    lp_cfg,
+    settings,
+    fio_bin,
+    base_env_vars,
+    results_dir,
+):
+    fio_parts = []
+    if base_env_vars:
+        fio_parts.append(
+            "".join(f'export {k}="{v}"; ' for k, v in base_env_vars.items())
+        )
+    fio_parts.append(fio_bin)
+    fio_parts.append(f"--name=lp{loadpoint:02d}_{c}")
+    fio_parts.append(f"--directory={mp}")
+
+    if "size" in lp_cfg:
+        fio_parts.append(f"--size={lp_cfg['size']}")
+    if "block-size" in lp_cfg:
+        fio_parts.append(f"--bs={lp_cfg['block-size']}")
+    if "iodepth" in lp_cfg:
+        fio_parts.append(f"--iodepth={lp_cfg['iodepth']}")
+    if "readwrite" in lp_cfg:
+        fio_parts.append(f"--rw={lp_cfg['readwrite']}")
+    if "ioengine" in lp_cfg:
+        fio_parts.append(f"--ioengine={lp_cfg['ioengine']}")
+    if "direct" in lp_cfg:
+        fio_parts.append(f"--direct={lp_cfg['direct']}")
+    if "buffered" in lp_cfg:
+        fio_parts.append(f"--buffered={lp_cfg['buffered']}")
+    if "rwmixread" in lp_cfg:
+        fio_parts.append(f"--rwmixread={lp_cfg['rwmixread']}")
+    if "create_serialize" in lp_cfg:
+        fio_parts.append(f"--create_serialize={lp_cfg['create_serialize']}")
+    if "threads" in lp_cfg:
+        fio_parts.append(f"--numjobs={lp_cfg['threads']}")
+    if lp_cfg.get("threads_fio") is True or settings.get("threads_fio") is True:
+        fio_parts.append("--thread")
+
+    duration = lp_cfg.get("duration", settings.get("duration", 0))
+    if duration:
+        fio_parts.append("--time_based=1")
+        fio_parts.append(f"--runtime={duration}")
+
+    for key in ["gtod_reduce", "ramp_time", "randrepeat"]:
+        if key in lp_cfg:
+            fio_parts.append(f"--{key}={lp_cfg[key]}")
+        elif key in settings:
+            fio_parts.append(f"--{key}={settings[key]}")
+
+    if "extra_args" in lp_cfg and lp_cfg["extra_args"]:
+        fio_parts.append(lp_cfg["extra_args"])
+
+    filename = (
+        f"{CommonUtils.get_workload_base_name('fio', 'result', c, loadpoint, settings, lp_cfg)}.json"
+    )
+    remote_path = f"{results_dir}/{filename}"
+    cmd = " ".join(fio_parts)
+    cmd += (
+        f" --group_reporting --output-format=json+ --output={remote_path} --eta=always"
+    )
+    return cmd, filename, remote_path
 
 
 def format_si_units(value):
@@ -120,84 +193,26 @@ def main():
 
         loadpoint_results = []
         for c in clients:
-            # Ensure results directory exists on each client
             subprocess.run(
                 ["ssh", "-o", "StrictHostKeyChecking=no", c, f"mkdir -p {results_dir}"]
             )
 
+        processes = []
+        for c in clients:
             for mp in mount_points:
-                variables = {
-                    "mount_point": mp,
-                    "client": c,
-                    "results_dir": results_dir,
-                    "fs_name": fs_name,
-                }
-
-                # Construct fio command from loadpoint configuration
-                lp_cfg = config
-                # fio command basic options
-                fio_parts = []
-                if base_env_vars:
-                    fio_parts.append(
-                        "".join(f'export {k}="{v}"; ' for k, v in base_env_vars.items())
-                    )
-                fio_parts.append(fio_bin)
-                fio_parts.append(f"--name=lp{loadpoint:02d}_{c}")
-                fio_parts.append(f"--directory={mp}")
-
-                # Map parameters
-                if "size" in lp_cfg:
-                    fio_parts.append(f"--size={lp_cfg['size']}")
-                if "block-size" in lp_cfg:
-                    fio_parts.append(f"--bs={lp_cfg['block-size']}")
-                if "iodepth" in lp_cfg:
-                    fio_parts.append(f"--iodepth={lp_cfg['iodepth']}")
-                if "readwrite" in lp_cfg:
-                    fio_parts.append(f"--rw={lp_cfg['readwrite']}")
-                if "ioengine" in lp_cfg:
-                    fio_parts.append(f"--ioengine={lp_cfg['ioengine']}")
-                if "direct" in lp_cfg:
-                    fio_parts.append(f"--direct={lp_cfg['direct']}")
-                if "buffered" in lp_cfg:
-                    fio_parts.append(f"--buffered={lp_cfg['buffered']}")
-                if "rwmixread" in lp_cfg:
-                    fio_parts.append(f"--rwmixread={lp_cfg['rwmixread']}")
-                if "create_serialize" in lp_cfg:
-                    fio_parts.append(f"--create_serialize={lp_cfg['create_serialize']}")
-                if "threads" in lp_cfg:
-                    fio_parts.append(f"--numjobs={lp_cfg['threads']}")
-                if lp_cfg.get("threads_fio") is True or settings.get("threads_fio") is True:
-                    fio_parts.append("--thread")
-
-                # Duration to runtime mapping
-                # First check loadpoint duration, then global settings
-                duration = lp_cfg.get("duration", settings.get("duration", 0))
-                if duration:
-                    fio_parts.append(f"--time_based=1")
-                    fio_parts.append(f"--runtime={duration}")
-
-                # Other common settings from loadpoint or global settings
-                for key in ["gtod_reduce", "ramp_time", "randrepeat"]:
-                    if key in lp_cfg:
-                        fio_parts.append(f"--{key}={lp_cfg[key]}")
-                    elif key in settings:
-                        fio_parts.append(f"--{key}={settings[key]}")
-
-                if "extra_args" in lp_cfg and lp_cfg["extra_args"]:
-                    fio_parts.append(lp_cfg["extra_args"])
-
-                cmd = " ".join(fio_parts)
-                filename = f"{CommonUtils.get_workload_base_name('fio', 'result', c, loadpoint, settings, lp_cfg)}.json"
-
-                remote_path = f"{results_dir}/{filename}"
-                cmd += f" --group_reporting --output-format=json+ --output={remote_path} --eta=always"
-
+                cmd, filename, remote_path = build_fio_command(
+                    c,
+                    mp,
+                    loadpoint,
+                    config,
+                    settings,
+                    fio_bin,
+                    base_env_vars,
+                    results_dir,
+                )
                 print(f"[{c}] Executing Fio: {cmd}", flush=True)
-
-                # Use Popen to read output in real-time
-                # Pass command via stdin to avoid "Argument list too long" errors
                 ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", c, "bash -s"]
-                process = subprocess.Popen(
+                proc = subprocess.Popen(
                     ssh_cmd,
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
@@ -205,118 +220,124 @@ def main():
                     text=True,
                     bufsize=1,
                 )
-                # Send the command to stdin and close it
-                process.stdin.write(cmd + "\n")
-                process.stdin.close()
+                proc.stdin.write(cmd + "\n")
+                proc.stdin.close()
+                processes.append((c, filename, remote_path, proc))
 
-                import re
+        run_phase_started = False
+        run_phase_lock = threading.Lock()
 
-                # Regex for Jobs: 8 (f=8): [w(8)][18.8%][w=454MiB/s][w=1858 IOPS][eta 02m:27s]
-                # During ramp: Jobs: 8 (f=0): [/(8)][-.-%][eta 02m:57s]
-                # Note: Fio can sometimes report negative percentages during certain phases or if clocks are skewed.
-                # We use a non-greedy match for the first bracketed group to correctly find the percentage.
-                status_re = re.compile(
-                    r"Jobs: \d+ \(f=\d+\): \[.*?\]\[(?P<percent>[\d\.-]+)%\](?:\[.*\])?\[eta (?P<eta>.*)\]"
-                )
+        def monitor_fio_output(client_name, proc):
+            nonlocal run_phase_started
+            last_status_time = 0.0
+            for line in proc.stdout:
+                line = line.strip()
+                if line.startswith("Jobs:"):
+                    match = FIO_STATUS_RE.search(line)
+                    if match:
+                        percent = match.group("percent")
+                        eta = match.group("eta")
 
-                run_phase_started = False
-                last_status_time = 0.0
-                for line in process.stdout:
-                    line = line.strip()
-                    if line.startswith("Jobs:"):
-                        # print(f"[{c}] Fio Status: {line}", flush=True)
-                        match = status_re.search(line)
-                        if match:
-                            percent = match.group("percent")
-                            eta = match.group("eta")
+                        try:
+                            f_percent = float(percent)
+                            if f_percent < 0:
+                                percent = "0.0"
+                        except ValueError:
+                            pass
 
-                            # Fio can sometimes report very large negative percentages if it gets confused
-                            # about the timing (e.g. during ramp-down or if clocks are slightly out of sync).
-                            # If we see a large negative number, treat it as 0.0 or just skip reporting it
-                            # to avoid confusing the user.
-                            try:
-                                f_percent = float(percent)
-                                if f_percent < 0:
-                                    percent = "0.0"
-                            except ValueError:
-                                # This handles "-.-" case
-                                pass
+                        if percent != "-.-":
+                            with run_phase_lock:
+                                if not run_phase_started:
+                                    print("Starting RUN phase", flush=True)
+                                    run_phase_started = True
 
-                            if not run_phase_started and percent != "-.-":
-                                print("Starting RUN phase", flush=True)
-                                run_phase_started = True
-
-                            # Report percentage and status back to caller, at most once per second
-                            now = time.monotonic()
-                            if now - last_status_time >= 1.0:
-                                last_status_time = now
-                                ts_prefix = ""
-                                if timestamp_progress:
-                                    ts_prefix = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+0000") + " "
-                                print(
-                                    f"{ts_prefix}[{c}] Fio Status: {percent}% complete, ETA: {eta}",
-                                    flush=True,
+                        now = time.monotonic()
+                        if now - last_status_time >= 1.0:
+                            last_status_time = now
+                            ts_prefix = ""
+                            if timestamp_progress:
+                                ts_prefix = (
+                                    datetime.datetime.now(
+                                        datetime.timezone.utc
+                                    ).strftime("%Y-%m-%dT%H:%M:%S.%f+0000")
+                                    + " "
                                 )
-                    else:
-                        # Print other output as is
-                        print(f"[{c}] {line}", flush=True)
-
-                process.wait()
-
-                if process.returncode != 0:
-                    print(
-                        f"[{c}] Fio failed with return code {process.returncode}",
-                        flush=True,
-                    )
-                    # Use a dummy executor for log collection
-                    class SimpleExecutor:
-                        def run_remote(self, host, cmd, check=False):
-                            # Pass command via stdin to avoid "Argument list too long" errors
-                            result = subprocess.run(
-                                ["ssh", "-o", "StrictHostKeyChecking=no", host, "bash -s"],
-                                input=cmd + "\n",
-                                capture_output=True,
-                                text=True
+                            print(
+                                f"{ts_prefix}[{client_name}] Fio Status: {percent}% complete, ETA: {eta}",
+                                flush=True,
                             )
-                            return result.stdout
+                elif line:
+                    print(f"[{client_name}] {line}", flush=True)
 
-                    CommonUtils.collect_journal_logs(SimpleExecutor(), clients, results_dir)
-                    sys.exit(process.returncode)
+        monitor_threads = []
+        for c, _filename, _remote_path, process in processes:
+            t = threading.Thread(target=monitor_fio_output, args=(c, process))
+            t.start()
+            monitor_threads.append(t)
 
-                # Copy results from client to admin (where this script is running)
-                print(f"[{c}] Copying results to {results_dir}...", flush=True)
-                local_path = f"{results_dir}/{filename}"
-                subprocess.run(
-                    [
-                        "scp",
-                        "-o",
-                        "StrictHostKeyChecking=no",
-                        f"{c}:{remote_path}",
-                        local_path,
-                    ]
+        failed_client = None
+        failed_returncode = 0
+        for c, _filename, _remote_path, process in processes:
+            process.wait()
+            if process.returncode != 0 and failed_client is None:
+                failed_client = c
+                failed_returncode = process.returncode
+
+        for t in monitor_threads:
+            t.join()
+
+        if failed_client is not None:
+            print(
+                f"[{failed_client}] Fio failed with return code {failed_returncode}",
+                flush=True,
+            )
+
+            class SimpleExecutor:
+                def run_remote(self, host, cmd, check=False):
+                    result = subprocess.run(
+                        ["ssh", "-o", "StrictHostKeyChecking=no", host, "bash -s"],
+                        input=cmd + "\n",
+                        capture_output=True,
+                        text=True,
+                    )
+                    return result.stdout
+
+            CommonUtils.collect_journal_logs(SimpleExecutor(), clients, results_dir)
+            sys.exit(failed_returncode)
+
+        for c, filename, remote_path, _process in processes:
+            print(f"[{c}] Copying results to {results_dir}...", flush=True)
+            local_path = f"{results_dir}/{filename}"
+            subprocess.run(
+                [
+                    "scp",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    f"{c}:{remote_path}",
+                    local_path,
+                ]
+            )
+
+            try:
+                with open(local_path, "r") as f:
+                    data = json.load(f)
+
+                data["test_parameters"] = CommonUtils.get_human_readable_settings(
+                    settings, config
                 )
+                if args.runner_name:
+                    data["test_parameters"]["Workload Runner"] = args.runner_name
 
-                # Inject test parameters into the JSON file
-                try:
-                    with open(local_path, "r") as f:
-                        data = json.load(f)
+                data["test_results_summary"] = CommonUtils.get_summary(data)
 
-                    data["test_parameters"] = CommonUtils.get_human_readable_settings(
-                        settings, lp_cfg
-                    )
-                    if args.runner_name:
-                        data["test_parameters"]["Workload Runner"] = args.runner_name
-
-                    data["test_results_summary"] = CommonUtils.get_summary(data)
-
-                    with open(local_path, "w") as f:
-                        json.dump(data, f, indent=4)
-                    print(
-                        f"[{c}] Injected test parameters into {local_path}", flush=True
-                    )
-                    loadpoint_results.append(data)
-                except Exception as e:
-                    print(f"[{c}] Failed to inject test parameters: {e}", flush=True)
+                with open(local_path, "w") as f:
+                    json.dump(data, f, indent=4)
+                print(
+                    f"[{c}] Injected test parameters into {local_path}", flush=True
+                )
+                loadpoint_results.append(data)
+            except Exception as e:
+                print(f"[{c}] Failed to inject test parameters: {e}", flush=True)
 
         CommonUtils.write_multi_client_results_summary(
             "fio",
