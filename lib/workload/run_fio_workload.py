@@ -118,6 +118,7 @@ def main():
         # Signal that a new load point is starting for external monitoring
         print(f"Starting tests... Load Point: {loadpoint}", flush=True)
 
+        loadpoint_results = []
         for c in clients:
             # Ensure results directory exists on each client
             subprocess.run(
@@ -313,8 +314,19 @@ def main():
                     print(
                         f"[{c}] Injected test parameters into {local_path}", flush=True
                     )
+                    loadpoint_results.append(data)
                 except Exception as e:
                     print(f"[{c}] Failed to inject test parameters: {e}", flush=True)
+
+        CommonUtils.write_multi_client_results_summary(
+            "fio",
+            loadpoint_results,
+            results_dir,
+            loadpoint,
+            settings,
+            config,
+            num_clients=len(clients),
+        )
 
         print(f"Finished Fio Load Point: {loadpoint}", flush=True)
 

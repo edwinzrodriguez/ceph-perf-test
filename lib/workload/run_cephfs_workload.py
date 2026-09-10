@@ -190,6 +190,7 @@ def main():
 
         write_phase_emitted = False
         read_phase_emitted = False
+        loadpoint_results = []
 
         for client, proc in processes:
             run_phase_started = False
@@ -304,11 +305,22 @@ def main():
                 print(
                     f"[{client}] Injected test parameters into {local_json}", flush=True
                 )
+                loadpoint_results.append(data)
             except Exception as e:
                 print(
                     f"[{client}] Failed to inject test parameters into {local_json}: {e}",
                     flush=True,
                 )
+
+        CommonUtils.write_multi_client_results_summary(
+            "cephfs_tool",
+            loadpoint_results,
+            results_dir,
+            lp,
+            settings,
+            lp_cfg,
+            num_clients=len(clients),
+        )
 
         print(f"Finished CephFS-Tool Load Point: {lp}", flush=True)
         time.sleep(2)

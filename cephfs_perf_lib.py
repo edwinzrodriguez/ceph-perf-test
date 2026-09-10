@@ -1668,3 +1668,74 @@ class CommonUtils:
             }
 
         return {}
+
+    @staticmethod
+    def aggregate_results_summaries(summaries):
+        """Sum bandwidth and IOPS fields across multiple test_results_summary dicts."""
+
+        def merge(a, b):
+            if not a:
+                return dict(b) if b else {}
+            if not b:
+                return dict(a)
+            merged = {}
+            for key in set(a.keys()) | set(b.keys()):
+                va = a.get(key)
+                vb = b.get(key)
+                if isinstance(va, dict) or isinstance(vb, dict):
+                    merged[key] = merge(va or {}, vb or {})
+                elif isinstance(va, (int, float)) and isinstance(vb, (int, float)):
+                    merged[key] = va + vb
+                elif va is not None:
+                    merged[key] = va
+                else:
+                    merged[key] = vb
+            return merged
+
+        aggregated = {}
+        for summary in summaries:
+            if summary:
+                aggregated = merge(aggregated, summary)
+        return aggregated
+
+    @staticmethod
+    def write_multi_client_results_summary(
+        workload,
+        client_results,
+        results_dir,
+        loadpoint,
+        settings,
+        lp_cfg=None,
+        num_clients=None,
+        config=None,
+    ):
+        """Write an aggregated results summary JSON for multi-client workloads."""
+        if num_clients is not None and num_clients <= 1:
+            return None
+        if not client_results:
+            return None
+
+        summaries = [
+            result.get("test_results_summary", {})
+            for result in client_results
+            if result.get("test_results_summary") is not None
+        ]
+        if not summaries:
+            return None
+
+        test_params = client_results[0].get("test_parameters", {})
+        summary_data = {
+            "test_parameters": test_params,
+            "test_results_summary": CommonUtils.aggregate_results_summaries(
+                summaries
+            ),
+        }
+
+        filename = (
+            f"{CommonUtils.get_workload_base_name(workload, 'results_summary', 'all', loadpoint, settings, lp_cfg, config)}.json"
+        )
+        output_path = os.path.join(results_dir, filename)
+        with open(output_path, "w") as f:
+            json.dump(summary_data, f, indent=4)
+        print(f"Wrote multi-client results summary to {output_path}")
+        return output_path

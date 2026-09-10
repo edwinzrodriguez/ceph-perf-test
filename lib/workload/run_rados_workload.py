@@ -120,6 +120,7 @@ def main():
         extra = lp_cfg.get("extra_args", "")
 
         processes = []
+        loadpoint_results = []
         for client in clients:
             run_name = build_run_name(fs_name, client, lp_cfg)
 
@@ -269,11 +270,22 @@ def main():
                     f"[{client}] Injected test parameters into {local_json}",
                     flush=True,
                 )
+                loadpoint_results.append(data)
             except Exception as e:
                 print(
                     f"[{client}] Failed to inject test parameters into {local_json}: {e}",
                     flush=True,
                 )
+
+        CommonUtils.write_multi_client_results_summary(
+            "rados_bench",
+            loadpoint_results,
+            results_dir,
+            lp,
+            settings,
+            lp_cfg,
+            num_clients=len(clients),
+        )
 
         print(f"Finished Rados Bench Load Point: {lp}", flush=True)
         time.sleep(2)
