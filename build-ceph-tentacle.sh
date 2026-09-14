@@ -25,13 +25,13 @@ for i in "$@"; do
             ./do_cmake.sh -DUSE_TRACEFLOW=OFF \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_INSTALL_PREFIX=/usr/local/$i \
-            -DENABLE_GIT_VERSION=OFF
+            -DENABLE_GIT_VERSION=ON
         else
           pushd ~/git/$i/build
               cmake .. -DUSE_TRACEFLOW=OFF \
                 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
                 -DCMAKE_INSTALL_PREFIX=/usr/local/$i \
-                -DENABLE_GIT_VERSION=OFF
+                -DENABLE_GIT_VERSION=ON
           popd
         fi
         pushd ~/git/$i/build
