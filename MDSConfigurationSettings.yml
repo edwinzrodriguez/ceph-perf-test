@@ -151,6 +151,10 @@ mds:
     debug_ms: 1
 #    mds_enable_op_tracker: true
 #    mds_op_complaint_time: 30
+#    mds_op_history_size: 200          # default 20 is too small
+#    mds_op_history_duration: 3600
+#    mds_op_history_slow_op_size: 100
+#    mds_op_history_slow_op_threshold: 5  # capture ops >5s even if not "blocked"
 
 ceph:
   conf: "/etc/ceph/ceph.conf"

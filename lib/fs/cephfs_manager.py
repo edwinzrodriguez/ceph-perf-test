@@ -562,7 +562,14 @@ class CephFSManager(FSManager):
     # may not exist in the monitor config schema (e.g. wip builds on cephadm).
     _MDS_CONF_ONLY_SETTINGS = frozenset({"mds_dispatch_engine"})
     _MDS_LOGGING_CONF_SETTINGS = frozenset(
-        {"mds_enable_op_tracker", "mds_op_complaint_time"}
+        {
+            "mds_enable_op_tracker",
+            "mds_op_complaint_time",
+            "mds_op_history_size",
+            "mds_op_history_duration",
+            "mds_op_history_slow_op_size",
+            "mds_op_history_slow_op_threshold",
+        }
     )
     _MDS_DISPATCH_ENGINE_VALUES = frozenset({"classic", "reactor"})
 
