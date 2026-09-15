@@ -442,6 +442,26 @@ class PerformanceTestConfig:
         return [h["name"] for h in self.hosts_meta.get("sambas", [])]
 
     @property
+    def grafanas(self):
+        return [h["name"] for h in self.hosts_meta.get("grafanas", [])]
+
+    @property
+    def mgrs(self):
+        hosts_meta = self.hosts_meta.get("mgrs")
+        if hosts_meta:
+            return [h["name"] for h in hosts_meta]
+        return self.mons
+
+    @property
+    def grafana_hosts(self):
+        """Grafana/Prometheus placement hosts (grafanas group, else first mon)."""
+        if self.grafanas:
+            return self.grafanas
+        if self.admin_host:
+            return [self.admin_host]
+        return []
+
+    @property
     def admin_host(self):
         # The first 'mons' host is used as the admin host to drive tests
         return self.mons[0] if self.mons else None
@@ -739,6 +759,82 @@ class PerformanceTestConfig:
     @property
     def specstorage(self):
         return self._config.get("specstorage")
+
+    @property
+    def grafana_enabled(self):
+        return self._config.get("grafana", {}).get("enabled", False)
+
+    @property
+    def grafana_type(self):
+        grafana_cfg = self._config.get("grafana", {}) or {}
+        explicit = grafana_cfg.get("type")
+        if explicit:
+            return explicit
+        if self.fs_manager_type == "CephFSSystemdManager":
+            return "systemd"
+        return "cephadm"
+
+    @property
+    def grafana_exporter_prio_limit(self):
+        return self._config.get("grafana", {}).get("exporter_prio_limit", 5)
+
+    @property
+    def grafana_yaml_path(self):
+        return self._config.get("grafana", {}).get(
+            "yaml_path", "/cephfs_perf/monitoring.yaml"
+        )
+
+    @property
+    def grafana_ceph_binary_path(self):
+        return self.expand_env(
+            self._config.get("grafana", {}).get(
+                "ceph_binary_path", "${CEPH_INSTALL_PREFIX}/bin/ceph"
+            )
+        )
+
+    @property
+    def grafana_env_vars(self):
+        return self._config.get("grafana", {}).get("env_vars", {})
+
+    @property
+    def grafana_port(self):
+        return self._config.get("grafana", {}).get("port", 3000)
+
+    @property
+    def prometheus_port(self):
+        return self._config.get("grafana", {}).get("prometheus_port", 9095)
+
+    @property
+    def grafana_exporter_port(self):
+        return self._config.get("grafana", {}).get("exporter_port", 9926)
+
+    @property
+    def grafana_mgr_prometheus_port(self):
+        return self._config.get("grafana", {}).get("mgr_prometheus_port", 9283)
+
+    @property
+    def grafana_anonymous_access(self):
+        return self._config.get("grafana", {}).get("anonymous_access", True)
+
+    @property
+    def grafana_protocol(self):
+        return self._config.get("grafana", {}).get("protocol", "http")
+
+    @property
+    def grafana_ssl(self):
+        return self._config.get("grafana", {}).get("ssl", False)
+
+    @property
+    def grafana_image(self):
+        return self._config.get("grafana", {}).get(
+            "image", "quay.io/ceph/grafana:12.3.1"
+        )
+
+    @property
+    def grafana_prometheus_image(self):
+        return self._config.get("grafana", {}).get(
+            "prometheus_image", "quay.io/prom/prometheus:v2.55.1"
+        )
 
 
 class SSHExecutor:

@@ -399,3 +399,5 @@
         - iptables_running | default(false)
         - ipt_check.rc is defined and ipt_check.rc != 0
       ignore_errors: yes
+
+- import_playbook: ceph-monitoring-host-prep.yml

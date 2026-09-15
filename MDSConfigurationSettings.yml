@@ -99,6 +99,13 @@ inventory:
       ansible_ssh_user: "root"
       private_ip: 10.241.64.70
       ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+  grafanas:
+    mon-000:
+      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.69
 
 fs_name: "perf_test_fs"
 # CephFSCephadmManager (or legacy CephFSManager) deploys MDS via `ceph orch`.
@@ -161,6 +168,26 @@ ceph:
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   user_id: "admin"
   fsid: "12345678-1234-1234-1234-123456789012"
+
+# Grafana / monitoring stack configuration
+grafana:
+  enabled: true
+  # type = cephadm|systemd (defaults to systemd when fs_manager_type is CephFSSystemdManager)
+  type: "systemd"
+  # ceph-exporter perf counter priority threshold; 0 exports all counters
+  exporter_prio_limit: 0
+  yaml_path: "/cephfs_perf/monitoring.yaml"
+  port: 3000
+  prometheus_port: 9095
+  exporter_port: 9926
+  mgr_prometheus_port: 9283
+  anonymous_access: true
+  protocol: http
+  ssl: false
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  exporter_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-exporter"
+  image: "quay.io/ceph/grafana:12.3.1"
+  prometheus_image: "quay.io/prom/prometheus:v2.55.1"
 
 ganesha:
   enabled: false

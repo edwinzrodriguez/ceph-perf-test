@@ -21,6 +21,8 @@ from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
 from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
 from lib.samba.samba_cephadm_manager import SambaCephadmManager
 from lib.samba.samba_systemd_manager import SambaSystemdManager
+from lib.grafana.grafana_cephadm_manager import GrafanaCephadmManager
+from lib.grafana.grafana_systemd_manager import GrafanaSystemdManager
 from lib.mount.mount_fuse_manager import MountFuseManager
 from lib.mount.mount_kernel_manager import MountKernelManager
 from lib.mount.mount_nfs_manager import MountNfsManager
@@ -57,6 +59,11 @@ class BenchRunner:
             ],
             help="Override mount_manager_type from the configuration file",
         )
+        self.parser.add_argument(
+            "--grafana",
+            choices=["cephadm", "systemd"],
+            help="Enable Grafana monitoring and specify the deployment type",
+        )
 
     def load_config(self, args):
         with open(args.config, "r") as f:
@@ -66,6 +73,8 @@ class BenchRunner:
             config_dict["ganesha"] = {}
         if "samba" not in config_dict:
             config_dict["samba"] = {}
+        if "grafana" not in config_dict:
+            config_dict["grafana"] = {}
 
         # YAML ``ganesha.enabled`` is the source of truth for kernel vs NFS
         # mounts. ``--ganesha TYPE`` is a convenience override that enables
@@ -78,6 +87,10 @@ class BenchRunner:
         if args.samba:
             config_dict["samba"]["enabled"] = True
             config_dict["samba"]["type"] = args.samba
+
+        if args.grafana:
+            config_dict["grafana"]["enabled"] = True
+            config_dict["grafana"]["type"] = args.grafana
 
         if args.mount_manager:
             config_dict["mount_manager_type"] = args.mount_manager
@@ -168,6 +181,15 @@ class BenchRunner:
             return MountKernelManager(executor, config, cephfs_manager), None
         raise ValueError(f"Invalid mount_manager_type: {mount_type}")
 
+    def get_monitoring_manager(self, executor, config, cephfs_manager):
+        if not config.grafana_enabled:
+            return None
+        if config.grafana_type == "systemd":
+            return GrafanaSystemdManager(executor, config, cephfs_manager)
+        if config.grafana_type == "cephadm":
+            return GrafanaCephadmManager(executor, config, cephfs_manager)
+        raise ValueError(f"Invalid Grafana type: {config.grafana_type}")
+
     def run(self):
         args = self.parser.parse_args()
         config = self.load_config(args)
@@ -180,6 +202,15 @@ class BenchRunner:
             executor, config, cephfs_manager
         )
         config.set_mount_display_name(mount_manager.display_name())
+
+        monitoring_manager = self.get_monitoring_manager(
+            executor, config, cephfs_manager
+        )
+        if monitoring_manager is not None:
+            print(
+                f"Provisioning monitoring stack (type={config.grafana_type})..."
+            )
+            monitoring_manager.provision_monitoring()
 
         workload_runner = self.get_workload_runner(executor, config, fs_names)
 
@@ -326,6 +357,7 @@ class BenchRunner:
                         cephfs_manager.stop_lockstat(fs)
                 mount_manager.unmount_clients()
                 self._cleanup_export_manager(export_manager)
+                self._cleanup_monitoring_manager(monitoring_manager)
                 sys.exit(1)
 
             if mds_lockstat_active:
@@ -336,7 +368,11 @@ class BenchRunner:
 
         # Final cleanup/collection (if applicable)
         self.post_run_cleanup(
-            config, fs_names, workload_runner, export_manager=export_manager
+            config,
+            fs_names,
+            workload_runner,
+            export_manager=export_manager,
+            monitoring_manager=monitoring_manager,
         )
 
     def _cleanup_export_manager(self, export_manager):
@@ -352,5 +388,19 @@ class BenchRunner:
             print("Cleaning up SMB shares and stopping Samba...")
             export_manager.cleanup_samba()
 
-    def post_run_cleanup(self, config, fs_names, workload_runner, export_manager=None):
+    def _cleanup_monitoring_manager(self, monitoring_manager):
+        if monitoring_manager is None:
+            return
+        print("Cleaning up monitoring stack...")
+        monitoring_manager.cleanup_monitoring()
+
+    def post_run_cleanup(
+        self,
+        config,
+        fs_names,
+        workload_runner,
+        export_manager=None,
+        monitoring_manager=None,
+    ):
         self._cleanup_export_manager(export_manager)
+        self._cleanup_monitoring_manager(monitoring_manager)

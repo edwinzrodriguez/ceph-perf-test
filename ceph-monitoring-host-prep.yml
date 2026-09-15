@@ -1,0 +1,91 @@
+# Host preparation for Grafana / Prometheus / ceph-exporter monitoring.
+# Invoked from cephfs-sfs-config.yml before benchmark runs.
+#
+# Inventory groups:
+#   grafanas  - hosts running Grafana and Prometheus (optional; falls back to mons)
+#   mons, mgrs, mdss, osds - hosts that may run ceph-exporter or expose mgr metrics
+
+- hosts: grafanas:mons:mdss:osds:mgrs
+  become: true
+  vars:
+    monitoring_ports:
+      - "3000/tcp"    # Grafana
+      - "9095/tcp"    # Prometheus (cephadm default)
+      - "9283/tcp"    # mgr/prometheus module
+      - "9926/tcp"    # ceph-exporter
+      - "9100/tcp"    # node-exporter
+  tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Determine if firewalld is running
+      ansible.builtin.set_fact:
+        firewalld_running: "{{ 'firewalld.service' in ansible_facts.services and ansible_facts.services['firewalld.service'].state == 'running' }}"
+
+    - name: Determine if iptables is running
+      ansible.builtin.set_fact:
+        iptables_running: "{{ 'iptables.service' in ansible_facts.services and ansible_facts.services['iptables.service'].state == 'running' }}"
+
+    - name: Query firewalld for monitoring ports
+      ansible.builtin.command: "firewall-cmd --query-port={{ item }}"
+      register: fw_monitoring_query
+      failed_when: false
+      changed_when: false
+      loop: "{{ monitoring_ports }}"
+      when: firewalld_running | default(false)
+
+    - name: Allow monitoring ports via firewalld (permanent)
+      ansible.builtin.command: "firewall-cmd --add-port={{ item.item }} --permanent"
+      when:
+        - firewalld_running | default(false)
+        - item.rc is defined and item.rc != 0
+      loop: "{{ fw_monitoring_query.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Reload firewalld after adding monitoring ports
+      ansible.builtin.command: firewall-cmd --reload
+      when:
+        - firewalld_running | default(false)
+        - fw_monitoring_query.results is defined
+        - fw_monitoring_query.results | selectattr('rc', 'defined') | rejectattr('rc', 'equalto', 0) | list | length > 0
+
+    - name: Check if iptables already allows monitoring ports
+      ansible.builtin.command: "iptables -C INPUT -p {{ item.split('/')[1] }} --dport {{ item.split('/')[0] }} -j ACCEPT"
+      register: ipt_monitoring_check
+      failed_when: false
+      changed_when: false
+      loop: "{{ monitoring_ports }}"
+      when: iptables_running | default(false)
+
+    - name: Add iptables rules to allow monitoring ports
+      ansible.builtin.command: "iptables -I INPUT -p {{ item.item.split('/')[1] }} --dport {{ item.item.split('/')[0] }} -j ACCEPT"
+      when:
+        - iptables_running | default(false)
+        - item.rc is defined and item.rc != 0
+      loop: "{{ ipt_monitoring_check.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Persist iptables rules (best-effort)
+      ansible.builtin.shell: iptables-save > /etc/sysconfig/iptables
+      when:
+        - iptables_running | default(false)
+        - ipt_monitoring_check.results is defined
+        - ipt_monitoring_check.results | selectattr('rc', 'defined') | rejectattr('rc', 'equalto', 0) | list | length > 0
+      ignore_errors: yes
+
+- hosts: grafanas:mons
+  become: true
+  tasks:
+    - name: Install podman for systemd monitoring containers
+      ansible.builtin.dnf:
+        name: podman
+        state: present
+      ignore_errors: yes
+
+    - name: Create monitoring config directory
+      ansible.builtin.file:
+        path: /etc/ceph/monitoring
+        state: directory
+        mode: '0755'

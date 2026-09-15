@@ -10,6 +10,7 @@ The framework operates on a **Test Matrix** principle. It iterates through combi
 2.  **Matrix Expansion**: If any setting in `mds_settings` or `ganesha` is a list, the framework calculates the Cartesian product of all combinations.
 3.  **Iteration Lifecycle**:
     -   Unmount clients.
+    -   Provision Grafana/Prometheus monitoring (if enabled; once per run, before the matrix).
     -   Rebuild/Reset CephFS (optional, based on settings).
     -   Apply MDS configurations.
     -   Provision Ganesha (if enabled).
@@ -20,8 +21,11 @@ The framework operates on a **Test Matrix** principle. It iterates through combi
 ## Usage
 
 ```bash
-./cephfs_perf_runner.py <config.yaml> <ansible_inventory>
+./cephfs_fio_runner.py <config.yaml> [<ansible_inventory>]
+./cephfs_fio_runner.py <config.yaml> --grafana systemd
 ```
+
+Workload-specific entry points: `cephfs_fio_runner.py`, `cephfs_sfs2020_runner.py`, `cephfs_tool_bench_runner.py`, `cephfs_rados_bench_runner.py`, `cephfs_rbd_runner.py`, or `cephfs_all_bench_runner.py` to run the full suite.
 
 ---
 
@@ -68,6 +72,129 @@ Connection details for the Ceph cluster.
 | `keyring` | string | | Path to Ceph keyring file |
 | `user_id` | string | `admin` | Ceph client user ID |
 | `fsid` | string | | Cluster FSID (UUID) |
+
+---
+
+### `grafana`
+
+Controls deployment of the Ceph monitoring stack (Grafana, Prometheus, ceph-exporter, node-exporter). When enabled, the benchmark runner provisions monitoring **once before the test matrix** and tears it down after the run completes.
+
+Host preparation (firewall ports, podman) is handled separately by Ansible via `ceph-monitoring-host-prep.yml`, which is imported from `cephfs-sfs-config.yml`.
+
+#### Core
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable Grafana/Prometheus monitoring |
+| `type` | string | `cephadm` or `systemd` | Deployment type. Defaults to `systemd` when `fs_manager_type` is `CephFSSystemdManager`, otherwise `cephadm` |
+| `exporter_prio_limit` | int | `5` | ceph-exporter perf counter priority threshold. `0` exports all counters |
+| `yaml_path` | string | `/cephfs_perf/monitoring.yaml` | Remote path for the cephadm monitoring spec (cephadm only) |
+| `ceph_binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/ceph` | Path to the `ceph` CLI |
+| `exporter_binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/ceph-exporter` | Path to `ceph-exporter` (systemd only) |
+
+#### Ports
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `port` | int | `3000` | Grafana HTTP port |
+| `prometheus_port` | int | `9095` | Prometheus HTTP port |
+| `exporter_port` | int | `9926` | ceph-exporter HTTP port |
+| `mgr_prometheus_port` | int | `9283` | mgr/prometheus module port |
+
+#### Grafana (cephadm)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `anonymous_access` | bool | `true` | Allow anonymous Grafana access |
+| `protocol` | string | `http` | Grafana protocol (`http` or `https`) |
+| `ssl` | bool | `false` | Enable TLS for Grafana |
+
+#### Container Images (systemd)
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `image` | string | `quay.io/ceph/grafana:12.3.1` | Grafana container image |
+| `prometheus_image` | string | `quay.io/prom/prometheus:v2.55.1` | Prometheus container image |
+
+#### Environment Variables
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `env_vars` | dict | `{}` | Extra environment variables for `ceph` CLI invocations during monitoring setup |
+
+#### Deployment Behavior
+
+**`type: cephadm`** — deploys via `ceph orch apply`:
+
+- `node-exporter` on all hosts (`host_pattern: *`)
+- `ceph-exporter` on all hosts with `prio_limit` from `exporter_prio_limit`
+- `prometheus` and `grafana` on hosts in the `grafanas` inventory group
+
+**`type: systemd`** — for non-cephadm MDS clusters:
+
+- Enables the mgr `prometheus` module
+- Starts `ceph-exporter` as a local process on mon/mgr/mds/osd hosts
+- Runs Prometheus and Grafana as podman containers on `grafanas` hosts
+
+#### Inventory
+
+Add a `grafanas` group to the inventory (same pattern as `ganeshas` or `sambas`) for hosts that run Grafana and Prometheus. If omitted, the first `mons` host is used.
+
+```yaml
+inventory:
+  grafanas:
+    mon-000:
+      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_user: root
+      private_ip: 10.241.64.69
+```
+
+#### Example Configuration
+
+```yaml
+grafana:
+  enabled: true
+  type: "systemd"
+  exporter_prio_limit: 0
+  port: 3000
+  prometheus_port: 9095
+  exporter_port: 9926
+  mgr_prometheus_port: 9283
+  anonymous_access: true
+  protocol: http
+  ssl: false
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  exporter_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-exporter"
+```
+
+#### Monitoring Setup and Access
+
+1. **Host prep** (once per cluster):
+
+```bash
+ansible-playbook -i <inventory> cephfs-sfs-config.yml
+```
+
+This runs `ceph-monitoring-host-prep.yml`, which opens firewall ports (3000, 9095, 9283, 9926, 9100), installs podman on monitoring hosts, and creates `/etc/ceph/monitoring`.
+
+2. **Run benchmarks with monitoring**:
+
+```bash
+./cephfs_fio_runner.py MDSConfigurationSettings.yml
+# or override deployment type:
+./cephfs_fio_runner.py MDSConfigurationSettings.yml --grafana systemd
+```
+
+3. **Access dashboards** (default ports on the `grafanas` host):
+
+| Service | URL |
+|---------|-----|
+| Grafana | `http://<grafana-host>:3000` |
+| Prometheus | `http://<grafana-host>:9095` |
+| mgr/prometheus | `http://<mgr-host>:9283/metrics` |
+| ceph-exporter | `http://<daemon-host>:9926/metrics` |
+
+Workload drivers print load-point markers (e.g. `Starting tests... Load Point: N`) that can be correlated with Grafana time series during a run.
 
 ---
 
@@ -593,7 +720,7 @@ Parses a YAML-based inventory defined directly in the config file under `invento
 
 > **Note**: A `mons` group is required. The first host in `mons` is designated the **admin host**.
 
-Supported groups: `mons`, `mgrs`, `clients`, `ganeshas`, `mdss`, `osds`.
+Supported groups: `mons`, `mgrs`, `clients`, `ganeshas`, `sambas`, `grafanas`, `mdss`, `osds`.
 
 Per-host fields:
 
@@ -617,7 +744,14 @@ inventory:
       ansible_ssh_host: 169.63.179.214
       ansible_ssh_user: root
       private_ip: 10.241.64.70
+  grafanas:
+    mon-000:
+      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_user: root
+      private_ip: 10.241.64.69
 ```
+
+The `grafanas` group identifies hosts for Grafana and Prometheus placement. When `grafana.enabled` is true and no `grafanas` group is defined, the first `mons` host is used.
 
 ### `AnsibleInventoryProvider`
 
