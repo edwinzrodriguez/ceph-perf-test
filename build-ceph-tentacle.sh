@@ -37,6 +37,11 @@ for i in "$@"; do
           popd
         fi
         pushd ~/git/$i/build
+            boost_tarball="boost/src/boost_1_87_0.tar.bz2"
+            if [ ! -e "$boost_tarball" ] && [ -e /cephfs_perf/boost_1_87_0.tar.bz2 ]; then
+                mkdir -pv "$(dirname "$boost_tarball")"
+                cp -v /cephfs_perf/boost_1_87_0.tar.bz2 "$boost_tarball"
+            fi
             ninja install
         popd
     popd
