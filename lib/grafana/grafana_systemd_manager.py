@@ -139,6 +139,7 @@ class GrafanaSystemdManager(GrafanaManager):
         )
         self.executor.run_remote(host_name, f"sudo chmod 0644 {config_path}")
         self._remove_container(host_name, container)
+        self._ensure_registry_login(host_name, image)
 
         run_cmd = (
             f"sudo podman run -d --name {container} --network host "
@@ -160,6 +161,7 @@ class GrafanaSystemdManager(GrafanaManager):
         anon = "true" if self.config.grafana_anonymous_access else "false"
 
         self._remove_container(host_name, container)
+        self._ensure_registry_login(host_name, image)
         run_cmd = (
             f"sudo podman run -d --name {container} --network host "
             f"-e GF_AUTH_ANONYMOUS_ENABLED={anon} "

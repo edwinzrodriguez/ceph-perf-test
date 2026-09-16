@@ -91,6 +91,26 @@ Host preparation (firewall ports, podman) is handled separately by Ansible via `
 | `yaml_path` | string | `/cephfs_perf/monitoring.yaml` | Remote path for the cephadm monitoring spec (cephadm only) |
 | `ceph_binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/ceph` | Path to the `ceph` CLI |
 | `exporter_binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/ceph-exporter` | Path to `ceph-exporter` (systemd only) |
+| `credentials_file` | string | `ibm-credentials.env` | Path to registry credentials file (see below) |
+| `registry_list` | list | IBM/quay defaults | Registry URLs and credential key references for `podman login` |
+
+#### Registry Authentication
+
+Upstream monitoring images on quay.io require `podman login` before pulls. The benchmark runner logs in automatically on each `grafanas` host using `ibm-credentials.env` (same `credentials_file:KEY` reference format as ceph-linode).
+
+Default `registry_list` (credential values use `credentials_file:KEY` references):
+
+| Registry | Username key | Password key |
+|----------|--------------|--------------|
+| `quay.io` | `QUAY_IO_USERNAME` | `QUAY_IO_PASSWORD` |
+| `quay.ceph.io` | `QUAY_CEPH_IO_USERNAME` | `QUAY_CEPH_IO_PASSWORD` |
+
+Default container images match the upstream Ceph cephadm monitoring stack:
+
+| Image | Default |
+|-------|---------|
+| Grafana | `quay.io/ceph/grafana:12.3.1` |
+| Prometheus | `quay.io/prometheus/prometheus:v3.6.0` |
 
 #### Ports
 
@@ -114,7 +134,7 @@ Host preparation (firewall ports, podman) is handled separately by Ansible via `
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `image` | string | `quay.io/ceph/grafana:12.3.1` | Grafana container image |
-| `prometheus_image` | string | `quay.io/prom/prometheus:v2.55.1` | Prometheus container image |
+| `prometheus_image` | string | `quay.io/prometheus/prometheus:v3.6.0` | Prometheus container image |
 
 #### Environment Variables
 

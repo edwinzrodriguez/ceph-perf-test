@@ -1,6 +1,7 @@
 import abc
+import os
 
-from cephfs_perf_lib import CommonUtils, FSManager
+from cephfs_perf_lib import CommonUtils, FSManager, RegistryCredentials
 
 
 class GrafanaManager(abc.ABC):
@@ -20,6 +21,8 @@ class GrafanaManager(abc.ABC):
         self.admin = config.admin_host
         self.grafana_hosts = config.grafana_hosts
         self._provisioned = False
+        self._registry_logins = {}
+        self._registry_credentials = config.grafana_registry_credentials
 
     @abc.abstractmethod
     def provision_monitoring(self):
@@ -93,3 +96,31 @@ class GrafanaManager(abc.ABC):
         self._run_ceph(
             f"config set global exporter_prio_limit {prio} || true", check=False
         )
+
+    def _ensure_registry_login(self, host_name, image):
+        creds = self._registry_credentials.credentials_for_image(image)
+        if creds is None:
+            registry = RegistryCredentials.registry_from_image(image)
+            print(
+                f"[{host_name}] No registry credentials configured for {registry}; "
+                f"assuming public pull for {image}"
+            )
+            return
+
+        cache_key = (host_name, creds["url"])
+        if cache_key in self._registry_logins:
+            return
+
+        creds_file = self.config.grafana_credentials_file
+        if not os.path.exists(creds_file):
+            raise RuntimeError(
+                f"Registry credentials file not found: {creds_file}. "
+                f"Create it or set grafana.credentials_file."
+            )
+
+        print(f"[{host_name}] Logging in to {creds['url']} for {image}...")
+        login_cmd = RegistryCredentials.podman_login_command(
+            creds["url"], creds["username"], creds["password"]
+        )
+        self.executor.run_remote(host_name, login_cmd, check=True)
+        self._registry_logins[cache_key] = True

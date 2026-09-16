@@ -1,12 +1,121 @@
 import abc
+import base64
 import datetime
 import json
 import os
 import re
+import shlex
 import subprocess
 import threading
 import time
 import yaml
+
+
+class RegistryCredentials:
+    """Resolve container registry logins from ibm-credentials.env-style files."""
+
+    DEFAULT_REGISTRY_LIST = [
+        {
+            "url": "quay.io",
+            "username": "ibm-credentials.env:QUAY_IO_USERNAME",
+            "password": "ibm-credentials.env:QUAY_IO_PASSWORD",
+        },
+        {
+            "url": "quay.ceph.io",
+            "username": "ibm-credentials.env:QUAY_CEPH_IO_USERNAME",
+            "password": "ibm-credentials.env:QUAY_CEPH_IO_PASSWORD",
+        },
+        {
+            "url": "cp.stg.icr.io",
+            "username": "ibm-credentials.env:IBM_CR_USERNAME",
+            "password": "ibm-credentials.env:IBM_STG_PASSWORD",
+        },
+        {
+            "url": "cp.icr.io",
+            "username": "ibm-credentials.env:IBM_CR_USERNAME",
+            "password": "ibm-credentials.env:IBM_CR_PASSWORD",
+        },
+    ]
+
+    def __init__(self, credentials_file="ibm-credentials.env", registry_list=None):
+        self.credentials_file = credentials_file
+        self.registry_list = registry_list or self.DEFAULT_REGISTRY_LIST
+        self._credentials_cache = None
+
+    @staticmethod
+    def load_env_file(path):
+        creds = {}
+        if not path or not os.path.exists(path):
+            return creds
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                value = value.strip()
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+                    value = value[1:-1]
+                creds[key.strip()] = value
+        return creds
+
+    def _credentials(self):
+        if self._credentials_cache is None:
+            self._credentials_cache = self.load_env_file(self.credentials_file)
+        return self._credentials_cache
+
+    def resolve_value(self, value):
+        if not isinstance(value, str):
+            return value
+        if ":" in value:
+            file_part, key_part = value.split(":", 1)
+            if file_part.endswith(".env"):
+                cred_path = file_part
+                if not os.path.isabs(cred_path):
+                    cred_path = os.path.join(
+                        os.path.dirname(os.path.abspath(self.credentials_file)),
+                        os.path.basename(cred_path),
+                    )
+                creds = self.load_env_file(cred_path)
+                return creds.get(key_part, "")
+        return value
+
+    def resolved_registry_list(self):
+        entries = []
+        for item in self.registry_list:
+            if not isinstance(item, dict):
+                continue
+            url = (item.get("url") or "").strip()
+            username = self.resolve_value(item.get("username", ""))
+            password = self.resolve_value(item.get("password", ""))
+            if url and username and password:
+                entries.append(
+                    {"url": url, "username": username, "password": password}
+                )
+        return entries
+
+    @staticmethod
+    def registry_from_image(image):
+        image = (image or "").split("://", 1)[-1]
+        return image.split("/", 1)[0]
+
+    def credentials_for_image(self, image):
+        host = self.registry_from_image(image)
+        for entry in self.resolved_registry_list():
+            if host == entry["url"] or image.startswith(entry["url"] + "/"):
+                return entry
+        return None
+
+    @staticmethod
+    def podman_login_command(registry_url, username, password):
+        user_b64 = base64.b64encode(username.encode()).decode()
+        pass_b64 = base64.b64encode(password.encode()).decode()
+        registry = shlex.quote(registry_url)
+        return (
+            f"user=$(echo {user_b64} | base64 -d); "
+            f"pass=$(echo {pass_b64} | base64 -d); "
+            f'echo "$pass" | sudo podman login {registry} -u "$user" --password-stdin'
+        )
 
 
 class InventoryProvider(abc.ABC):
@@ -825,6 +934,30 @@ class PerformanceTestConfig:
         return self._config.get("grafana", {}).get("ssl", False)
 
     @property
+    def grafana_credentials_file(self):
+        path = self._config.get("grafana", {}).get(
+            "credentials_file", "ibm-credentials.env"
+        )
+        if os.path.isabs(path):
+            return path
+        return os.path.abspath(path)
+
+    @property
+    def grafana_registry_list(self):
+        grafana_cfg = self._config.get("grafana", {}) or {}
+        registry_list = grafana_cfg.get("registry_list")
+        if registry_list is not None:
+            return registry_list
+        return RegistryCredentials.DEFAULT_REGISTRY_LIST
+
+    @property
+    def grafana_registry_credentials(self):
+        return RegistryCredentials(
+            credentials_file=self.grafana_credentials_file,
+            registry_list=self.grafana_registry_list,
+        )
+
+    @property
     def grafana_image(self):
         return self._config.get("grafana", {}).get(
             "image", "quay.io/ceph/grafana:12.3.1"
@@ -833,7 +966,7 @@ class PerformanceTestConfig:
     @property
     def grafana_prometheus_image(self):
         return self._config.get("grafana", {}).get(
-            "prometheus_image", "quay.io/prom/prometheus:v2.55.1"
+            "prometheus_image", "quay.io/prometheus/prometheus:v3.6.0"
         )
 
 

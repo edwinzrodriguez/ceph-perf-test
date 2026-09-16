@@ -184,10 +184,18 @@ grafana:
   anonymous_access: true
   protocol: http
   ssl: false
+  credentials_file: "ibm-credentials.env"
+  registry_list:
+    - url: "quay.io"
+      username: "ibm-credentials.env:QUAY_IO_USERNAME"
+      password: "ibm-credentials.env:QUAY_IO_PASSWORD"
+    - url: "quay.ceph.io"
+      username: "ibm-credentials.env:QUAY_CEPH_IO_USERNAME"
+      password: "ibm-credentials.env:QUAY_CEPH_IO_PASSWORD"
   ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
   exporter_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-exporter"
   image: "quay.io/ceph/grafana:12.3.1"
-  prometheus_image: "quay.io/prom/prometheus:v2.55.1"
+  prometheus_image: "quay.io/prometheus/prometheus:v3.6.0"
 
 ganesha:
   enabled: false
