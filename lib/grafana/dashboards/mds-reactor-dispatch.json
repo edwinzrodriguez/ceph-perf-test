@@ -1,0 +1,1009 @@
+{
+   "__inputs": [ ],
+   "__requires": [
+      {
+         "id": "grafana",
+         "name": "Grafana",
+         "type": "grafana",
+         "version": "5.3.2"
+      },
+      {
+         "id": "graph",
+         "name": "Graph",
+         "type": "panel",
+         "version": "5.0.0"
+      }
+   ],
+   "annotations": {
+      "list": [
+         {
+            "builtIn": 1,
+            "datasource": "-- Grafana --",
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "showIn": 0,
+            "tags": [ ],
+            "type": "dashboard"
+         }
+      ]
+   },
+   "description": "Reactor dispatch engine counters for MDS stall and backlog investigation. Most panels use PRIO_USEFUL/INTERESTING metrics exported by default (exporter_prio_limit=5). The Replies panel requires ceph-exporter exporter_prio_limit=0 because ceph_mds_reply is PRIO_DEBUGONLY.",
+   "editable": false,
+   "gnetId": null,
+   "graphTooltip": 1,
+   "hideControls": false,
+   "id": null,
+   "links": [
+      {
+         "asDropdown": true,
+         "icon": "external link",
+         "includeVars": true,
+         "keepTime": true,
+         "tags": [ ],
+         "targetBlank": false,
+         "title": "Browse Dashboards",
+         "tooltip": "",
+         "type": "dashboards",
+         "url": ""
+      }
+   ],
+   "panels": [
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+         },
+         "id": 1,
+         "panels": [ ],
+         "title": "Reactor Dispatch Queue",
+         "type": "row"
+      },
+      {
+         "datasource": "$datasource",
+         "description": "Current depth of the single-threaded MDSOpWorkQueue.",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Queued ops",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "none"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 1
+         },
+         "id": 2,
+         "options": {
+            "legend": {
+               "calcs": [ "max", "lastNotNull" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "ceph_mds_dispatch_queue_len{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "{{ ceph_daemon }}",
+               "refId": "A"
+            }
+         ],
+         "title": "Dispatch Queue Depth - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "datasource": "$datasource",
+         "description": "High water mark since last reset. A large max with queue depth near zero indicates the reactor fell behind and later drained (idle stall pattern).",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "High water mark",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 10,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "none"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 1
+         },
+         "id": 3,
+         "options": {
+            "legend": {
+               "calcs": [ "max", "lastNotNull" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "ceph_mds_dispatch_queue_len_max{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "{{ ceph_daemon }}",
+               "refId": "A"
+            }
+         ],
+         "title": "Dispatch Queue High Water Mark - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 9
+         },
+         "id": 4,
+         "panels": [ ],
+         "title": "Dispatch Throughput",
+         "type": "row"
+      },
+      {
+         "datasource": "$datasource",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Ops/sec",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "ops"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 10
+         },
+         "id": 5,
+         "options": {
+            "legend": {
+               "calcs": [ "mean", "max" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_inbound{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "dispatch_inbound",
+               "refId": "A"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_io_completions{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "dispatch_io_completions",
+               "refId": "B"
+            }
+         ],
+         "title": "Reactor Inbound / IO Completion Rate - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "datasource": "$datasource",
+         "description": "Replies (ceph_mds_reply) are PRIO_DEBUGONLY and only exported when ceph-exporter runs with exporter_prio_limit=0.",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Ops/sec",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "ops"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 10
+         },
+         "id": 6,
+         "options": {
+            "legend": {
+               "calcs": [ "mean", "max" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "sum(rate(ceph_mds_server_handle_client_request{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "handle_client_request",
+               "refId": "A"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_handle_client_caps{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "handle_client_caps",
+               "refId": "B"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_reply{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "reply (exporter_prio_limit=0)",
+               "refId": "C"
+            }
+         ],
+         "title": "Client Request / Caps / Reply Rate - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 18
+         },
+         "id": 7,
+         "panels": [ ],
+         "title": "Dispatch Queue Wait (Enqueue Latency)",
+         "type": "row"
+      },
+      {
+         "datasource": "$datasource",
+         "description": "Time messages waited in MDSOpWorkQueue before execution. Lane order: Control > IOComplete > Client > Maintenance.",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Wait time",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "µs"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 19
+         },
+         "id": 8,
+         "options": {
+            "legend": {
+               "calcs": [ "mean", "max" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_enqueue_usec_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_enqueue_usec_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "overall",
+               "refId": "A"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_enqueue_usec_control_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_enqueue_usec_control_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "control",
+               "refId": "B"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_enqueue_usec_io_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_enqueue_usec_io_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "io",
+               "refId": "C"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_enqueue_usec_client_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_enqueue_usec_client_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "client",
+               "refId": "D"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_enqueue_usec_maintenance_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_enqueue_usec_maintenance_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "maintenance",
+               "refId": "E"
+            }
+         ],
+         "title": "Enqueue Wait Latency by Lane - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 28
+         },
+         "id": 9,
+         "panels": [ ],
+         "title": "Dispatch Execute Latency",
+         "type": "row"
+      },
+      {
+         "datasource": "$datasource",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Execute time",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "µs"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 29
+         },
+         "id": 10,
+         "options": {
+            "legend": {
+               "calcs": [ "mean", "max" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_usec_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_usec_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "overall",
+               "refId": "A"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_usec_control_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_usec_control_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "control",
+               "refId": "B"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_usec_io_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_usec_io_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "io",
+               "refId": "C"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_usec_client_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_usec_client_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "client",
+               "refId": "D"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_usec_maintenance_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_usec_maintenance_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "maintenance",
+               "refId": "E"
+            }
+         ],
+         "title": "Execute Latency by Lane - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "collapsed": false,
+         "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 38
+         },
+         "id": 11,
+         "panels": [ ],
+         "title": "Cache Trim and Memory",
+         "type": "row"
+      },
+      {
+         "datasource": "$datasource",
+         "description": "Cache trim ticks deferred because the maintenance lane was starved. Non-zero rate under load suggests trim starvation.",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Throttles/sec",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "ops"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 39
+         },
+         "id": 12,
+         "options": {
+            "legend": {
+               "calcs": [ "mean", "max" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "sum(rate(ceph_mds_cache_cache_trim_throttle{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "cache_trim_throttle",
+               "refId": "A"
+            }
+         ],
+         "title": "Cache Trim Throttle Rate - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "datasource": "$datasource",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "bytes"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 39
+         },
+         "id": 13,
+         "options": {
+            "legend": {
+               "calcs": [ "lastNotNull", "max" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "ceph_mds_mem_heap{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "{{ ceph_daemon }} heap",
+               "refId": "A"
+            },
+            {
+               "expr": "ceph_mds_mem_cap{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "{{ ceph_daemon }} cap",
+               "refId": "B"
+            }
+         ],
+         "title": "MDS Memory Heap / Cap - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "datasource": "$datasource",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": [ ]
+               },
+               "unit": "none"
+            },
+            "overrides": [ ]
+         },
+         "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 39
+         },
+         "id": 14,
+         "options": {
+            "legend": {
+               "calcs": [ "lastNotNull", "max" ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "ceph_mds_caps{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "{{ ceph_daemon }} caps",
+               "refId": "A"
+            }
+         ],
+         "title": "Capabilities - $mds_servers",
+         "type": "timeseries"
+      }
+   ],
+   "refresh": "5s",
+   "schemaVersion": 16,
+   "style": "dark",
+   "tags": [
+      "ceph",
+      "mds",
+      "reactor"
+   ],
+   "templating": {
+      "list": [
+         {
+            "current": {
+               "text": "default",
+               "value": "default"
+            },
+            "hide": 0,
+            "label": "Data Source",
+            "name": "datasource",
+            "options": [ ],
+            "query": "prometheus",
+            "refresh": 1,
+            "regex": "",
+            "type": "datasource"
+         },
+         {
+            "allValue": null,
+            "current": { },
+            "datasource": "$datasource",
+            "hide": 0,
+            "includeAll": false,
+            "label": "cluster",
+            "multi": false,
+            "name": "cluster",
+            "options": [ ],
+            "query": "label_values(ceph_health_status, cluster)",
+            "refresh": 1,
+            "regex": "(.*)",
+            "sort": 1,
+            "tagValuesQuery": "",
+            "tags": [ ],
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+         },
+         {
+            "allValue": null,
+            "current": { },
+            "datasource": "$datasource",
+            "hide": 0,
+            "includeAll": true,
+            "label": "MDS Server",
+            "multi": false,
+            "name": "mds_servers",
+            "options": [ ],
+            "query": "label_values(ceph_mds_inodes{cluster=~\"$cluster\", }, ceph_daemon)",
+            "refresh": 1,
+            "regex": "",
+            "sort": 1,
+            "tagValuesQuery": "",
+            "tags": [ ],
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+         }
+      ]
+   },
+   "time": {
+      "from": "now-1h",
+      "to": "now"
+   },
+   "timepicker": {
+      "refresh_intervals": [
+         "5s",
+         "10s",
+         "30s",
+         "1m",
+         "5m",
+         "15m",
+         "30m",
+         "1h",
+         "2h",
+         "1d"
+      ],
+      "time_options": [
+         "5m",
+         "15m",
+         "1h",
+         "6h",
+         "12h",
+         "24h",
+         "2d",
+         "7d",
+         "30d"
+      ]
+   },
+   "timezone": "",
+   "title": "MDS Reactor Dispatch",
+   "uid": "mdsReactorDispatch",
+   "version": 0
+}

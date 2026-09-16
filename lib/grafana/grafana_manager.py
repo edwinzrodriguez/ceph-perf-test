@@ -1,5 +1,6 @@
 import abc
 import os
+import time
 
 from cephfs_perf_lib import CommonUtils, FSManager, RegistryCredentials
 
@@ -12,6 +13,14 @@ class GrafanaManager(abc.ABC):
         "prometheus",
         "grafana",
         "node-exporter",
+    )
+
+    # cephadm monitoring services removed before the systemd benchmark stack
+    CEPHADM_MONITORING_SERVICE_TYPES = (
+        "grafana",
+        "prometheus",
+        "alertmanager",
+        "ceph-exporter",
     )
 
     def __init__(self, executor, config, fs_manager=None):
@@ -97,6 +106,37 @@ class GrafanaManager(abc.ABC):
             f"config set global exporter_prio_limit {prio} || true", check=False
         )
 
+    def _remove_cephadm_monitoring(self, wait=True):
+        """Remove cephadm monitoring services so the benchmark stack can take over."""
+        print("Removing cephadm monitoring services (grafana, prometheus, ...)...")
+        for service_type in self.CEPHADM_MONITORING_SERVICE_TYPES:
+            self._run_ceph(f"orch rm {service_type} || true", check=False)
+
+        if not wait:
+            return
+
+        for service_type in self.CEPHADM_MONITORING_SERVICE_TYPES:
+            for _ in range(24):
+                svcs = self.safe_json_load(
+                    self._run_ceph(
+                        f"orch ls --service_type {service_type} --format json"
+                    ),
+                    default=[],
+                )
+                if not svcs:
+                    break
+                running = sum(
+                    s.get("status", {}).get("running", 0) for s in svcs
+                )
+                if running == 0:
+                    break
+                time.sleep(5)
+            else:
+                print(
+                    f"Warning: cephadm {service_type} may still be running after "
+                    "orch rm"
+                )
+
     def _ensure_registry_login(self, host_name, image):
         creds = self._registry_credentials.credentials_for_image(image)
         if creds is None:
@@ -124,3 +164,20 @@ class GrafanaManager(abc.ABC):
         )
         self.executor.run_remote(host_name, login_cmd, check=True)
         self._registry_logins[cache_key] = True
+
+    def _verify_container_running(self, host_name, container):
+        state = self.executor.run_remote(
+            host_name,
+            f"sudo podman inspect -f '{{{{.State.Running}}}}' {container} 2>/dev/null "
+            f"|| echo false",
+        ).strip()
+        if state == "true":
+            return
+        logs = self.executor.run_remote(
+            host_name,
+            f"sudo podman logs {container} 2>&1 | tail -80",
+        )
+        raise RuntimeError(
+            f"{container} failed to start on {host_name}. "
+            f"Recent logs:\n{logs}"
+        )

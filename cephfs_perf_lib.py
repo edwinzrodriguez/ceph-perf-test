@@ -914,6 +914,10 @@ class PerformanceTestConfig:
         return self._config.get("grafana", {}).get("prometheus_port", 9095)
 
     @property
+    def prometheus_scrape_interval(self):
+        return self._config.get("grafana", {}).get("prometheus_scrape_interval", "15s")
+
+    @property
     def grafana_exporter_port(self):
         return self._config.get("grafana", {}).get("exporter_port", 9926)
 

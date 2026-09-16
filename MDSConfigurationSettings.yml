@@ -179,6 +179,7 @@ grafana:
   yaml_path: "/cephfs_perf/monitoring.yaml"
   port: 3000
   prometheus_port: 9095
+  prometheus_scrape_interval: 5s
   exporter_port: 9926
   mgr_prometheus_port: 9283
   anonymous_access: true
