@@ -1,5 +1,6 @@
 import base64
 import os
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -62,20 +63,25 @@ class GrafanaSystemdManager(GrafanaManager):
             )
         )
 
+    def _exporter_sock_dir(self):
+        """Admin-socket directory for ceph-exporter (must match MDS/OSD run_dir)."""
+        return (self.config.get("mds", {}) or {}).get("run_dir", "/var/run/ceph")
+
     def _start_ceph_exporter(self, host_name):
         binary = self._exporter_binary()
         prio = self.config.grafana_exporter_prio_limit
         port = self.config.grafana_exporter_port
+        sock_dir = self._exporter_sock_dir()
         pid_path = self.EXPORTER_PID_PATH
         log_path = "/var/log/ceph/ceph-exporter.log"
         conf = self.config.ceph_conf_path
 
-        self.executor.run_remote(host_name, "sudo mkdir -p /var/run/ceph /var/log/ceph")
+        self.executor.run_remote(host_name, f"sudo mkdir -p {sock_dir} /var/log/ceph")
         self._stop_ceph_exporter(host_name)
 
         start_cmd = (
             f"nohup {binary} -c {conf} "
-            f"--sock-dir /var/run/ceph --prio-limit {prio} "
+            f"--sock-dir {sock_dir} --prio-limit {prio} "
             f"--tcp-port {port} -f "
             f"> {log_path} 2>&1 & echo $! | sudo tee {pid_path} > /dev/null"
         )
@@ -109,6 +115,10 @@ class GrafanaSystemdManager(GrafanaManager):
                 f"{addr}:{self.config.grafana_exporter_port}"
             )
 
+        # Ceph Grafana dashboards filter on label ``cluster`` (from
+        # ceph_health_status). Attach the same label to every scrape target so
+        # ceph-exporter MDS/OSD counters are not dropped by cluster=~"$cluster".
+        cluster = self.config.prometheus_cluster_label
         config = {
             "global": {
                 "scrape_interval": self.config.prometheus_scrape_interval,
@@ -117,11 +127,18 @@ class GrafanaSystemdManager(GrafanaManager):
                 {
                     "job_name": "ceph",
                     "honor_labels": True,
-                    "static_configs": [{"targets": mgr_targets}],
+                    "static_configs": [
+                        {"targets": mgr_targets, "labels": {"cluster": cluster}}
+                    ],
                 },
                 {
                     "job_name": "ceph-exporter",
-                    "static_configs": [{"targets": exporter_targets}],
+                    "static_configs": [
+                        {
+                            "targets": exporter_targets,
+                            "labels": {"cluster": cluster},
+                        }
+                    ],
                 },
             ],
         }
@@ -254,6 +271,7 @@ class GrafanaSystemdManager(GrafanaManager):
             f"http://127.0.0.1:{self.config.prometheus_port}"
         )
         anon = "true" if self.config.grafana_anonymous_access else "false"
+        timezone = shlex.quote(self.config.grafana_timezone)
         provisioning_dir = self.GRAFANA_PROVISIONING_DIR
         dashboards_dir = self.GRAFANA_DASHBOARDS_HOST_DIR
 
@@ -268,6 +286,7 @@ class GrafanaSystemdManager(GrafanaManager):
             f"-e GF_AUTH_ANONYMOUS_ENABLED={anon} "
             f"-e GF_AUTH_ANONYMOUS_ORG_ROLE=Admin "
             f"-e GF_SERVER_HTTP_PORT={port} "
+            f"-e GF_DATE_FORMATS_DEFAULT_TIMEZONE={timezone} "
             f"-e GF_SECURITY_ALLOW_EMBEDDING=true "
             f"-e GF_INSTALL_PLUGINS= "
             f"{image}"

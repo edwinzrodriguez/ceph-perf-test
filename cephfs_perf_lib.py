@@ -918,6 +918,11 @@ class PerformanceTestConfig:
         return self._config.get("grafana", {}).get("prometheus_scrape_interval", "15s")
 
     @property
+    def prometheus_cluster_label(self):
+        """Value for the Prometheus ``cluster`` label (Ceph dashboards filter on it)."""
+        return self._config.get("grafana", {}).get("prometheus_cluster_label", "ceph")
+
+    @property
     def grafana_exporter_port(self):
         return self._config.get("grafana", {}).get("exporter_port", 9926)
 
@@ -928,6 +933,11 @@ class PerformanceTestConfig:
     @property
     def grafana_anonymous_access(self):
         return self._config.get("grafana", {}).get("anonymous_access", True)
+
+    @property
+    def grafana_timezone(self):
+        """Grafana UI timezone. UTC matches Ceph daemon log timestamps."""
+        return self._config.get("grafana", {}).get("timezone", "UTC")
 
     @property
     def grafana_protocol(self):

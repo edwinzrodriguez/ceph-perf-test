@@ -180,9 +180,13 @@ grafana:
   port: 3000
   prometheus_port: 9095
   prometheus_scrape_interval: 5s
+  # Must match the ``cluster`` label on mgr metrics so dashboards see exporter MDS data
+  prometheus_cluster_label: ceph
   exporter_port: 9926
   mgr_prometheus_port: 9283
   anonymous_access: true
+  # UI timezone. UTC matches Ceph daemon log timestamps (IANA name or browser).
+  timezone: UTC
   protocol: http
   ssl: false
   credentials_file: "ibm-credentials.env"

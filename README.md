@@ -126,6 +126,7 @@ Default container images match the upstream Ceph cephadm monitoring stack:
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `anonymous_access` | bool | `true` | Allow anonymous Grafana access |
+| `timezone` | string | `UTC` | Grafana UI timezone (`UTC`, an IANA name (such as America/New_York), or `browser`). `UTC` matches Ceph daemon log timestamps. Applied to the systemd Grafana container. |
 | `protocol` | string | `http` | Grafana protocol (`http` or `https`) |
 | `ssl` | bool | `false` | Enable TLS for Grafana |
 
@@ -181,6 +182,7 @@ grafana:
   exporter_port: 9926
   mgr_prometheus_port: 9283
   anonymous_access: true
+  timezone: UTC
   protocol: http
   ssl: false
   ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
