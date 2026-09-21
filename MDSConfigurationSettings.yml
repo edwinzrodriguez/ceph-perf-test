@@ -504,7 +504,7 @@ mds_settings:
 #  mds_cache_trim_threshold: [64Ki, 128Ki, 64Ki]
 ##  mds_cache_reservation: [5, 10, 5]
 ##  mds_log_max_segments: [30, 60, 30]
-  mds_dispatch_engine: [classic, reactor]
+#  mds_dispatch_engine: [classic, reactor]
 # For vstart / uniform wip mons, use monitor config store instead of ceph.conf:
 #mds:
 #  dispatch_engine_via: ceph-config
