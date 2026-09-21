@@ -71,6 +71,7 @@
         value: '255'
         state: present
         reload: yes
+      ignore_errors: yes
 
     - name: Read netmist.env
       ansible.builtin.shell:
