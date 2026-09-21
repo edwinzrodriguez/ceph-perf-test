@@ -112,6 +112,10 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             if cephfs_manager:
                 print(f"Resetting MDS perf counters for Load Point {current_lp}...")
                 cephfs_manager.reset_perf_counters()
+            if cephfs_manager:
+                cephfs_manager.start_periodic_perf_dump(
+                    current_lp, payload.get("results_dir")
+                )
             if (
                 cephfs_manager
                 and cephfs_manager.is_mds_logging_enabled()
@@ -161,6 +165,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                 on_run_phase_start(fallback=True)
             if "Tests finished" in line:
                 r_dir = payload.get("results_dir")
+                if cephfs_manager:
+                    cephfs_manager.stop_periodic_perf_dump()
                 if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
                     print(f"Dumping MDS lockstat for Load Point {current_lp}...")
                     cephfs_manager.dump_lockstat(
@@ -238,6 +244,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                     perf_threads.append(t)
                     ganesha_perf_triggered = True
         process.wait()
+        if cephfs_manager:
+            cephfs_manager.stop_periodic_perf_dump()
         for t in perf_threads:
             t.join()
         if process.returncode != 0:
@@ -419,7 +427,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         # Ensure the remote directory exists
         self.executor.run_remote(
             target,
-            f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}",
+            f"sudo mkdir -p {remote_dir} /cephfs_perf && "
+            f"sudo chown {u}:{u} {remote_dir} /cephfs_perf",
         )
 
         # Ensure g_remote_dir exists if applicable
@@ -499,6 +508,10 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             ("lib/workload/run_sfs2020_workload.py", run_cmd),
             ("perf_record.py", perf_script),
             ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
+            (
+                "mds_perf_dump_collector.py",
+                "/cephfs_perf/mds_perf_dump_collector.py",
+            ),
         ]
 
         # Also copy ganesha perf record script if different

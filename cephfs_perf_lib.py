@@ -241,6 +241,28 @@ class FSManager(abc.ABC):
         """
         return False
 
+    def is_mds_periodic_perf_dump_enabled(self):
+        """Return True when periodic MDS perf/histogram dumps should run.
+
+        Default False so pool/stub managers no-op. CephFSManager overrides
+        to read ``mds.perf_dump.enabled`` from the config.
+        """
+        return False
+
+    def start_periodic_perf_dump(self, loadpoint, results_dir=None):
+        """Start local MDS perf dump collectors for the loadpoint.
+
+        Default no-op for stub/pool managers. CephFSManager implements this.
+        """
+        pass
+
+    def stop_periodic_perf_dump(self):
+        """Stop local MDS perf dump collectors and collect files.
+
+        Default no-op for stub/pool managers. CephFSManager implements this.
+        """
+        pass
+
     def reset_perf_counters(self):
         """Reset MDS admin-socket perf counters (start of loadpoint window).
 
@@ -251,7 +273,7 @@ class FSManager(abc.ABC):
     def dump_perf_counters(
         self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None
     ):
-        """Dump MDS admin-socket perf counters (end of loadpoint window).
+        """Dump MDS admin-socket perf counters and histograms (end of loadpoint).
 
         Default no-op for stub/pool managers. CephFSManager implements this.
         """

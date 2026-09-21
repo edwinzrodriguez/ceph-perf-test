@@ -1,7 +1,10 @@
 import base64
 import json
+import os
 import re
 import shlex
+import subprocess
+import threading
 import time
 from cephfs_perf_lib import CommonUtils, FSManager
 
@@ -30,6 +33,9 @@ class CephFSManager(FSManager):
         self.lockstat_exists = {}
         # Track deployed MDS instances: {fs_name: [(host, mds_id), ...]}
         self._mds_instances = {}
+        # Active local collectors: list of dicts with host/local_dir/pid_file/...
+        self._periodic_perf_dump_jobs = []
+        self._periodic_perf_dump_dest = None  # final results subdir on admin
 
     # ------------------------------------------------------------------
     # ceph CLI helpers (always honor env_vars + sudo library path)
@@ -323,13 +329,28 @@ class CephFSManager(FSManager):
         if not found:
             print("Warning: no MDS admin sockets found for perf counter reset")
 
+    def _mds_perf_dump_dest_file(
+        self, target_name, base_output_type, host, loadpoint, phase, settings, lp_cfg
+    ):
+        output_type = f"{base_output_type}_{phase}" if phase else base_output_type
+        if settings is not None:
+            return (
+                f"{CommonUtils.get_workload_base_name(target_name, output_type, host, loadpoint, settings, lp_cfg)}.json"
+            )
+        lp_tag = f"{int(loadpoint):02d}"
+        phase_suffix = f"_{phase}" if phase else ""
+        return (
+            f"{target_name}_{base_output_type}{phase_suffix}_{host}_lp{lp_tag}.json"
+        )
+
     def dump_perf_counters(
         self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None
     ):
-        """Dump MDS admin-socket ``perf dump`` JSON for the loadpoint window.
+        """Dump MDS admin-socket perf counters for the loadpoint window.
 
-        Mirrors dump_lockstat / collect_ganesha_perf_dump: call at loadpoint end
-        so counters cover the full RUN phase.
+        Collects both ``perf dump`` and ``perf histogram dump mds``. Mirrors
+        dump_lockstat / collect_ganesha_perf_dump: call at loadpoint end so
+        counters cover the full RUN phase.
         """
         if not results_dir:
             print(
@@ -352,40 +373,317 @@ class CephFSManager(FSManager):
                 f"(Load Point {loadpoint}{phase_label}) via {asok}..."
             )
             target_name = f"mds.{mds_id}"
-            output_type = f"perf_dump_{phase}" if phase else "perf_dump"
-            if settings is not None:
-                dest_file = (
-                    f"{CommonUtils.get_workload_base_name(target_name, output_type, host, loadpoint, settings, lp_cfg)}.json"
-                )
-            else:
-                lp_tag = f"{int(loadpoint):02d}"
-                phase_suffix = f"_{phase}" if phase else ""
-                dest_file = (
-                    f"{target_name}_perf_dump{phase_suffix}_{host}_lp{lp_tag}.json"
-                )
-            temp_file = f"/tmp/{dest_file}"
-            dump_cmd = self._admin_daemon_cmd(asok, "perf dump")
-            self.executor.run_remote(
-                host, f"{dump_cmd} | sudo tee {temp_file} > /dev/null"
+            perf_dest_file = self._mds_perf_dump_dest_file(
+                target_name,
+                "perf_dump",
+                host,
+                loadpoint,
+                phase,
+                settings,
+                lp_cfg,
             )
-            user, _, _ = self.executor.get_ssh_details(host)
-            self.executor.run_remote(host, f"sudo chown {user}:{user} {temp_file}")
-            admin_user, admin_host_addr, admin_port = self.executor.get_ssh_details(
-                self.admin
+            hist_dest_file = self._mds_perf_dump_dest_file(
+                target_name,
+                "perf_histogram_dump_mds",
+                host,
+                loadpoint,
+                phase,
+                settings,
+                lp_cfg,
             )
-            copy_cmd = (
-                f"scp -o StrictHostKeyChecking=no -P {admin_port} "
-                f"{temp_file} {admin_user}@{admin_host_addr}:{results_dir}/"
+            self._admin_perf_command_to_results(
+                host, asok, results_dir, "perf dump", perf_dest_file
             )
-            self.executor.run_remote(host, copy_cmd)
-            self.executor.run_remote(host, f"rm -f {temp_file}")
-            print(f"[{host}] Wrote MDS perf dump {dest_file} → {results_dir}/")
+            print(f"[{host}] Wrote MDS perf dump {perf_dest_file} → {results_dir}/")
+            self._admin_perf_command_to_results(
+                host,
+                asok,
+                results_dir,
+                "perf histogram dump mds",
+                hist_dest_file,
+            )
+            print(
+                f"[{host}] Wrote MDS perf histogram dump {hist_dest_file} "
+                f"→ {results_dir}/"
+            )
 
         if not found:
             print(
                 f"Warning: no MDS admin sockets found for perf dump "
                 f"(load point {loadpoint})"
             )
+
+    def _mds_perf_dump_cfg(self):
+        return (self.config.get("mds", {}) or {}).get("perf_dump", {}) or {}
+
+    def _mds_periodic_perf_dump_interval(self):
+        return max(1, int(self._mds_perf_dump_cfg().get("interval", 60)))
+
+    def _mds_perf_dump_script_remote(self):
+        return self._mds_perf_dump_cfg().get(
+            "script", "/cephfs_perf/mds_perf_dump_collector.py"
+        )
+
+    def _mds_perf_dump_script_local(self):
+        """Repo-relative path to the collector helper (for scp deploy)."""
+        here = os.path.dirname(os.path.abspath(__file__))
+        return os.path.abspath(
+            os.path.join(here, "..", "..", "mds_perf_dump_collector.py")
+        )
+
+    def _periodic_perf_dump_dir(self, results_dir, loadpoint):
+        return f"{results_dir}/lp{int(loadpoint):02d}"
+
+    def _ensure_mds_perf_dump_script(self, host):
+        """Copy the collector helper to *host* if the local source exists."""
+        remote = self._mds_perf_dump_script_remote()
+        local = self._mds_perf_dump_script_local()
+        if not os.path.isfile(local):
+            # Assume prepare_storage (or a prior deploy) already placed it.
+            return remote
+        remote_dir = os.path.dirname(remote) or "/cephfs_perf"
+        user, _, _ = self.executor.get_ssh_details(host)
+        self.executor.run_remote(
+            host, f"sudo mkdir -p {remote_dir} && sudo chown {user}:{user} {remote_dir}"
+        )
+        u, h, p = self.executor.get_ssh_details(host)
+        subprocess.run(
+            [
+                "scp",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-P",
+                str(p),
+                local,
+                f"{u}@{h}:{remote}",
+            ],
+            check=False,
+        )
+        self.executor.run_remote(host, f"chmod +x {remote} || true")
+        return remote
+
+    def _admin_perf_command_to_results(
+        self, host, asok, results_subdir, admin_subcommand, dest_filename
+    ):
+        """Run an admin-daemon perf command on *host* and copy JSON to *results_subdir*."""
+        temp_file = f"/tmp/{dest_filename}"
+        dump_cmd = self._admin_daemon_cmd(asok, admin_subcommand)
+        self.executor.run_remote(
+            host, f"{dump_cmd} | sudo tee {temp_file} > /dev/null"
+        )
+        user, _, _ = self.executor.get_ssh_details(host)
+        self.executor.run_remote(host, f"sudo chown {user}:{user} {temp_file}")
+        admin_user, admin_host_addr, admin_port = self.executor.get_ssh_details(
+            self.admin
+        )
+        copy_cmd = (
+            f"scp -o StrictHostKeyChecking=no -P {admin_port} "
+            f"{temp_file} {admin_user}@{admin_host_addr}:{results_subdir}/"
+        )
+        self.executor.run_remote(host, copy_cmd)
+        self.executor.run_remote(host, f"rm -f {temp_file}")
+
+    def _start_local_perf_dump_collector(self, host, mds_id, asok, loadpoint, script):
+        """Start the collector process on *host*; return job metadata dict."""
+        lp_tag = f"{int(loadpoint):02d}"
+        safe_id = mds_id.replace("/", "_")
+        local_dir = f"/tmp/mds_perf_dump_lp{lp_tag}_{safe_id}"
+        pid_file = f"{local_dir}.pid"
+        log_file = f"{local_dir}.log"
+        interval = self._mds_periodic_perf_dump_interval()
+        ceph_bin = self._ceph_bin()
+
+        env = CommonUtils.expand_env_vars_map(self._ceph_env() or {})
+        env_args = " ".join(
+            f"--env {shlex.quote(f'{k}={v}')}" for k, v in env.items()
+        )
+
+        # Stop any leftover collector for this MDS/loadpoint tag.
+        self.executor.run_remote(
+            host,
+            f"if [ -f {shlex.quote(pid_file)} ]; then "
+            f"kill $(cat {shlex.quote(pid_file)}) 2>/dev/null || true; fi; "
+            f"rm -rf {shlex.quote(local_dir)} {shlex.quote(pid_file)}; "
+            f"mkdir -p {shlex.quote(local_dir)}",
+        )
+
+        collector_cmd = (
+            f"python3 {shlex.quote(script)} "
+            f"--host {shlex.quote(host)} "
+            f"--asok {shlex.quote(asok)} "
+            f"--ceph-bin {shlex.quote(ceph_bin)} "
+            f"--output-dir {shlex.quote(local_dir)} "
+            f"--interval {interval} "
+            f"--pid-file {shlex.quote(pid_file)} "
+            f"{env_args}"
+        )
+        # Detach fully so the SSH session can exit immediately.
+        start_cmd = (
+            f"nohup {collector_cmd} >{shlex.quote(log_file)} 2>&1 </dev/null & "
+            f"echo $! > {shlex.quote(pid_file)}"
+        )
+        print(
+            f"[{host}] Starting local MDS perf dump collector for mds.{mds_id} "
+            f"(interval={interval}s) → {local_dir}/"
+        )
+        self.executor.run_remote(host, start_cmd)
+        return {
+            "host": host,
+            "mds_id": mds_id,
+            "asok": asok,
+            "local_dir": local_dir,
+            "pid_file": pid_file,
+            "log_file": log_file,
+        }
+
+    def _stop_local_perf_dump_collector(self, job, dest_dir):
+        """Stop one collector and scp its dumps into *dest_dir* on admin."""
+        host = job["host"]
+        local_dir = job["local_dir"]
+        pid_file = job["pid_file"]
+        print(
+            f"[{host}] Stopping local MDS perf dump collector for "
+            f"mds.{job['mds_id']}..."
+        )
+        self.executor.run_remote(
+            host,
+            f"if [ -f {shlex.quote(pid_file)} ]; then "
+            f"kill $(cat {shlex.quote(pid_file)}) 2>/dev/null || true; "
+            f"for i in 1 2 3 4 5 6 7 8 9 10; do "
+            f"  kill -0 $(cat {shlex.quote(pid_file)} 2>/dev/null) 2>/dev/null || break; "
+            f"  sleep 0.5; "
+            f"done; "
+            f"kill -9 $(cat {shlex.quote(pid_file)} 2>/dev/null) 2>/dev/null || true; "
+            f"fi",
+        )
+
+        admin_user, admin_host_addr, admin_port = self.executor.get_ssh_details(
+            self.admin
+        )
+        listing = self.executor.run_remote(
+            host,
+            f"ls {shlex.quote(local_dir)}/*.json 2>/dev/null || true",
+        ).strip()
+        files = [f for f in listing.split() if f]
+        if files:
+            print(
+                f"[{host}] Copying {len(files)} periodic MDS perf dump file(s) "
+                f"→ {dest_dir}/"
+            )
+            # One scp for the whole batch (avoids per-file SSH overhead).
+            copy_cmd = (
+                f"scp -o StrictHostKeyChecking=no -P {admin_port} "
+                f"{shlex.quote(local_dir)}/*.json "
+                f"{admin_user}@{admin_host_addr}:{shlex.quote(dest_dir)}/"
+            )
+            self.executor.run_remote(host, copy_cmd)
+        else:
+            print(f"[{host}] No periodic MDS perf dump files found in {local_dir}")
+
+        self.executor.run_remote(
+            host,
+            f"rm -rf {shlex.quote(local_dir)} {shlex.quote(pid_file)} "
+            f"{shlex.quote(job.get('log_file', ''))}",
+        )
+
+    def start_periodic_perf_dump(self, loadpoint, results_dir=None):
+        """Start a local collector process on each MDS for this loadpoint.
+
+        Each MDS runs ``mds_perf_dump_collector.py`` writing dumps under
+        ``/tmp/mds_perf_dump_lp<NN>_<mds_id>/``. Files are copied to
+        ``<results_dir>/lp<NN>/`` when ``stop_periodic_perf_dump`` runs.
+        """
+        cfg = self._mds_perf_dump_cfg()
+        if not self.is_mds_periodic_perf_dump_enabled():
+            if cfg:
+                print(
+                    "Skipping periodic MDS perf dump: mds.perf_dump.enabled is false "
+                    f"(set enabled: true to collect every {cfg.get('interval', 60)}s)"
+                )
+            return
+        if not results_dir:
+            print(
+                f"Skipping periodic MDS perf dump for load point {loadpoint}: "
+                "no results_dir"
+            )
+            return
+
+        self.stop_periodic_perf_dump()
+
+        dump_dir = self._periodic_perf_dump_dir(results_dir, loadpoint)
+        self.executor.run_remote(self.admin, f"mkdir -p {dump_dir}")
+
+        jobs = []
+        for host, mds_id, asok in self._iter_mds_admin_sockets():
+            if not self._asok_exists(host, asok):
+                print(
+                    f"[{host}] Warning: MDS admin socket not found for "
+                    f"mds.{mds_id} ({asok}); skip periodic perf dump"
+                )
+                continue
+            script = self._ensure_mds_perf_dump_script(host)
+            jobs.append(
+                self._start_local_perf_dump_collector(
+                    host, mds_id, asok, loadpoint, script
+                )
+            )
+
+        self._periodic_perf_dump_jobs = jobs
+        self._periodic_perf_dump_dest = dump_dir
+        if jobs:
+            print(
+                f"Started {len(jobs)} local MDS perf dump collector(s) "
+                f"(interval={self._mds_periodic_perf_dump_interval()}s); "
+                f"will copy to {dump_dir}/ at loadpoint end"
+            )
+        else:
+            print(
+                f"Warning: no MDS admin sockets found for periodic perf dump "
+                f"(load point {loadpoint})"
+            )
+
+    def stop_periodic_perf_dump(self):
+        """Stop local collectors and copy dumps into the loadpoint results subdir."""
+        jobs = list(self._periodic_perf_dump_jobs or [])
+        dest_dir = self._periodic_perf_dump_dest
+        self._periodic_perf_dump_jobs = []
+        self._periodic_perf_dump_dest = None
+        if not jobs:
+            return
+        if not dest_dir:
+            print(
+                "Warning: periodic MDS perf dump has no results dest; "
+                "stopping collectors without collecting files"
+            )
+            for job in jobs:
+                host = job["host"]
+                self.executor.run_remote(
+                    host,
+                    f"if [ -f {shlex.quote(job['pid_file'])} ]; then "
+                    f"kill $(cat {shlex.quote(job['pid_file'])}) 2>/dev/null || true; fi; "
+                    f"rm -rf {shlex.quote(job['local_dir'])} "
+                    f"{shlex.quote(job['pid_file'])} "
+                    f"{shlex.quote(job.get('log_file', ''))}",
+                )
+            return
+
+        # Stop + collect in parallel across MDS hosts.
+        threads = []
+        for job in jobs:
+            t = threading.Thread(
+                target=self._stop_local_perf_dump_collector,
+                args=(job, dest_dir),
+                name=f"mds-perf-dump-stop-{job['host']}-{job['mds_id']}",
+            )
+            t.start()
+            threads.append(t)
+        for t in threads:
+            t.join(timeout=120)
+            if t.is_alive():
+                print(
+                    f"Warning: periodic MDS perf dump stop thread {t.name} "
+                    "still alive after 120s"
+                )
 
     def rebuild_filesystem(
         self, settings, ganesha_manager=None, samba_manager=None, results_dir=None
@@ -1100,6 +1398,9 @@ class CephFSManager(FSManager):
 
     def is_mds_perf_record_enabled(self):
         return bool(self.config.get("mds", {}).get("perf_record", False))
+
+    def is_mds_periodic_perf_dump_enabled(self):
+        return bool(self._mds_perf_dump_cfg().get("enabled", False))
 
     def is_mds_logging_enabled(self):
         return bool(self._mds_logging_cfg().get("enabled"))

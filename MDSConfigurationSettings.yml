@@ -152,6 +152,10 @@ mds:
   perf_record_script: "/cephfs_perf/perf_record.py"
   perf_record_executable: "ceph-mds"
   perf_record_duration: 5
+  perf_dump:
+    enabled: false
+    interval: 5  # seconds between perf dump + perf histogram dump mds per MDS
+    script: "/cephfs_perf/mds_perf_dump_collector.py"
   logging:
     enabled: false
     debug_mds: 1

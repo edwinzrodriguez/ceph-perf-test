@@ -251,6 +251,10 @@ class FioWorkloadRunner(WorkloadRunner):
                         f"Resetting MDS perf counters for Load Point {current_lp}..."
                     )
                     cephfs_manager.reset_perf_counters()
+                if cephfs_manager:
+                    cephfs_manager.start_periodic_perf_dump(
+                        current_lp, results_dir
+                    )
                 if (
                     cephfs_manager
                     and cephfs_manager.is_mds_logging_enabled()
@@ -300,6 +304,8 @@ class FioWorkloadRunner(WorkloadRunner):
                     perf_threads.append(t)
                 perf_triggered = True
             if "Finished Fio Load Point:" in line:
+                if cephfs_manager:
+                    cephfs_manager.stop_periodic_perf_dump()
                 if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
                     print(f"Dumping MDS lockstat for Load Point {current_lp}...")
                     cephfs_manager.dump_lockstat(
@@ -379,6 +385,8 @@ class FioWorkloadRunner(WorkloadRunner):
                     )
 
         process.wait()
+        if cephfs_manager:
+            cephfs_manager.stop_periodic_perf_dump()
         for t in perf_threads:
             t.join()
 
@@ -450,6 +458,10 @@ class FioWorkloadRunner(WorkloadRunner):
                 ("lib/workload/run_fio_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
                 ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
+                (
+                    "mds_perf_dump_collector.py",
+                    "/cephfs_perf/mds_perf_dump_collector.py",
+                ),
             ]
 
             # Also copy ganesha perf record script if different
@@ -467,6 +479,9 @@ class FioWorkloadRunner(WorkloadRunner):
             if stap_script and os.path.exists(os.path.basename(stap_script)):
                 files_to_copy.append((os.path.basename(stap_script), stap_script))
 
+            self.executor.run_remote(
+                target, f"sudo mkdir -p /cephfs_perf && sudo chown {u}:{u} /cephfs_perf"
+            )
             for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
                     print(f"Copying local {local_file} to {remote_path} on {target}...")
