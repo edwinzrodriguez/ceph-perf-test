@@ -96,14 +96,36 @@ class CephFSManager(FSManager):
             return mds_cfg.get("logging") or {}
         return self.config.get("logging", {}) or {}
 
+    def _mds_logging_debug_levels(self):
+        """Return ``(debug_mds, debug_ms)`` from ``mds.logging``."""
+        logging_cfg = self._mds_logging_cfg()
+        return (
+            logging_cfg.get("debug_mds", 20),
+            logging_cfg.get("debug_ms", 1),
+        )
+
+    def _mds_logging_idle_levels(self):
+        """Debug levels used outside an active loadpoint window.
+
+        Memory logging keeps the configured ``log/memory`` levels (e.g. ``1/20``)
+        so the gather buffer stays armed. Classic file logging drops back to
+        ``1`` between loadpoints to avoid writing verbose logs continuously.
+        """
+        if self.is_mds_memory_logging_enabled():
+            return self._mds_logging_debug_levels()
+        return 1, 1
+
     def _configure_mds_logging(self):
         """Apply baseline MDS logging from ``mds.logging`` after daemons are up."""
         if self.is_mds_logging_enabled():
-            self._run_ceph(self.admin, "config set mds debug_mds 1")
-            self._run_ceph(self.admin, "config set mds debug_ms 1")
+            debug_mds, debug_ms = self._mds_logging_idle_levels()
+            print(f"Setting MDS debug_mds={debug_mds} debug_ms={debug_ms}")
+            self._run_ceph(self.admin, f"config set mds debug_mds {debug_mds}")
+            self._run_ceph(self.admin, f"config set mds debug_ms {debug_ms}")
             self._run_ceph(self.admin, "config set mds log_to_file true")
             self._run_ceph(self.admin, "config set mds log_to_stderr false")
             self._run_ceph(self.admin, "config set mds err_to_stderr true")
+            self._apply_mds_log_max_recent()
         else:
             self._run_ceph(self.admin, "config set mds debug_mds 1")
             self._run_ceph(self.admin, "config set mds debug_ms 1")
@@ -111,15 +133,64 @@ class CephFSManager(FSManager):
             self._run_ceph(self.admin, "config set mds log_to_stderr false")
             self._run_ceph(self.admin, "config set mds err_to_stderr false")
 
+    def _apply_mds_log_max_recent(self):
+        """Apply ``mds.logging.log_max_recent`` when configured."""
+        logging_cfg = self._mds_logging_cfg()
+        if "log_max_recent" not in logging_cfg:
+            return
+        log_max_recent = logging_cfg["log_max_recent"]
+        print(f"Setting MDS log_max_recent={log_max_recent}")
+        self._run_ceph(
+            self.admin, f"config set mds log_max_recent {log_max_recent}", check=True
+        )
+
+    def _dump_mds_recent_logs(self, loadpoint):
+        """Flush in-memory recent log entries to the MDS log file via asok.
+
+        Used with ``debug_mds: <log>/<memory>`` (e.g. ``1/20``) so verbose
+        gather-level messages kept in the ``log_max_recent`` ring buffer are
+        written out before log collection. No-op when no admin sockets exist.
+        """
+        dumped = 0
+        for host, mds_id, asok in self._iter_mds_admin_sockets():
+            if not self._asok_exists(host, asok):
+                print(
+                    f"[{host}] Warning: MDS admin socket not found for "
+                    f"mds.{mds_id} ({asok}); skip log dump"
+                )
+                continue
+            print(
+                f"[{host}] Dumping MDS recent (memory) logs for mds.{mds_id} "
+                f"(Load Point {loadpoint}) via {asok}..."
+            )
+            try:
+                self.executor.run_remote(
+                    host,
+                    self._admin_daemon_cmd(asok, "log dump"),
+                    check=True,
+                )
+                dumped += 1
+            except Exception as e:
+                print(
+                    f"[{host}] Warning: MDS log dump failed for "
+                    f"mds.{mds_id}: {e}"
+                )
+        if dumped == 0:
+            print(
+                "Warning: no MDS admin sockets found for memory log dump "
+                f"(Load Point {loadpoint})"
+            )
+
     def start_fs_logging(self, loadpoint):
         if not self.is_mds_logging_enabled():
             return
-        logging_cfg = self._mds_logging_cfg()
-        debug_mds = logging_cfg.get("debug_mds", 20)
-        debug_ms = logging_cfg.get("debug_ms", 1)
+        # Prefer log/memory form (e.g. 1/20) to gather verbosely in memory
+        # while keeping on-disk log traffic low during the loadpoint.
+        debug_mds, debug_ms = self._mds_logging_debug_levels()
         for server_name in self.mdss:
             print(
-                f"[{server_name}] Starting MDS debug logging for Load Point {loadpoint}"
+                f"[{server_name}] Starting MDS debug logging for Load Point "
+                f"{loadpoint} (debug_mds={debug_mds} debug_ms={debug_ms})"
             )
             self._run_ceph(server_name, f"config set mds debug_mds {debug_mds}")
             self._run_ceph(server_name, f"config set mds debug_ms {debug_ms}")
@@ -127,12 +198,16 @@ class CephFSManager(FSManager):
     def stop_fs_logging(self, loadpoint, results_dir=None):
         if not self.is_mds_logging_enabled():
             return
+        if self.is_mds_memory_logging_enabled():
+            self._dump_mds_recent_logs(loadpoint)
+        idle_mds, idle_ms = self._mds_logging_idle_levels()
         for server_name in self.mdss:
             print(
-                f"[{server_name}] Stopping MDS debug logging for Load Point {loadpoint}"
+                f"[{server_name}] Stopping MDS debug logging for Load Point "
+                f"{loadpoint} (debug_mds={idle_mds} debug_ms={idle_ms})"
             )
-            self._run_ceph(server_name, "config set mds debug_mds 1")
-            self._run_ceph(server_name, "config set mds debug_ms 1")
+            self._run_ceph(server_name, f"config set mds debug_mds {idle_mds}")
+            self._run_ceph(server_name, f"config set mds debug_ms {idle_ms}")
         if results_dir:
             self._collect_mds_logs(loadpoint, results_dir)
 
@@ -867,6 +942,7 @@ class CephFSManager(FSManager):
             "mds_op_history_duration",
             "mds_op_history_slow_op_size",
             "mds_op_history_slow_op_threshold",
+            "mds_reactor_queue_len_abort",
         }
     )
     _MDS_DISPATCH_ENGINE_VALUES = frozenset({"classic", "reactor"})
@@ -1404,3 +1480,20 @@ class CephFSManager(FSManager):
 
     def is_mds_logging_enabled(self):
         return bool(self._mds_logging_cfg().get("enabled"))
+
+    def is_mds_memory_logging_enabled(self):
+        """True when MDS logging should use the in-memory recent buffer.
+
+        Enabled explicitly via ``mds.logging.memory``, or implicitly when
+        ``debug_mds`` uses the ``<log>/<memory>`` form (e.g. ``1/20``) or
+        ``log_max_recent`` is set.
+        """
+        if not self.is_mds_logging_enabled():
+            return False
+        logging_cfg = self._mds_logging_cfg()
+        if "memory" in logging_cfg:
+            return bool(logging_cfg.get("memory"))
+        if "log_max_recent" in logging_cfg:
+            return True
+        debug_mds = str(logging_cfg.get("debug_mds", ""))
+        return "/" in debug_mds

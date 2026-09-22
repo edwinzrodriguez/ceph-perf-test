@@ -166,6 +166,7 @@ mds:
 #    mds_op_history_duration: 3600
 #    mds_op_history_slow_op_size: 100
 #    mds_op_history_slow_op_threshold: 5  # capture ops >5s even if not "blocked"
+#    mds_reactor_queue_len_abort: 3000000
 
 ceph:
   conf: "/etc/ceph/ceph.conf"

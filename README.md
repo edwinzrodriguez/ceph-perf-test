@@ -627,13 +627,26 @@ sfs2020_archive: "/path/to/SPECstorage2020.tgz"  # optional
 
 ### `logging`
 
-Controls MDS debug logging during tests.
+Controls MDS debug logging during tests. Prefer nesting under ``mds.logging``;
+a top-level ``logging`` section is still accepted for older settings files.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `false` | Enable MDS debug logging |
-| `debug_mds` | int | `5` | MDS subsystem debug level |
-| `debug_ms` | int | `1` | Messenger subsystem debug level |
+| `debug_mds` | int or string | `5` | MDS subsystem debug level. Use ``<log>/<memory>`` (e.g. ``1/20``) to keep a verbose gather level in memory while writing only the lower log level to disk |
+| `debug_ms` | int or string | `1` | Messenger subsystem debug level (same ``log/memory`` form supported) |
+| `memory` | bool | auto | Flush the in-memory recent log buffer via admin-socket ``log dump`` before collecting logs. Defaults to on when ``debug_mds`` uses ``log/memory`` form or ``log_max_recent`` is set |
+| `log_max_recent` | int | | Size of the in-memory recent-log ring buffer (Ceph daemon default is ``10000``). Applied via ``ceph config set mds log_max_recent`` |
+
+```yaml
+mds:
+  logging:
+    enabled: true
+    debug_mds: 1/20
+    debug_ms: 1
+    memory: true
+    log_max_recent: 10000
+```
 
 ---
 
