@@ -439,7 +439,7 @@
       },
       {
          "datasource": "$datasource",
-         "description": "Time messages waited in MDSOpWorkQueue before execution (Prometheus exports PERFCOUNTER_TIME in seconds as seconds via PERFCOUNTER_TIME). Lane order: Control > IOComplete > Client > Maintenance.",
+         "description": "Time messages waited in MDSOpWorkQueue before execution (Prometheus exports PERFCOUNTER_TIME in seconds as seconds via PERFCOUNTER_TIME). Lane order: Control > IOComplete > Maintenance > Client.",
          "fieldConfig": {
             "defaults": {
                "color": {
@@ -530,17 +530,17 @@
                "refId": "C"
             },
             {
-               "expr": "sum(rate(ceph_mds_dispatch_enqueue_latency_client_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_enqueue_latency_client_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
-               "format": "time_series",
-               "intervalFactor": 1,
-               "legendFormat": "client",
-               "refId": "D"
-            },
-            {
                "expr": "sum(rate(ceph_mds_dispatch_enqueue_latency_maintenance_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_enqueue_latency_maintenance_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
                "format": "time_series",
                "intervalFactor": 1,
                "legendFormat": "maintenance",
+               "refId": "D"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_enqueue_latency_client_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_enqueue_latency_client_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "client",
                "refId": "E"
             }
          ],
@@ -652,17 +652,17 @@
                "refId": "C"
             },
             {
-               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_client_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_client_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
-               "format": "time_series",
-               "intervalFactor": 1,
-               "legendFormat": "client",
-               "refId": "D"
-            },
-            {
                "expr": "sum(rate(ceph_mds_dispatch_execute_latency_maintenance_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_maintenance_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
                "format": "time_series",
                "intervalFactor": 1,
                "legendFormat": "maintenance",
+               "refId": "D"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_client_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_client_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "client",
                "refId": "E"
             }
          ],
@@ -859,7 +859,7 @@
       },
       {
          "datasource": "$datasource",
-         "description": "Execute time for Maintenance inbound messages and synthetic work (trim_quantum, log_trim, advance_queues, io_completion, callable). Long trim_quantum/log_trim holds mds_lock and blocks all lanes.",
+         "description": "Execute time for Maintenance inbound messages and synthetic work (trim_quantum, log_trim, advance_queues, io_completion, callable). TrimQuantum/LogTrim are time-sliced (mds_*_trim_max_duration) and single-flight; long holds should be rare.",
          "fieldConfig": {
             "defaults": {
                "color": {
@@ -1351,5 +1351,5 @@
    "timezone": "",
    "title": "MDS Reactor Dispatch",
    "uid": "mdsReactorDispatch",
-   "version": 1
+   "version": 2
 }
