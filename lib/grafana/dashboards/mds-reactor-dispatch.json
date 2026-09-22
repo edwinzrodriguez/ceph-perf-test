@@ -671,12 +671,330 @@
          "description": "Time spent executing an op on the reactor thread under mds_lock (PERFCOUNTER_TIME values are seconds as seconds via PERFCOUNTER_TIME)."
       },
       {
+         "datasource": "$datasource",
+         "description": "Per-message-type reactor execute time for Control-lane inbound messages. Use this to see which control ops dominate dispatch_execute_latency_control.",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Execute time",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": []
+               },
+               "unit": "s"
+            },
+            "overrides": []
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 38
+         },
+         "id": 15,
+         "options": {
+            "legend": {
+               "calcs": [
+                  "mean",
+                  "max"
+               ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_mon_map_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_mon_map_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "mon_map",
+               "refId": "A"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_mds_map_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_mds_map_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "mds_map",
+               "refId": "B"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_osd_map_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_osd_map_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "osd_map",
+               "refId": "C"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_remove_snaps_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_remove_snaps_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "remove_snaps",
+               "refId": "D"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_command_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_command_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "command",
+               "refId": "E"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_mon_command_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_mon_command_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "mon_command",
+               "refId": "F"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_client_session_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_client_session_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "client_session",
+               "refId": "G"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_client_reconnect_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_client_reconnect_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "client_reconnect",
+               "refId": "H"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_client_reclaim_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_client_reclaim_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "client_reclaim",
+               "refId": "I"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_quiesce_db_listing_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_quiesce_db_listing_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "quiesce_db_listing",
+               "refId": "J"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_quiesce_db_ack_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_quiesce_db_ack_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "quiesce_db_ack",
+               "refId": "K"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_resolve_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_resolve_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "resolve",
+               "refId": "L"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_resolve_ack_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_resolve_ack_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "resolve_ack",
+               "refId": "M"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_cache_rejoin_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_cache_rejoin_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "cache_rejoin",
+               "refId": "N"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_heartbeat_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_heartbeat_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "heartbeat",
+               "refId": "O"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_table_request_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_table_request_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "table_request",
+               "refId": "P"
+            }
+         ],
+         "title": "Execute Latency by Control Work Class - $mds_servers",
+         "type": "timeseries"
+      },
+      {
+         "datasource": "$datasource",
+         "description": "Execute time for Maintenance inbound messages and synthetic work (trim_quantum, log_trim, advance_queues, io_completion, callable). Long trim_quantum/log_trim holds mds_lock and blocks all lanes.",
+         "fieldConfig": {
+            "defaults": {
+               "color": {
+                  "mode": "palette-classic"
+               },
+               "custom": {
+                  "axisCenteredZero": false,
+                  "axisColorMode": "text",
+                  "axisLabel": "Execute time",
+                  "axisPlacement": "auto",
+                  "barAlignment": 0,
+                  "drawStyle": "line",
+                  "fillOpacity": 8,
+                  "gradientMode": "none",
+                  "hideFrom": {
+                     "legend": false,
+                     "tooltip": false,
+                     "viz": false
+                  },
+                  "lineInterpolation": "linear",
+                  "lineWidth": 1,
+                  "pointSize": 0,
+                  "scaleDistribution": {
+                     "type": "linear"
+                  },
+                  "showPoints": "never",
+                  "spanNulls": true,
+                  "stacking": {
+                     "group": "A",
+                     "mode": "none"
+                  },
+                  "thresholdsStyle": {
+                     "mode": "off"
+                  }
+               },
+               "min": 0,
+               "thresholds": {
+                  "mode": "absolute",
+                  "steps": []
+               },
+               "unit": "s"
+            },
+            "overrides": []
+         },
+         "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 47
+         },
+         "id": 16,
+         "options": {
+            "legend": {
+               "calcs": [
+                  "mean",
+                  "max"
+               ],
+               "displayMode": "table",
+               "placement": "bottom",
+               "showLegend": true
+            },
+            "tooltip": {
+               "mode": "multi",
+               "sort": "desc"
+            }
+         },
+         "pluginVersion": "9.1.3",
+         "targets": [
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_scrub_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_scrub_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "scrub",
+               "refId": "A"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_scrub_stats_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_scrub_stats_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "scrub_stats",
+               "refId": "B"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_cache_expire_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_cache_expire_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "cache_expire",
+               "refId": "C"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_io_completion_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_io_completion_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "io_completion",
+               "refId": "D"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_advance_queues_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_advance_queues_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "advance_queues",
+               "refId": "E"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_trim_quantum_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_trim_quantum_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "trim_quantum",
+               "refId": "F"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_log_trim_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_log_trim_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "log_trim",
+               "refId": "G"
+            },
+            {
+               "expr": "sum(rate(ceph_mds_dispatch_execute_latency_callable_sum{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval])) / sum(rate(ceph_mds_dispatch_execute_latency_callable_count{ceph_daemon=~\"($mds_servers).*\", cluster=~\"$cluster\"}[$__rate_interval]))",
+               "format": "time_series",
+               "intervalFactor": 1,
+               "legendFormat": "callable",
+               "refId": "H"
+            }
+         ],
+         "title": "Execute Latency by Maintenance / Synthetic Work Class - $mds_servers",
+         "type": "timeseries"
+      },
+      {
          "collapsed": false,
          "gridPos": {
             "h": 1,
             "w": 24,
             "x": 0,
-            "y": 38
+            "y": 56
          },
          "id": 11,
          "panels": [],
@@ -734,7 +1052,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 39
+            "y": 57
          },
          "id": 12,
          "options": {
@@ -815,7 +1133,7 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 39
+            "y": 57
          },
          "id": 13,
          "options": {
@@ -903,7 +1221,7 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 39
+            "y": 57
          },
          "id": 14,
          "options": {
@@ -1033,5 +1351,5 @@
    "timezone": "",
    "title": "MDS Reactor Dispatch",
    "uid": "mdsReactorDispatch",
-   "version": 0
+   "version": 1
 }
