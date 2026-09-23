@@ -106,6 +106,28 @@ inventory:
       ansible_ssh_user: "root"
       ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
       private_ip: 10.241.64.69
+  rgws:
+    mon-000:
+      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.69
+      monitor_address: 10.241.64.69
+    mon-001:
+      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.71
+      monitor_address: 10.241.64.71
+    mon-002:
+      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_port: 22
+      ansible_ssh_user: "root"
+      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      private_ip: 10.241.64.68
+      monitor_address: 10.241.64.68
 
 fs_name: "perf_test_fs"
 # CephFSCephadmManager (or legacy CephFSManager) deploys MDS via `ceph orch`.
@@ -270,6 +292,34 @@ samba:
 #  finisher_log_level: 10
   client_oc_size: "16GiB"
   msgr_workers: 8
+#  env_vars: {}
+
+rgw:
+  enabled: false
+  service_id: "eot"
+  # type = systemd|cephadm (defaults from fs_manager_type when unset)
+  type: "cephadm"
+  # Cephadm orch host label applied to inventory 'rgws' hosts
+  host_label: "rgw"
+  # Number of radosgw daemons per RGW host (consecutive ports)
+  count_per_host: 4
+  # First beast frontend port; instances use port .. port+count_per_host-1
+  frontend_port: 7480
+  yaml_path: "/cephfs_perf/rgw.yaml"
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  radosgw_binary_path: "${CEPH_INSTALL_PREFIX}/bin/radosgw"
+  radosgw_admin_binary_path: "${CEPH_INSTALL_PREFIX}/bin/radosgw-admin"
+  # systemd-only
+  pid_dir: "/var/run/ceph"
+  user_id: "admin"
+  keyring_path: "/etc/ceph/ceph.client.admin.keyring"
+  manage_firewall: true
+  # S3 user created via radosgw-admin (keys optional; auto-generated if omitted)
+  uid: "perfuser"
+  display_name: "Perf User"
+  access_key: "PERFACCESSKEY"
+  secret_key: "PERFSECRETKEY0123456789"
+  credentials_path: "/cephfs_perf/rgw/s3_credentials.json"
 #  env_vars: {}
 
 # SpecStorage configuration

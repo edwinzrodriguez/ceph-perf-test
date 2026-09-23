@@ -21,6 +21,8 @@ from lib.ganesha.ganesha_cephadm_manager import GaneshaCephadmManager
 from lib.ganesha.ganesha_systemd_manager import GaneshaSystemdManager
 from lib.samba.samba_cephadm_manager import SambaCephadmManager
 from lib.samba.samba_systemd_manager import SambaSystemdManager
+from lib.rgw.rgw_cephadm_manager import RgwCephadmManager
+from lib.rgw.rgw_systemd_manager import RgwSystemdManager
 from lib.grafana.grafana_cephadm_manager import GrafanaCephadmManager
 from lib.grafana.grafana_systemd_manager import GrafanaSystemdManager
 from lib.mount.mount_fuse_manager import MountFuseManager
@@ -51,6 +53,11 @@ class BenchRunner:
             help="Enable Samba and specify the type",
         )
         self.parser.add_argument(
+            "--rgw",
+            choices=["cephadm", "systemd"],
+            help="Enable RGW (S3) and specify the type",
+        )
+        self.parser.add_argument(
             "--mount-manager",
             choices=[
                 "MountKernelManager",
@@ -73,6 +80,8 @@ class BenchRunner:
             config_dict["ganesha"] = {}
         if "samba" not in config_dict:
             config_dict["samba"] = {}
+        if "rgw" not in config_dict:
+            config_dict["rgw"] = {}
         if "grafana" not in config_dict:
             config_dict["grafana"] = {}
 
@@ -87,6 +96,10 @@ class BenchRunner:
         if args.samba:
             config_dict["samba"]["enabled"] = True
             config_dict["samba"]["type"] = args.samba
+
+        if args.rgw:
+            config_dict["rgw"]["enabled"] = True
+            config_dict["rgw"]["type"] = args.rgw
 
         if args.grafana:
             config_dict["grafana"]["enabled"] = True
@@ -130,6 +143,8 @@ class BenchRunner:
         force a specific mount manager (e.g. StubMountManager for rados bench).
 
         Selection:
+          - ``rgw.enabled`` (YAML, or forced true by ``--rgw``) →
+            StubMountManager + RGW manager (S3; no filesystem mounts)
           - ``samba.enabled`` (YAML, or forced true by ``--samba``) →
             MountSmbManager + Samba manager
           - ``ganesha.enabled`` (YAML, or forced true by ``--ganesha``) →
@@ -137,6 +152,21 @@ class BenchRunner:
           - else ``mount_manager_type`` (YAML, or ``--mount-manager``) selects
             StubMountManager, MountFuseManager, or MountKernelManager
         """
+        if config.rgw_enabled:
+            if config.rgw_type == "systemd":
+                export_manager = RgwSystemdManager(
+                    executor, config, cephfs_manager
+                )
+            elif config.rgw_type == "cephadm":
+                export_manager = RgwCephadmManager(
+                    executor, config, cephfs_manager
+                )
+            else:
+                raise ValueError(f"Invalid RGW type: {config.rgw_type}")
+            print(
+                f"Using StubMountManager (rgw.enabled=true, type={config.rgw_type})"
+            )
+            return StubMountManager(executor, config, cephfs_manager), export_manager
         if config.samba_enabled:
             if config.samba_type == "systemd":
                 export_manager = SambaSystemdManager(
@@ -239,14 +269,17 @@ class BenchRunner:
 
         # Only expand / provision export servers when this runner actually
         # created a manager. Subclasses such as rados/rbd force StubMount + None
-        # even if --ganesha or --samba was passed (or set in the shared YAML).
+        # even if --ganesha, --samba, or --rgw was passed (or set in the shared YAML).
         ganesha_keys = []
         ganesha_ranges = []
         samba_keys = []
         samba_ranges = []
+        rgw_keys = []
+        rgw_ranges = []
         if export_manager is not None:
             from lib.ganesha.ganesha_manager import GaneshaManager
             from lib.samba.samba_manager import SambaManager
+            from lib.rgw.rgw_manager import RgwManager
 
             if isinstance(export_manager, GaneshaManager):
                 ganesha_settings_raw = config.get("ganesha", {})
@@ -278,20 +311,31 @@ class BenchRunner:
                         if isinstance(val, list):
                             samba_keys.append(k)
                             samba_ranges.append(val)
+            elif isinstance(export_manager, RgwManager):
+                rgw_settings_raw = config.get("rgw", {})
+                for k in ["count_per_host", "frontend_port"]:
+                    if k in rgw_settings_raw:
+                        val = rgw_settings_raw[k]
+                        if isinstance(val, list):
+                            rgw_keys.append(k)
+                            rgw_ranges.append(val)
 
-        combined_keys = keys + ganesha_keys + samba_keys
-        combined_ranges = ranges + ganesha_ranges + samba_ranges
+        combined_keys = keys + ganesha_keys + samba_keys + rgw_keys
+        combined_ranges = ranges + ganesha_ranges + samba_ranges + rgw_ranges
 
         for values in itertools.product(*combined_ranges):
             all_settings = dict(zip(combined_keys, values))
             current_settings = {k: all_settings[k] for k in keys}
             current_ganesha_settings = {k: all_settings[k] for k in ganesha_keys}
             current_samba_settings = {k: all_settings[k] for k in samba_keys}
+            current_rgw_settings = {k: all_settings[k] for k in rgw_keys}
 
             if current_ganesha_settings:
                 config["ganesha"].update(current_ganesha_settings)
             if current_samba_settings:
                 config["samba"].update(current_samba_settings)
+            if current_rgw_settings:
+                config["rgw"].update(current_rgw_settings)
 
             print(f"\n--- Starting Test Iteration: {all_settings} ---")
 
@@ -301,6 +345,7 @@ class BenchRunner:
 
             from lib.ganesha.ganesha_manager import GaneshaManager
             from lib.samba.samba_manager import SambaManager
+            from lib.rgw.rgw_manager import RgwManager
 
             ganesha_manager = (
                 export_manager if isinstance(export_manager, GaneshaManager) else None
@@ -308,6 +353,13 @@ class BenchRunner:
             samba_manager = (
                 export_manager if isinstance(export_manager, SambaManager) else None
             )
+            rgw_manager = (
+                export_manager if isinstance(export_manager, RgwManager) else None
+            )
+
+            # Re-provision RGW when matrix settings change this iteration
+            if rgw_manager is not None and current_rgw_settings:
+                rgw_manager.cleanup_rgw()
 
             cephfs_manager.rebuild_filesystem(
                 current_settings,
@@ -323,6 +375,8 @@ class BenchRunner:
                 )
             if samba_manager is not None:
                 samba_manager.provision_samba(results_dir=results_dir)
+            if rgw_manager is not None:
+                rgw_manager.provision_rgw(results_dir=results_dir)
 
             skip_initial_mount = (
                 hasattr(workload_runner, "remount_per_loadpoint_enabled")
@@ -381,6 +435,7 @@ class BenchRunner:
             return
         from lib.ganesha.ganesha_manager import GaneshaManager
         from lib.samba.samba_manager import SambaManager
+        from lib.rgw.rgw_manager import RgwManager
 
         if isinstance(export_manager, GaneshaManager):
             print("Cleaning up NFS exports and stopping Ganesha...")
@@ -388,6 +443,9 @@ class BenchRunner:
         elif isinstance(export_manager, SambaManager):
             print("Cleaning up SMB shares and stopping Samba...")
             export_manager.cleanup_samba()
+        elif isinstance(export_manager, RgwManager):
+            print("Cleaning up RGW service...")
+            export_manager.cleanup_rgw()
 
     def _cleanup_monitoring_manager(self, monitoring_manager):
         if monitoring_manager is None:

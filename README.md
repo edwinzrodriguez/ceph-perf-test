@@ -299,6 +299,74 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 
 ---
 
+### `rgw`
+
+Controls Ceph Object Gateway (RGW) deployment for S3 benchmarking. When enabled, the runner uses `StubMountManager` (no filesystem mounts) and provisions RGW on inventory hosts in the `rgws` group. An elbencho workload generator will be added in a follow-up.
+
+#### Core
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable RGW deployment |
+| `type` | string | from `fs_manager_type` | Deployment type (`cephadm` or `systemd`) |
+| `service_id` | string | `rgw` | Cephadm service id (e.g. `rgw.eot`) |
+| `host_label` | string | `rgw` | Cephadm orch host label applied to `rgws` hosts |
+| `count_per_host` | int or list | `1` | Number of `radosgw` daemons per host (matrix-expandable) |
+| `frontend_port` | int or list | `7480` | First beast port; instances use `port` .. `port+count_per_host-1` |
+| `yaml_path` | string | `/cephfs_perf/rgw.yaml` | Remote path for the cephadm RGW spec |
+| `ceph_binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/ceph` | Path to the `ceph` CLI |
+| `radosgw_binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/radosgw` | Path to `radosgw` (systemd only) |
+| `radosgw_admin_binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/radosgw-admin` | Path to `radosgw-admin` |
+| `pid_dir` | string | `/var/run/ceph` | PID file directory (systemd only) |
+| `manage_firewall` | bool | `true` | Open frontend ports via firewalld/iptables when those services are active |
+
+#### Authentication / S3 user
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `user_id` | string | inherits `ceph.user_id` | Ceph client used for `ceph` / `radosgw-admin` |
+| `keyring_path` | string | inherits `ceph.keyring` | Keyring for admin commands |
+| `uid` | string | `perfuser` | S3 user uid created with `radosgw-admin user create` |
+| `display_name` | string | `Perf User` | S3 user display name |
+| `access_key` | string | | Optional fixed access key (auto-generated if omitted) |
+| `secret_key` | string | | Optional fixed secret key (auto-generated if omitted) |
+| `credentials_path` | string | `/cephfs_perf/rgw/s3_credentials.json` | Where access keys and endpoint URLs are written for workloads |
+
+#### Example (cephadm)
+
+Matches a typical orch spec with label placement and multiple daemons per host:
+
+```yaml
+rgw:
+  enabled: true
+  type: "cephadm"
+  service_id: "eot"
+  host_label: "rgw"
+  count_per_host: 4
+  frontend_port: 7480
+  uid: "perfuser"
+  display_name: "Perf User"
+  access_key: "PERFACCESSKEY"
+  secret_key: "PERFSECRETKEY0123456789"
+  credentials_path: "/cephfs_perf/rgw/s3_credentials.json"
+```
+
+Generated cephadm spec (conceptually):
+
+```yaml
+service_type: rgw
+service_id: eot
+placement:
+  label: rgw
+  count_per_host: 4
+spec:
+  rgw_frontend_port: 7480
+```
+
+Enable with `--rgw cephadm` or `--rgw systemd`, and ensure inventory includes an `rgws` group.
+
+---
+
 ### `cephfs_tool`
 
 Configuration for the `cephfs-tool bench` workload runner.
@@ -756,7 +824,7 @@ Parses a YAML-based inventory defined directly in the config file under `invento
 
 > **Note**: A `mons` group is required. The first host in `mons` is designated the **admin host**.
 
-Supported groups: `mons`, `mgrs`, `clients`, `ganeshas`, `sambas`, `grafanas`, `mdss`, `osds`.
+Supported groups: `mons`, `mgrs`, `clients`, `ganeshas`, `sambas`, `rgws`, `grafanas`, `mdss`, `osds`.
 
 Per-host fields:
 

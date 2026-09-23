@@ -573,6 +573,10 @@ class PerformanceTestConfig:
         return [h["name"] for h in self.hosts_meta.get("sambas", [])]
 
     @property
+    def rgws(self):
+        return [h["name"] for h in self.hosts_meta.get("rgws", [])]
+
+    @property
     def grafanas(self):
         return [h["name"] for h in self.hosts_meta.get("grafanas", [])]
 
@@ -874,6 +878,116 @@ class PerformanceTestConfig:
     @property
     def samba_msgr_workers(self):
         return self._config.get("samba", {}).get("msgr_workers")
+
+    @property
+    def rgw_enabled(self):
+        return self._config.get("rgw", {}).get("enabled", False)
+
+    @property
+    def rgw_type(self):
+        rgw_cfg = self._config.get("rgw", {}) or {}
+        explicit = rgw_cfg.get("type")
+        if explicit:
+            return explicit
+        if self.fs_manager_type == "CephFSSystemdManager":
+            return "systemd"
+        return "cephadm"
+
+    @property
+    def rgw_service_id(self):
+        return self._config.get("rgw", {}).get("service_id", "rgw")
+
+    @property
+    def rgw_host_label(self):
+        return self._config.get("rgw", {}).get("host_label", "rgw")
+
+    @property
+    def rgw_count_per_host(self):
+        return self._config.get("rgw", {}).get("count_per_host", 1)
+
+    @property
+    def rgw_frontend_port(self):
+        return self._config.get("rgw", {}).get("frontend_port", 7480)
+
+    @property
+    def rgw_yaml_path(self):
+        return self._config.get("rgw", {}).get(
+            "yaml_path", "/cephfs_perf/rgw.yaml"
+        )
+
+    @property
+    def rgw_ceph_binary_path(self):
+        return self.expand_env(
+            self._config.get("rgw", {}).get(
+                "ceph_binary_path", "${CEPH_INSTALL_PREFIX}/bin/ceph"
+            )
+        )
+
+    @property
+    def rgw_radosgw_binary_path(self):
+        return self.expand_env(
+            self._config.get("rgw", {}).get(
+                "radosgw_binary_path",
+                "${CEPH_INSTALL_PREFIX}/bin/radosgw",
+            )
+        )
+
+    @property
+    def rgw_radosgw_admin_binary_path(self):
+        return self.expand_env(
+            self._config.get("rgw", {}).get(
+                "radosgw_admin_binary_path",
+                "${CEPH_INSTALL_PREFIX}/bin/radosgw-admin",
+            )
+        )
+
+    @property
+    def rgw_pid_dir(self):
+        return self._config.get("rgw", {}).get("pid_dir", "/var/run/ceph")
+
+    @property
+    def rgw_user_id(self):
+        user_id = self._config.get("rgw", {}).get("user_id")
+        if user_id:
+            return user_id
+        return self.ceph_user_id
+
+    @property
+    def rgw_keyring_path(self):
+        keyring = self._config.get("rgw", {}).get("keyring_path")
+        if keyring:
+            return keyring
+        return self.ceph_keyring_path
+
+    @property
+    def rgw_env_vars(self):
+        return self._config.get("rgw", {}).get("env_vars", {})
+
+    @property
+    def rgw_uid(self):
+        return self._config.get("rgw", {}).get("uid", "perfuser")
+
+    @property
+    def rgw_display_name(self):
+        return self._config.get("rgw", {}).get("display_name", "Perf User")
+
+    @property
+    def rgw_access_key(self):
+        return self._config.get("rgw", {}).get("access_key")
+
+    @property
+    def rgw_secret_key(self):
+        return self._config.get("rgw", {}).get("secret_key")
+
+    @property
+    def rgw_credentials_path(self):
+        return self._config.get("rgw", {}).get(
+            "credentials_path", "/cephfs_perf/rgw/s3_credentials.json"
+        )
+
+    @property
+    def rgw_manage_firewall(self):
+        return self._config.get("rgw", {}).get("manage_firewall", True)
 
     @property
     def fio(self):
@@ -1310,6 +1424,10 @@ class CommonUtils:
             "Samba User ID": "suid",
             "Samba Keyring Path": "skp",
             "Samba Ceph Binary Path": "scbp",
+            "RGW Count Per Host": "rcph",
+            "RGW Frontend Port": "rfp",
+            "RGW Enabled": "re",
+            "RGW Type": "rt",
             "Workload Runner": "wr",
             "Fio Threads": "ft",
             "Msgr Workers": "mw",
