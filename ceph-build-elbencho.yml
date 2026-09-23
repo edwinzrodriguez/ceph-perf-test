@@ -1,0 +1,112 @@
+- name: Build elbencho from source with S3 support
+  hosts: all
+  become: true
+  vars_files:
+    - ceph-build-vars.yml
+  tasks:
+
+    - name: Install elbencho build dependencies
+      ansible.builtin.dnf:
+        name:
+          - boost-devel
+          - cmake
+          - gcc-c++
+          - git
+          - libaio-devel
+          - libarchive
+          - libcurl-devel
+          - libuuid-devel
+          - make
+          - numactl-devel
+          - openssl-devel
+          - rpm-build
+          - zlib
+          - zlib-devel
+        state: present
+
+    # Rocky/RHEL 9+ ship awscli2; older releases may have awscli.
+    - name: Install AWS CLI from dnf (prefer awscli2, else awscli)
+      ansible.builtin.dnf:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - awscli2
+        - awscli
+      register: awscli_dnf
+      failed_when: false
+
+    - name: Check whether aws CLI is on PATH
+      ansible.builtin.command:
+        cmd: which aws
+      register: aws_which
+      changed_when: false
+      failed_when: false
+
+    - name: Check if AWS CLI source directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ awscli_dest_name }}"
+      register: awscli_dir_stat
+      become: false
+      when: aws_which.rc != 0
+
+    - name: Clone AWS CLI repository
+      ansible.builtin.git:
+        repo: "{{ awscli_repo_url }}"
+        dest: "{{ git_base_dir }}/{{ awscli_dest_name }}"
+        version: "{{ awscli_version }}"
+      become: false
+      when:
+        - aws_which.rc != 0
+        - not awscli_dir_stat.stat.exists
+
+    - name: Install AWS CLI build dependencies for source install
+      ansible.builtin.dnf:
+        name:
+          - cmake
+          - gcc
+          - gcc-c++
+          - make
+          - python3
+          - python3-devel
+          - python3-pip
+        state: present
+      when: aws_which.rc != 0
+
+    - name: Install AWS CLI from source
+      ansible.builtin.pip:
+        name: .
+        chdir: "{{ git_base_dir }}/{{ awscli_dest_name }}"
+        executable: pip3
+        extra_args: --break-system-packages
+      when: aws_which.rc != 0
+
+    - name: Check if elbencho source directory exists
+      ansible.builtin.stat:
+        path: "{{ git_base_dir }}/{{ elbencho_dest_name }}"
+      register: elbencho_dir_stat
+      become: false
+
+    - name: Clone elbencho repository
+      ansible.builtin.git:
+        repo: "{{ elbencho_repo_url }}"
+        dest: "{{ git_base_dir }}/{{ elbencho_dest_name }}"
+        version: "{{ elbencho_version }}"
+      become: false
+      when: not elbencho_dir_stat.stat.exists
+
+    - name: Build elbencho with S3 support
+      ansible.builtin.make:
+        chdir: "{{ git_base_dir }}/{{ elbencho_dest_name }}"
+        jobs: "{{ ansible_facts.processor_vcpus }}"
+        params:
+          S3_SUPPORT: "1"
+      become: false
+      when: not elbencho_dir_stat.stat.exists
+
+    - name: Install elbencho
+      ansible.builtin.make:
+        chdir: "{{ git_base_dir }}/{{ elbencho_dest_name }}"
+        target: install
+        params:
+          INST_PATH: "{{ elbencho_install_prefix }}/bin"
+      when: not elbencho_dir_stat.stat.exists
