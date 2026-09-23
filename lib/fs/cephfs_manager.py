@@ -852,6 +852,7 @@ class CephFSManager(FSManager):
             self._apply_mds_startup_settings(settings)
             self._deploy_mds(fs, settings)
             self._wait_for_mds_active(fs)
+            self._verify_mds_conf_file_options(settings)
             self._configure_mds_logging()
             self.setup_client_auth(fs)
         self.distribute_keys_and_config()
@@ -1343,60 +1344,89 @@ class CephFSManager(FSManager):
         )
         return self._parse_config_get(raw, key)
 
+    def _check_mds_live_options(self, expected, context):
+        """Require live MDS asok values to match *expected* ``{option: value}``."""
+        if not expected:
+            return
+        sockets = self._live_mds_asoks()
+        if not sockets:
+            raise RuntimeError(
+                f"No MDS admin sockets found; cannot verify {context}"
+            )
+        usable = 0
+        for host, mds_id, asok in sockets:
+            try:
+                raw = self._collect_mds_config_diff(host, mds_id, asok)
+            except Exception as e:
+                if self._asok_error_is_unusable(e):
+                    print(
+                        f"[{host}] Skipping unusable MDS socket "
+                        f"{asok}: {e}"
+                    )
+                    continue
+                raise
+            usable += 1
+            live = self._parse_config_diff(raw)
+            mismatches = []
+            for key, exp in expected.items():
+                got = self._live_mds_config_value(host, asok, key, live)
+                if got is None:
+                    mismatches.append(
+                        f"{key}: expected {exp!r}, not present in "
+                        f"config diff / config get"
+                    )
+                elif not self._config_values_match(exp, got):
+                    mismatches.append(
+                        f"{key}: expected {exp!r}, live {got!r}"
+                    )
+                else:
+                    print(
+                        f"[{host}] mds.{mds_id} {key}="
+                        f"{got!r} matches expected {exp!r}"
+                    )
+            if mismatches:
+                raise RuntimeError(
+                    f"MDS config mismatch on mds.{mds_id}@{host} "
+                    f"({context}): " + "; ".join(mismatches)
+                )
+        if usable == 0:
+            raise RuntimeError(
+                f"No usable MDS admin sockets found; cannot verify {context}"
+            )
+
+    def _verify_mds_conf_file_options(self, settings, retries=8, sleep_secs=2):
+        """Verify options written to the MDS-only conf file are live on asok.
+
+        Catches silent rejects (e.g. lowercase SI units rejected by
+        ``strict_si_cast`` leaving ``mds_reactor_queue_len_abort`` at 0).
+        """
+        expected = self._merged_mds_conf_options(settings)
+        if not expected:
+            return
+        for attempt in range(retries):
+            try:
+                self._check_mds_live_options(
+                    expected, "mds-settings.conf options"
+                )
+                return
+            except Exception as e:
+                if attempt + 1 < retries:
+                    print(
+                        f"[wait] MDS conf-file options not live yet "
+                        f"(attempt {attempt + 1}/{retries}): {e}"
+                    )
+                    time.sleep(sleep_secs)
+                    continue
+                raise
+
     def _verify_mds_settings(self, settings, fs_set_pending, retries=8, sleep_secs=2):
         """Collect MDS ``config diff`` and require live values to match *settings*."""
         expected = self._mds_config_from_settings(settings)
         for attempt in range(retries):
             try:
-                sockets = self._live_mds_asoks()
-                if expected and not sockets:
-                    raise RuntimeError(
-                        "No MDS admin sockets found; cannot collect "
-                        "config diff after apply_fs_settings"
-                    )
-                usable = 0
-                for host, mds_id, asok in sockets:
-                    try:
-                        raw = self._collect_mds_config_diff(host, mds_id, asok)
-                    except Exception as e:
-                        if self._asok_error_is_unusable(e):
-                            print(
-                                f"[{host}] Skipping unusable MDS socket "
-                                f"{asok}: {e}"
-                            )
-                            continue
-                        raise
-                    usable += 1
-                    if not expected:
-                        continue
-                    live = self._parse_config_diff(raw)
-                    mismatches = []
-                    for key, exp in expected.items():
-                        got = self._live_mds_config_value(host, asok, key, live)
-                        if got is None:
-                            mismatches.append(
-                                f"{key}: expected {exp!r}, not present in "
-                                f"config diff / config get"
-                            )
-                        elif not self._config_values_match(exp, got):
-                            mismatches.append(
-                                f"{key}: expected {exp!r}, live {got!r}"
-                            )
-                        else:
-                            print(
-                                f"[{host}] mds.{mds_id} {key}="
-                                f"{got!r} matches expected {exp!r}"
-                            )
-                    if mismatches:
-                        raise RuntimeError(
-                            f"MDS config mismatch on mds.{mds_id}@{host}: "
-                            + "; ".join(mismatches)
-                        )
-                if expected and usable == 0:
-                    raise RuntimeError(
-                        "No usable MDS admin sockets found; cannot collect "
-                        "config diff after apply_fs_settings"
-                    )
+                self._check_mds_live_options(
+                    expected, "apply_fs_settings"
+                )
                 for k, val in fs_set_pending.items():
                     for fs in self.get_fs_names():
                         raw = self._run_ceph(

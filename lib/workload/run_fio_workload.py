@@ -111,10 +111,10 @@ def format_si_units(value):
             if val % 1024 != 0 or val < 1024:
                 return f"{val}{unit}"
 
-    # Decimal units (powers of 1000)
+    # Decimal units (powers of 1000). Uppercase to match Ceph strict_si_cast.
     if val > 0 and val % 1000 == 0:
         temp_val = int(s_val)
-        for unit in ["k", "m", "g", "t", "p"]:
+        for unit in ["K", "M", "G", "T", "P"]:
             temp_val //= 1000
             if temp_val % 1000 != 0 or temp_val < 1000:
                 return f"{temp_val}{unit}"

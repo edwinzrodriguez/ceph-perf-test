@@ -1428,6 +1428,12 @@ class CommonUtils:
 
     @staticmethod
     def format_si_units(value):
+        """Format an integer with SI/IEC unit suffixes when evenly divisible.
+
+        Decimal prefixes are uppercase (``K``/``M``/``G``/…) because Ceph's
+        ``strict_si_cast`` rejects lowercase (``k`` → "unit prefix not
+        recognized"); the option is then ignored and stays at its default.
+        """
         try:
             val = int(value)
         except:
@@ -1439,7 +1445,7 @@ class CommonUtils:
                     return f"{val}{unit}"
         val = int(value)
         if val > 0 and val % 1000 == 0:
-            for unit in ["k", "m", "g", "t", "p"]:
+            for unit in ["K", "M", "G", "T", "P"]:
                 val //= 1000
                 if val % 1000 != 0 or val < 1000:
                     return f"{val}{unit}"
