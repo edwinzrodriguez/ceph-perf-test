@@ -95,6 +95,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         perf_triggered, ganesha_perf_triggered, logging_triggered = False, False, False
         ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
         perf_threads = []
+        total_lps = len(self.config["specstorage"].get("loadpoints", []))
 
         def on_run_phase_start(fallback=False):
             nonlocal run_phase_started, logging_triggered
@@ -155,7 +156,11 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                     ganesha_perf_triggered,
                     logging_triggered,
                 ) = (False, False, False, False)
-                print(f"Detected Starting tests... Load Point: {current_lp}")
+                pct = int(100 * current_lp / total_lps) if total_lps else 0
+                print(
+                    f"Detected Starting tests... Load Point: "
+                    f"{current_lp}/{total_lps} ({pct}% done)"
+                )
             if "Starting RUN phase" in line:
                 on_run_phase_start()
             elif (

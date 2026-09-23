@@ -216,7 +216,7 @@ This runs `ceph-monitoring-host-prep.yml`, which opens firewall ports (3000, 909
 | mgr/prometheus | `http://<mgr-host>:9283/metrics` |
 | ceph-exporter | `http://<daemon-host>:9926/metrics` |
 
-Workload drivers print load-point markers (e.g. `Starting tests... Load Point: N`) that can be correlated with Grafana time series during a run.
+Workload runners print load-point markers (e.g. `Detected Starting tests... Load Point: N/T (P% done)`) that can be correlated with Grafana time series during a run.
 
 ---
 

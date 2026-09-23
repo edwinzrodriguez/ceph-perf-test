@@ -166,7 +166,12 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                 write_lockstat_dumped = False
                 read_lockstat_dumped = False
                 lockstat_data = {}
-                print(f"Detected Starting tests... Load Point: {current_lp}")
+                total_lps = len(loadpoints)
+                pct = int(100 * current_lp / total_lps) if total_lps else 0
+                print(
+                    f"Detected Starting tests... Load Point: "
+                    f"{current_lp}/{total_lps} ({pct}% done)"
+                )
             if "Starting RUN phase" in line:
                 run_phase_started = True
                 if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():

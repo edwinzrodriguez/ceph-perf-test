@@ -124,7 +124,12 @@ class RadosToolWorkloadRunner(WorkloadRunner):
             if "Starting tests..." in line:
                 current_lp += 1
                 run_phase_started, perf_triggered = False, False
-                print(f"Detected Starting tests... Load Point: {current_lp}")
+                total_lps = len(loadpoints)
+                pct = int(100 * current_lp / total_lps) if total_lps else 0
+                print(
+                    f"Detected Starting tests... Load Point: "
+                    f"{current_lp}/{total_lps} ({pct}% done)"
+                )
             if "Starting RUN phase" in line:
                 run_phase_started = True
 
