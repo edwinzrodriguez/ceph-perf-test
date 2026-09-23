@@ -196,6 +196,7 @@
           - net-tools
           - telnet
           - lsof
+          - sysfsutils
         state: latest
 
     - name: Install perl-open.noarch
