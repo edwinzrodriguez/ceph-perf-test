@@ -19,6 +19,7 @@ class WorkloadRunner(abc.ABC):
         ganesha_manager=None,
         results_dir=None,
         mount_manager=None,
+        rgw_manager=None,
     ):
         pass
 

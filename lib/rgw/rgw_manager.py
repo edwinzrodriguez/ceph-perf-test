@@ -125,65 +125,12 @@ class RgwManager(abc.ABC):
         ports = self.frontend_ports()
         if not ports:
             return
-        port_spec = (
-            f"{ports[0]}-{ports[-1]}" if len(ports) > 1 else str(ports[0])
+        print(
+            f"Opening firewall TCP ports {ports[0]}-{ports[-1]} on RGW hosts..."
+            if len(ports) > 1
+            else f"Opening firewall TCP port {ports[0]} on RGW hosts..."
         )
-        print(f"Opening firewall TCP ports {port_spec} on RGW hosts...")
-        for host_name in self.rgws:
-            self._open_firewall_on_host(host_name, port_spec, ports)
-
-    def _open_firewall_on_host(self, host_name, port_spec, ports):
-        # firewalld
-        fw_active = self.executor.run_remote(
-            host_name,
-            "systemctl is-active firewalld 2>/dev/null || true",
-        ).strip()
-        if fw_active == "active":
-            query = self.executor.run_remote(
-                host_name,
-                f"firewall-cmd --query-port={port_spec}/tcp",
-                check=False,
-            )
-            # firewall-cmd returns rc != 0 when the port is not already open
-            already = "yes" in (query or "").lower()
-            if not already:
-                self.executor.run_remote(
-                    host_name,
-                    f"sudo firewall-cmd --add-port={port_spec}/tcp --permanent",
-                    check=False,
-                )
-                self.executor.run_remote(
-                    host_name, "sudo firewall-cmd --reload", check=False
-                )
-                print(f"[{host_name}] firewalld allowed {port_spec}/tcp")
-            else:
-                print(f"[{host_name}] firewalld already allows {port_spec}/tcp")
-
-        # iptables (best-effort when the service is active)
-        ipt_active = self.executor.run_remote(
-            host_name,
-            "systemctl is-active iptables 2>/dev/null || true",
-        ).strip()
-        if ipt_active == "active":
-            first, last = ports[0], ports[-1]
-            missing = self.executor.run_remote(
-                host_name,
-                f"sudo iptables -C INPUT -p tcp --dport {first}:{last} -j ACCEPT "
-                f">/dev/null 2>&1; echo $?",
-            ).strip()
-            if missing != "0":
-                self.executor.run_remote(
-                    host_name,
-                    f"sudo iptables -I INPUT -p tcp --dport {first}:{last} -j ACCEPT",
-                    check=False,
-                )
-                self.executor.run_remote(
-                    host_name,
-                    "sudo service iptables save 2>/dev/null || "
-                    "sudo iptables-save | sudo tee /etc/sysconfig/iptables >/dev/null || true",
-                    check=False,
-                )
-                print(f"[{host_name}] iptables allowed {first}:{last}/tcp")
+        CommonUtils.open_firewall_tcp_ports(self.executor, self.rgws, ports)
 
     def ensure_s3_user(self):
         """Create (or fetch) the S3 user and persist credentials for workloads."""

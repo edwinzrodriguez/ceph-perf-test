@@ -25,7 +25,7 @@ The framework operates on a **Test Matrix** principle. It iterates through combi
 ./cephfs_fio_runner.py <config.yaml> --grafana systemd
 ```
 
-Workload-specific entry points: `cephfs_fio_runner.py`, `cephfs_sfs2020_runner.py`, `cephfs_tool_bench_runner.py`, `cephfs_rados_bench_runner.py`, `cephfs_rbd_runner.py`, or `cephfs_all_bench_runner.py` to run the full suite.
+Workload-specific entry points: `cephfs_fio_runner.py`, `cephfs_sfs2020_runner.py`, `cephfs_tool_bench_runner.py`, `cephfs_rados_bench_runner.py`, `cephfs_rbd_runner.py`, `cephfs_elbencho_runner.py`, or `cephfs_all_bench_runner.py` to run the full suite.
 
 ---
 
@@ -364,6 +364,70 @@ spec:
 ```
 
 Enable with `--rgw cephadm` or `--rgw systemd`, and ensure inventory includes an `rgws` group.
+
+---
+
+### `elbencho`
+
+Configuration for the elbencho S3 workload runner (`cephfs_elbencho_runner.py`). This runner forces `StubFSManager` + RGW provisioning, generates an `s3-classic.conf`-style file from RGW credentials/endpoints and inventory clients, then drives elbencho with `--jsonfile` output.
+
+Each result JSON under `results_base_dir` includes `test_parameters` and `test_results_summary` (same pattern as rados/fio).
+
+#### Global Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `results_base_dir` | string | `/cephfs_perf/results` | Base directory for result files |
+| `run_command` | string | `/cephfs_perf/elbencho/run_elbencho_workload.py` | Remote driver script path |
+| `executable_path` | string | `/usr/local/bin/elbencho` | Path to the `elbencho` binary (S3-enabled build) |
+| `conf_path` | string | `/cephfs_perf/rgw/s3-classic.conf` | Where the generated bash-style conf is written |
+| `size_limit` | string | `4T` | Written to conf as `SIZE_LIMIT` |
+| `object_limit` | int | `1000000` | Written to conf as `OBJECT_LIMIT` |
+| `load_driver_port` | int | `1611` | Elbencho service port (`LOAD_DRIVER_PORT` / `--port`) |
+| `distributed` | bool | `true` | Start `elbencho --service` on clients and use `--hosts` |
+| `manage_firewall` | bool | inherits `rgw.manage_firewall` | Open `load_driver_port` on clients (and admin) via firewalld/iptables |
+| `buckets` | list | `["eot-classic"]` | S3 bucket names (`BUCKET_LIST`) |
+| `env_vars` | dict | `{}` | Extra environment variables for elbencho |
+
+S3 keys and `RGW_HOSTS` are taken from `rgw.credentials_path` (written when RGW is provisioned). `CLIENTS` are inventory `clients` private IPs.
+
+#### Loadpoint Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `readwrite` | string or list | `write` | `write`, `read`, `writeread`, `delete`, `mkdirs` |
+| `threads` | int or list | `16` | Threads per host (`--threads`) |
+| `size` | string | `4MiB` | Object size (`--size`); use IEC (`KiB`/`MiB`/`GiB`) to match `numfmt --from=iec` |
+| `block-size` | string | same as `size` | Block/part size (`--block`) |
+| `files` | int | `1000` | Objects per directory (`--files` / `-N`) |
+| `dirs` | int | `1` | Directories per thread (`--dirs` / `-n`) |
+| `blockvarpct` | int | | PUT-only: passed as `--blockvarpct` (benchmark-s3.sh random data %) |
+| `s3fastget` | bool | `false` | GET-only: pass `--s3fastget` |
+| `timelimit` | int | | Optional `--timelimit` seconds |
+| `extra_args` | string | | Extra elbencho CLI arguments |
+
+#### Example
+
+```yaml
+elbencho:
+  results_base_dir: "/cephfs_perf/results"
+  executable_path: "/usr/local/bin/elbencho"
+  conf_path: "/cephfs_perf/rgw/s3-classic.conf"
+  buckets: ["eot-classic"]
+  load_driver_port: 1611
+  distributed: true
+  loadpoints:
+    - readwrite: ["write", "read"]
+      threads: [32, 16]
+      size: "4MiB"
+      block-size: "4MiB"
+      files: 1000
+      dirs: 1
+```
+
+```bash
+./cephfs_elbencho_runner.py MDSConfigurationSettings.yml --rgw cephadm
+```
 
 ---
 

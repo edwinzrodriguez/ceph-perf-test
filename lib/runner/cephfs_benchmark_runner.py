@@ -404,6 +404,7 @@ class BenchRunner:
                     ganesha_manager=ganesha_manager,
                     results_dir=results_dir,
                     mount_manager=mount_manager,
+                    rgw_manager=rgw_manager,
                 )
             except Exception as e:
                 print(f"Workload execution failed: {e}")

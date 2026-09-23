@@ -17,6 +17,7 @@ class RadosToolWorkloadRunner(WorkloadRunner):
         ganesha_manager=None,
         results_dir=None,
         mount_manager=None,
+        rgw_manager=None,
     ):
         cfg = self.config.rados_bench
         loadpoints = cfg.get("loadpoints", [])

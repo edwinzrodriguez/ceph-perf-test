@@ -1002,6 +1002,10 @@ class PerformanceTestConfig:
         return self._config.get("rados_bench")
 
     @property
+    def elbencho(self):
+        return self._config.get("elbencho")
+
+    @property
     def rbd(self):
         return self._config.get("rbd")
 
@@ -1550,6 +1554,75 @@ class CommonUtils:
         return "".join(lines)
 
     @staticmethod
+    def open_firewall_tcp_ports(executor, hosts, ports):
+        """Open TCP ports via firewalld and/or iptables when those services are active.
+
+        ``ports`` may be an int or a list/range of ints. Uses a port range
+        when multiple consecutive ports are given.
+        """
+        if not hosts or not ports:
+            return
+        if isinstance(ports, int):
+            ports = [ports]
+        ports = sorted(int(p) for p in ports)
+        port_spec = (
+            f"{ports[0]}-{ports[-1]}" if len(ports) > 1 else str(ports[0])
+        )
+        first, last = ports[0], ports[-1]
+
+        for host_name in hosts:
+            fw_active = executor.run_remote(
+                host_name,
+                "systemctl is-active firewalld 2>/dev/null || true",
+            ).strip()
+            if fw_active == "active":
+                query = executor.run_remote(
+                    host_name,
+                    f"firewall-cmd --query-port={port_spec}/tcp",
+                    check=False,
+                )
+                already = "yes" in (query or "").lower()
+                if not already:
+                    executor.run_remote(
+                        host_name,
+                        f"sudo firewall-cmd --add-port={port_spec}/tcp --permanent",
+                        check=False,
+                    )
+                    executor.run_remote(
+                        host_name, "sudo firewall-cmd --reload", check=False
+                    )
+                    print(f"[{host_name}] firewalld allowed {port_spec}/tcp")
+                else:
+                    print(
+                        f"[{host_name}] firewalld already allows {port_spec}/tcp"
+                    )
+
+            ipt_active = executor.run_remote(
+                host_name,
+                "systemctl is-active iptables 2>/dev/null || true",
+            ).strip()
+            if ipt_active == "active":
+                missing = executor.run_remote(
+                    host_name,
+                    f"sudo iptables -C INPUT -p tcp --dport {first}:{last} -j ACCEPT "
+                    f">/dev/null 2>&1; echo $?",
+                ).strip()
+                if missing != "0":
+                    executor.run_remote(
+                        host_name,
+                        f"sudo iptables -I INPUT -p tcp --dport {first}:{last} -j ACCEPT",
+                        check=False,
+                    )
+                    executor.run_remote(
+                        host_name,
+                        "sudo service iptables save 2>/dev/null || "
+                        "sudo iptables-save | sudo tee /etc/sysconfig/iptables "
+                        ">/dev/null || true",
+                        check=False,
+                    )
+                    print(f"[{host_name}] iptables allowed {first}:{last}/tcp")
+
+    @staticmethod
     def format_si_units(value):
         """Format an integer with SI/IEC unit suffixes when evenly divisible.
 
@@ -1661,6 +1734,15 @@ class CommonUtils:
             "msgr_workers": "Msgr Workers",
             "min-object-size": "Min Object Size",
             "max-object-size": "Max Object Size",
+            "files": "Files",
+            "dirs": "Directories",
+            "buckets": "Buckets",
+            "rgw_enabled": "RGW Enabled",
+            "rgw_type": "RGW Type",
+            "rgw_count_per_host": "RGW Count Per Host",
+            "rgw_frontend_port": "RGW Frontend Port",
+            "rgw_service_id": "RGW Service ID",
+            "rgw_uid": "RGW UID",
         }
 
         # Helper to format values
@@ -1810,10 +1892,36 @@ class CommonUtils:
             "pool",
             "recreate_images",
             "mount_display_name",
+            # Elbencho / RGW payload keys (must not land in result filenames)
+            "conf_path",
+            "credentials_path",
+            "s3_access",
+            "s3_secret",
+            "rgw_endpoints",
+            "buckets",
+            "size_limit",
+            "object_limit",
+            "load_driver_port",
+            "distributed",
+            "elbencho_clients",
+            "name_settings",
+            "rgw_enabled",
+            "rgw_type",
+            "rgw_service_id",
+            "rgw_count_per_host",
+            "rgw_frontend_port",
+            "rgw_uid",
+            "timelimit",
         }
+        # Prefer a compact naming dict when the workload provides one
+        naming = settings.get("name_settings") if isinstance(settings, dict) else None
+        if isinstance(naming, dict):
+            settings_for_name = naming
+        else:
+            settings_for_name = settings
         mds_p = "-".join(
             f"{k}{CommonUtils.format_si_units(v)}"
-            for k, v in sorted(settings.items())
+            for k, v in sorted(settings_for_name.items())
             if k not in exclude
         )
 
@@ -2064,6 +2172,45 @@ class CommonUtils:
                     "agg_bw_mib": write_bw,
                     "agg_iops": write_iops,
                 },
+                "agg_bw_mib": read_bw + write_bw,
+                "agg_iops": read_iops + write_iops,
+            }
+
+        if runner == "elbencho":
+            # Prefer a precomputed summary from the workload driver.
+            existing = data.get("test_results_summary")
+            if isinstance(existing, dict) and (
+                existing.get("agg_bw_mib") is not None
+                or existing.get("agg_iops") is not None
+            ):
+                return existing
+
+            def _phase_metrics(phase):
+                last = (phase or {}).get("last_done") or {}
+                first = (phase or {}).get("first_done") or {}
+                bps = float(last.get("bytes/s") or first.get("bytes/s") or 0)
+                iops = float(last.get("iops") or first.get("iops") or 0)
+                return bps / (1024.0 * 1024.0), iops
+
+            phases = data.get("elbencho_phases") or [data]
+            pattern = str(test_params.get("Read/Write Pattern", "")).lower()
+            read_bw = read_iops = write_bw = write_iops = 0.0
+            for phase in phases:
+                bw, iops = _phase_metrics(phase)
+                ptype = str((phase or {}).get("phase_type", "")).upper()
+                if ptype == "READ" or ("read" in pattern and "write" not in pattern):
+                    read_bw, read_iops = bw, iops
+                elif ptype == "WRITE" or "write" in pattern:
+                    write_bw, write_iops = bw, iops
+            if not read_bw and not write_bw and phases:
+                bw, iops = _phase_metrics(phases[-1])
+                if "read" in pattern:
+                    read_bw, read_iops = bw, iops
+                else:
+                    write_bw, write_iops = bw, iops
+            return {
+                "read": {"agg_bw_mib": read_bw, "agg_iops": read_iops},
+                "write": {"agg_bw_mib": write_bw, "agg_iops": write_iops},
                 "agg_bw_mib": read_bw + write_bw,
                 "agg_iops": read_iops + write_iops,
             }

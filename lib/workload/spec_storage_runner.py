@@ -17,6 +17,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         ganesha_manager=None,
         results_dir=None,
         mount_manager=None,
+        rgw_manager=None,
     ):
         cmd = self.config["specstorage"]["run_command"]
         cfg = self.config["specstorage"]["output_path"]

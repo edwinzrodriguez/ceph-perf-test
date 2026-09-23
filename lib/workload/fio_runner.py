@@ -20,6 +20,7 @@ class FioWorkloadRunner(WorkloadRunner):
         ganesha_manager=None,
         results_dir=None,
         mount_manager=None,
+        rgw_manager=None,
     ):
         fio_cfg = self.config.fio
         run_cmd = fio_cfg.get("run_command", "/cephfs_perf/fio/run_fio_workload.py")

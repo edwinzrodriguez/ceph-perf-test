@@ -322,6 +322,173 @@ rgw:
   credentials_path: "/cephfs_perf/rgw/s3_credentials.json"
 #  env_vars: {}
 
+# Elbencho S3 / RGW workload (used by cephfs_elbencho_runner.py)
+elbencho:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/elbencho/run_elbencho_workload.py"
+  executable_path: "/usr/local/bin/elbencho"
+  conf_path: "/cephfs_perf/rgw/s3-classic.conf"
+  # Dataset caps written into the generated conf (for harness compatibility)
+  size_limit: "4T"
+  object_limit: 1000000
+  load_driver_port: 1611
+  distributed: true
+  # Open load_driver_port on clients via firewalld/iptables when active
+  # (defaults to rgw.manage_firewall when unset)
+  manage_firewall: true
+  buckets: ["eot-classic"]
+  perf_record: false
+  perf_record_script: "/cephfs_perf/perf_record.py"
+  perf_record_executable: "radosgw"
+  perf_record_duration: 30
+  env_vars: {}
+  loadpoints:
+    - readwrite: ["write", "read"]
+      threads: [32, 16, 8, 1]
+      size: "4MiB"
+      block-size: "4MiB"
+      files: 1000
+      dirs: 1
+      extra_args: ""
+
+  # Loadpoints derived from workload-eot.csv + benchmark-s3.sh:
+  #   CSV: client_count,object_size,part_size,threads,blockvarpct
+  #   Each row expands to PUT/GET/DELETE via readwrite: [write, read, delete]
+  #   files (--files/-N) = min(SIZE_LIMIT/obj_size, OBJECT_LIMIT) / (client_count * threads)
+  #   with SIZE_LIMIT=4TiB, OBJECT_LIMIT=1e6, client_count=6, threads=32
+  #   Use IEC units (KiB/MiB/GiB) to match numfmt --from=iec in the bash script.
+  #   blockvarpct applies to write only; s3fastget applies to read only.
+  #   Inventory should provide 6 clients to match client_count=6.
+  loadpoints1:
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "8KiB"
+      block-size: "8KiB"
+      files: 5208
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "64KiB"
+      block-size: "64KiB"
+      files: 5208
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "256KiB"
+      block-size: "256KiB"
+      files: 5208
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "512KiB"
+      block-size: "512KiB"
+      files: 5208
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "1MiB"
+      block-size: "1MiB"
+      files: 5208
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "4MiB"
+      block-size: "4MiB"
+      files: 5208
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "16MiB"
+      block-size: "16MiB"
+      files: 1365
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "32MiB"
+      block-size: "16MiB"
+      files: 682
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "64MiB"
+      block-size: "16MiB"
+      files: 341
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "256MiB"
+      block-size: "16MiB"
+      files: 85
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "1GiB"
+      block-size: "16MiB"
+      files: 21
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "32MiB"
+      block-size: "32MiB"
+      files: 682
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "62MiB"
+      block-size: "62MiB"
+      files: 352
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "64MiB"
+      block-size: "64MiB"
+      files: 341
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "256MiB"
+      block-size: "8MiB"
+      files: 85
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+    - readwrite: [write, read, delete]
+      threads: 32
+      size: "1GiB"
+      block-size: "8MiB"
+      files: 21
+      dirs: 1
+      blockvarpct: 4
+      s3fastget: true
+
 # SpecStorage configuration
 specstorage:
   output_path: "/cephfs_perf/sfs2020/spec_2020.txt"
