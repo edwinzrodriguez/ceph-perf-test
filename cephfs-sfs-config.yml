@@ -73,6 +73,17 @@
         reload: yes
       ignore_errors: yes
 
+    # NFSv4.1 client max outstanding requests per session (default 64).
+    # RHEL10 upper bound without a kernel rebuild is 1024.
+    # See: https://learn.microsoft.com/en-us/azure/azure-netapp-files/performance-linux-concurrency-session-slots#nfsv41
+    # Takes effect after reboot (or after the nfs module is (re)loaded).
+    - name: Set NFS client max_session_slots to 1024
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/nfsclient.conf
+        content: |
+          options nfs max_session_slots=1024
+        mode: '0644'
+
     - name: Read netmist.env
       ansible.builtin.shell:
         cmd: "grep '^sfs2020_archive=' netmist.env | cut -d'=' -f2 | tr -d '\"' | tr -d \"'\""

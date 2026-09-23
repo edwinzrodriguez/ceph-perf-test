@@ -262,6 +262,7 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 |-----|------|---------|-------------|
 | `worker_threads` | int | | Number of Ganesha 9P worker threads |
 | `msgr_workers` | int | | Ceph messenger worker threads (`ms_async_op_threads`) |
+| `slot_table_size` | int or list | | NFSv4.1 session slot table size (`NFS_Core_Param.slot_table_size`; max 1024) |
 | `rpc_ioq_thrdmin` | int | | RPC I/O queue minimum threads |
 | `rpc_ioq_thrdmax` | int or list | | RPC I/O queue maximum threads |
 

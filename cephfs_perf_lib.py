@@ -670,6 +670,10 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("msgr_workers")
 
     @property
+    def ganesha_slot_table_size(self):
+        return self._config.get("ganesha", {}).get("slot_table_size")
+
+    @property
     def ganesha_rpc_ioq_thrdmin(self):
         return self._config.get("ganesha", {}).get("rpc_ioq_thrdmin")
 
@@ -1287,6 +1291,7 @@ class CommonUtils:
             "Ganesha Zero Copy": "gzc",
             "Ganesha Client Object Cache Size": "gocs",
             "Ganesha Msgr Workers": "gmw",
+            "Ganesha Slot Table Size": "gsts",
             "Ganesha RPC IOQ Thread Min": "grpcmin",
             "Ganesha RPC IOQ Thread Max": "grpcmax",
             "Ganesha User ID": "guid",
@@ -1515,6 +1520,7 @@ class CommonUtils:
             "ganesha_zerocopy": "Ganesha Zero Copy",
             "ganesha_client_oc_size": "Ganesha Client Object Cache Size",
             "ganesha_msgr_workers": "Ganesha Msgr Workers",
+            "ganesha_slot_table_size": "Ganesha Slot Table Size",
             "ganesha_rpc_ioq_thrdmin": "Ganesha RPC IOQ Thread Min",
             "ganesha_rpc_ioq_thrdmax": "Ganesha RPC IOQ Thread Max",
             "ganesha_user_id": "Ganesha User ID",
@@ -1561,6 +1567,7 @@ class CommonUtils:
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_msgr_workers",
+            "ganesha_slot_table_size",
             "ganesha_client_oc_size",
             "ganesha_rpc_ioq_thrdmin",
             "ganesha_rpc_ioq_thrdmax",
@@ -1646,6 +1653,7 @@ class CommonUtils:
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
             "ganesha_msgr_workers",
+            "ganesha_slot_table_size",
             "ganesha_rpc_ioq_thrdmin",
             "ganesha_rpc_ioq_thrdmax",
             "ganesha_user_id",
@@ -1714,6 +1722,8 @@ class CommonUtils:
                 )
             if config.ganesha_msgr_workers:
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Msgr Workers')}{config.ganesha_msgr_workers}")
+            if config.ganesha_slot_table_size:
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Slot Table Size')}{config.ganesha_slot_table_size}")
             if g_parts:
                 g_p = "-" + "-".join(g_parts)
         elif settings.get("ganesha_enabled"):
@@ -1738,6 +1748,8 @@ class CommonUtils:
                 )
             if settings.get("ganesha_msgr_workers"):
                 g_parts.append(f"{CommonUtils.get_short_name('Ganesha Msgr Workers')}{settings['ganesha_msgr_workers']}")
+            if settings.get("ganesha_slot_table_size"):
+                g_parts.append(f"{CommonUtils.get_short_name('Ganesha Slot Table Size')}{settings['ganesha_slot_table_size']}")
             if g_parts:
                 g_p = "-" + "-".join(g_parts)
 

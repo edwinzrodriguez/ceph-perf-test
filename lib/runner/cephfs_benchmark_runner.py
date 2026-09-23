@@ -261,6 +261,7 @@ class BenchRunner:
                     "zerocopy",
                     "client_oc_size",
                     "msgr_workers",
+                    "slot_table_size",
                     "rpc_ioq_thrdmin",
                     "rpc_ioq_thrdmax",
                 ]:

@@ -332,6 +332,8 @@ class GaneshaCephadmManager(GaneshaManager):
             "    allow_set_io_flusher_fail = true;\n"
         )
         
+        if self.config.ganesha_slot_table_size is not None:
+            nfs_core_params += f"    slot_table_size = {self.config.ganesha_slot_table_size};\n"
         if self.config.ganesha_rpc_ioq_thrdmin is not None:
             nfs_core_params += f"    rpc_ioq_thrdmin = {self.config.ganesha_rpc_ioq_thrdmin};\n"
         if self.config.ganesha_rpc_ioq_thrdmax is not None:
