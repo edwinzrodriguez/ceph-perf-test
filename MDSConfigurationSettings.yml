@@ -182,13 +182,33 @@ mds:
     enabled: false
     debug_mds: 1
     debug_ms: 1
+#    memory: true
+#    log_max_recent: 50000  # default daemon value; raise for longer capture windows
 #    mds_enable_op_tracker: true
 #    mds_op_complaint_time: 30
 #    mds_op_history_size: 200          # default 20 is too small
 #    mds_op_history_duration: 3600
 #    mds_op_history_slow_op_size: 100
 #    mds_op_history_slow_op_threshold: 5  # capture ops >5s even if not "blocked"
-#    mds_reactor_queue_len_abort: 3000000
+#    mds_reactor_queue_len_abort: 500000 # Abort the MDS when the reactor dispatch queue depth reaches this value, default 0
+#    mds_reactor_lane_slice_control: 10 # Max wall time per Control lane visit in a reactor scheduling round, default 10
+#    mds_reactor_lane_slice_io: 5 # Max wall time per IOComplete lane visit in a reactor scheduling round, default 10
+#    mds_reactor_lane_slice_maintenance: 2 # Max wall time per Maintenance lane visit in a reactor scheduling round, default 2
+#    mds_reactor_lane_slice_client: 5 # Max wall time per Client lane visit in a reactor scheduling round, default 2
+#    mds_reactor_slice_exec_window: 256 # Rolling window size for per-lane reactor execute-time average, default 256
+#    mds_reactor_slice_backlog_target: 500 # Soft Client backlog that starts adapting reactor lane slices, default 500
+#    mds_reactor_client_enqueue_high: 250000 # Stall Client-lane reactor enqueues when Client depth reaches this value, default 250K
+#    mds_reactor_client_enqueue_low: 125000 # Resume Client-lane reactor enqueues when Client depth drops below this value, default 125K
+#    mds_reactor_lane_slice_client_min: 5 # Minimum Client lane slice when another lane has the dominant backlog, default 1
+#    mds_reactor_lane_slice_client_max: 20 # Maximum Client lane slice under backlog adaptation, default 20
+#    mds_reactor_lane_slice_maintenance_min: 1 # Minimum Maintenance lane slice when another lane has the dominant backlog, default 1
+#    mds_reactor_lane_slice_maintenance_max: 5 # Maximum Maintenance lane slice when Maintenance has the dominant backlog, default 5
+#    mds_reactor_lane_slice_io_min: 1 #Minimum IOComplete lane slice when another lane has the dominant backlog, default 2
+#    mds_reactor_lane_slice_io_max: 20 # Maximum IOComplete lane slice when IO has the dominant backlog, default 20
+#    mds_reactor_io_enqueue_high: 100000 # Stall IOComplete-lane reactor enqueues when IOComplete depth reaches this value, default 100K
+#    mds_reactor_io_enqueue_low: 50000 # Resume IOComplete-lane reactor enqueues when IOComplete depth drops below this value, default 50K
+#    mds_cap_revoke_eviction_timeout: 0 # number of seconds after which clients which have not responded to cap revoke messages by the MDS are evicted
+#    mds_cap_revoke_abort_timeout: 60 # Abort the MDS when a client has not responded to a cap revoke for this many seconds
 
 ceph:
   conf: "/etc/ceph/ceph.conf"
