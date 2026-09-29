@@ -332,22 +332,28 @@ class GaneshaCephadmManager(GaneshaManager):
             "    allow_set_io_flusher_fail = true;\n"
         )
         
-        if self.config.ganesha_slot_table_size is not None:
-            nfs_core_params += f"    slot_table_size = {self.config.ganesha_slot_table_size};\n"
         if self.config.ganesha_rpc_ioq_thrdmin is not None:
             nfs_core_params += f"    rpc_ioq_thrdmin = {self.config.ganesha_rpc_ioq_thrdmin};\n"
         if self.config.ganesha_rpc_ioq_thrdmax is not None:
             nfs_core_params += f"    rpc_ioq_thrdmax = {self.config.ganesha_rpc_ioq_thrdmax};\n"
+
+        nfsv4_params = (
+            '    RecoveryBackend = "rados_cluster";\n'
+            "    Minor_Versions = 1, 2;\n"
+        )
+        if self.config.ganesha_slot_table_size is not None:
+            nfsv4_params += (
+                f"    Slot_Table_Size = {self.config.ganesha_slot_table_size};\n"
+            )
 
         config_content = (
             f"NFS_Core_Param {{\n"
             f"{nfs_core_params}"
             f"}}\n"
             f"{worker_threads_block}"
-            "NFSv4 {\n"
-            '    RecoveryBackend = "rados_cluster";\n'
-            "    Minor_Versions = 1, 2;\n"
-            "}\n"
+            f"NFSv4 {{\n"
+            f"{nfsv4_params}"
+            f"}}\n"
             f"{ceph_block}"
             "RADOS_KV {\n"
             "    nodeid = 0;\n"

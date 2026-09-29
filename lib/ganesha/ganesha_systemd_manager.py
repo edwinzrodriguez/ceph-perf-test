@@ -231,12 +231,19 @@ class GaneshaSystemdManager(GaneshaManager):
             "    allow_set_io_flusher_fail = true;\n"
         )
 
-        if self.config.ganesha_slot_table_size is not None:
-            nfs_core_params += f"    slot_table_size = {self.config.ganesha_slot_table_size};\n"
         if self.config.ganesha_rpc_ioq_thrdmin is not None:
             nfs_core_params += f"    rpc_ioq_thrdmin = {self.config.ganesha_rpc_ioq_thrdmin};\n"
         if self.config.ganesha_rpc_ioq_thrdmax is not None:
             nfs_core_params += f"    rpc_ioq_thrdmax = {self.config.ganesha_rpc_ioq_thrdmax};\n"
+
+        nfsv4_params = (
+            '    RecoveryBackend = "fs";\n'
+            "    Minor_Versions = 1, 2;\n"
+        )
+        if self.config.ganesha_slot_table_size is not None:
+            nfsv4_params += (
+                f"    Slot_Table_Size = {self.config.ganesha_slot_table_size};\n"
+            )
 
         log_block = ""
         if self.config.ganesha_log_level:
@@ -301,10 +308,9 @@ class GaneshaSystemdManager(GaneshaManager):
             f"{nfs_core_params}"
             f"}}\n"
             f"{worker_threads_block}"
-            "NFSv4 {\n"
-            '    RecoveryBackend = "fs";\n'
-            "    Minor_Versions = 1, 2;\n"
-            "}\n"
+            f"NFSv4 {{\n"
+            f"{nfsv4_params}"
+            f"}}\n"
             f"{ceph_block}"
             f"{log_block}"
         )
