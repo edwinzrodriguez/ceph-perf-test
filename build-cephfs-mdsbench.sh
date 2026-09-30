@@ -19,9 +19,6 @@ fi
 for i in "$@"; do
 
     pushd ~/git/cephfs-mdsbench-src
-#      g++ --std=c++20 -D_FILE_OFFSET_BITS=64 -O3 -o /usr/local/$i/bin/cephfs-mdsbench \
-#        cephfs-mdsbench.cc -I~/git/$i/src -I/usr/local/$i/include -L/usr/local/$i/lib64 \
-#        -lcephfs -lpthread -lboost_program_options
       g++ --std=c++20 -D_FILE_OFFSET_BITS=64 -O3 \
         -o /usr/local/$i/bin/cephfs-mdsbench \
         cephfs-mdsbench.cc \
