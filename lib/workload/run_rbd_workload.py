@@ -4,8 +4,10 @@ import datetime
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
+import threading
 import time
 
 # Add project root to sys.path to allow importing cephfs_perf_lib
@@ -15,6 +17,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from cephfs_perf_lib import CommonUtils
+
+DEFAULT_RBD_ASOK = "/var/run/ceph/fio-rbd.asok"
 
 
 def rbd_image_exists(rbd_bin, pool, image, config_path, keyring, client_id):
@@ -82,6 +86,132 @@ def ensure_rbd_image(
             sys.exit(r.returncode)
 
 
+def _admin_daemon_cmd(ceph_bin, asok, args, env_vars=None):
+    """Build ``ceph --admin-daemon`` using a short relative socket path.
+
+    Drop CEPH_ARGS so fio's ``--admin-socket`` does not leak into the dump
+    CLI (same rationale as cephfs-tool lockstat).
+    """
+    asok = (asok or "").rstrip("/")
+    if "/" in asok:
+        directory, name = asok.rsplit("/", 1)
+    else:
+        directory, name = ".", asok
+    dump_env = dict(env_vars or {})
+    dump_env.pop("CEPH_ARGS", None)
+    inner = (
+        f"cd {shlex.quote(directory)} && "
+        f"{ceph_bin} --admin-daemon {shlex.quote(name)} {args}"
+    )
+    return CommonUtils.with_env_exports(inner, dump_env)
+
+
+def _run_remote(client, cmd, check=False):
+    result = subprocess.run(
+        ["ssh", "-o", "StrictHostKeyChecking=no", client, "bash -s"],
+        input=cmd + "\n",
+        capture_output=True,
+        text=True,
+    )
+    if check and result.returncode != 0:
+        raise RuntimeError(
+            f"[{client}] remote command failed (rc={result.returncode}): "
+            f"{result.stderr or result.stdout}"
+        )
+    return result
+
+
+def ensure_asok_dir(client, asok_path):
+    directory = os.path.dirname(asok_path) or "/var/run/ceph"
+    _run_remote(client, f"mkdir -p {shlex.quote(directory)}")
+
+
+def reset_client_perf(client, ceph_bin, asok, env_vars=None):
+    """Reset librados/librbd perf counters at the start of the RUN window."""
+    cmd = _admin_daemon_cmd(ceph_bin, asok, "perf reset all", env_vars)
+    print(f"[{client}] Resetting RBD client perf counters via {asok}...", flush=True)
+    result = _run_remote(client, cmd)
+    if result.returncode != 0:
+        print(
+            f"[{client}] Warning: perf reset failed (rc={result.returncode}): "
+            f"{(result.stderr or result.stdout).strip()}",
+            flush=True,
+        )
+
+
+def dump_client_perf(
+    client, ceph_bin, asok, results_dir, loadpoint, settings, lp_cfg,
+    host_tag, env_vars=None,
+):
+    """Dump client perf counters while fio is still alive; save under results_dir."""
+    filename = (
+        f"{CommonUtils.get_workload_base_name('rbd', 'perf_dump', host_tag, loadpoint, settings, lp_cfg)}.json"
+    )
+    remote_tmp = f"/tmp/{filename}"
+    local_path = os.path.join(results_dir, filename)
+    dump_cmd = _admin_daemon_cmd(ceph_bin, asok, "perf dump", env_vars)
+    # Write on the client, then scp back (asok dies when fio exits).
+    cmd = f"{dump_cmd} > {shlex.quote(remote_tmp)} 2>/tmp/rbd_perf_dump.err"
+    print(f"[{client}] Dumping RBD client perf counters via {asok}...", flush=True)
+    result = _run_remote(client, cmd)
+    if result.returncode != 0:
+        err = _run_remote(client, "cat /tmp/rbd_perf_dump.err 2>/dev/null || true")
+        print(
+            f"[{client}] Warning: perf dump failed (rc={result.returncode}): "
+            f"{(err.stdout or '').strip()}",
+            flush=True,
+        )
+        return None
+
+    scp = subprocess.run(
+        [
+            "scp",
+            "-o",
+            "StrictHostKeyChecking=no",
+            f"{client}:{remote_tmp}",
+            local_path,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    _run_remote(client, f"rm -f {shlex.quote(remote_tmp)}")
+    if scp.returncode != 0:
+        print(
+            f"[{client}] Warning: failed to copy perf dump: {scp.stderr}",
+            flush=True,
+        )
+        return None
+
+    try:
+        with open(local_path, "r") as f:
+            data = json.load(f)
+        print(f"[{client}] Wrote RBD perf dump {local_path}", flush=True)
+        return data
+    except Exception as e:
+        print(f"[{client}] Warning: invalid perf dump JSON ({e})", flush=True)
+        return None
+
+
+def schedule_perf_dump(
+    client, ceph_bin, asok, results_dir, loadpoint, settings, lp_cfg,
+    host_tag, duration, env_vars, done_event, dumped_flag,
+):
+    """Wait until near the end of the measurement window, then dump once."""
+    # fio percent advances over --runtime after ramp; dump a few seconds early
+    # so the asok is still live.
+    delay = max(1, int(duration) - 3) if duration else 10
+    if done_event.wait(timeout=delay):
+        return
+    if dumped_flag["done"]:
+        return
+    data = dump_client_perf(
+        client, ceph_bin, asok, results_dir, loadpoint, settings, lp_cfg,
+        host_tag, env_vars=env_vars,
+    )
+    if data is not None:
+        dumped_flag["done"] = True
+
+
 def main():
     parser = argparse.ArgumentParser(description="RBD (fio --ioengine=rbd) Driver")
     parser.add_argument(
@@ -135,8 +265,29 @@ def main():
     recreate_images = bool(settings.get("recreate_images", False))
     timestamp_progress = bool(settings.get("timestamp_progress", False))
 
+    # Client-side librados/librbd admin socket for per-loadpoint perf dumps.
+    # Injected into CEPH_ARGS as --admin-socket=... so fio's rbd ioengine
+    # creates a reachable asok for `ceph --admin-daemon ... perf dump`.
+    perf_dump_enabled = bool(settings.get("rbd_perf_dump_enabled", False))
+    perf_dump_asok = settings.get("rbd_perf_dump_asok", DEFAULT_RBD_ASOK)
+    ceph_bin = settings.get("ceph_binary_path", "ceph")
+    if perf_dump_enabled and perf_dump_asok:
+        asok_arg = f"--admin-socket={perf_dump_asok}"
+        existing = base_env_vars.get("CEPH_ARGS", "")
+        # Avoid duplicating --admin-socket if the user already set one.
+        if "--admin-socket" not in existing:
+            base_env_vars["CEPH_ARGS"] = (
+                f"{existing} {asok_arg}".strip() if existing else asok_arg
+            )
+        print(
+            f"RBD perf dump enabled: CEPH_ARGS will use {asok_arg}",
+            flush=True,
+        )
+
     # Create images per client up-front so all subsequent loadpoints reuse them.
     for c in clients:
+        if perf_dump_enabled:
+            ensure_asok_dir(c, perf_dump_asok)
         for idx in range(images_per_client):
             image = f"{c}_img_{idx:02d}"
             ensure_rbd_image(
@@ -238,6 +389,12 @@ def main():
 
                 run_phase_started = False
                 last_status_time = 0.0
+                dump_stop = threading.Event()
+                dump_thread = None
+                dumped_flag = {"done": False}
+                host_tag = (
+                    f"{c}_img{img_idx:02d}" if images_per_client > 1 else c
+                )
                 for line in proc.stdout:
                     line = line.strip()
                     if line.startswith("Jobs:"):
@@ -254,6 +411,29 @@ def main():
                             if not run_phase_started and percent != "-.-":
                                 print("Starting RUN phase", flush=True)
                                 run_phase_started = True
+                                if perf_dump_enabled:
+                                    reset_client_perf(
+                                        c, ceph_bin, perf_dump_asok, base_env_vars
+                                    )
+                                    dump_thread = threading.Thread(
+                                        target=schedule_perf_dump,
+                                        args=(
+                                            c,
+                                            ceph_bin,
+                                            perf_dump_asok,
+                                            results_dir,
+                                            loadpoint,
+                                            settings,
+                                            lp_cfg,
+                                            host_tag,
+                                            duration,
+                                            base_env_vars,
+                                            dump_stop,
+                                            dumped_flag,
+                                        ),
+                                        daemon=True,
+                                    )
+                                    dump_thread.start()
 
                             now = time.monotonic()
                             if now - last_status_time >= 1.0:
@@ -269,6 +449,26 @@ def main():
                                 )
                     else:
                         print(f"[{c}] {line}", flush=True)
+
+                # fio stdout closed — stop the timer and attempt a final dump
+                # if the scheduled one has not already succeeded (short runs).
+                dump_stop.set()
+                if dump_thread is not None:
+                    dump_thread.join(timeout=5)
+                if perf_dump_enabled and run_phase_started and not dumped_flag["done"]:
+                    data = dump_client_perf(
+                        c,
+                        ceph_bin,
+                        perf_dump_asok,
+                        results_dir,
+                        loadpoint,
+                        settings,
+                        lp_cfg,
+                        host_tag,
+                        env_vars=base_env_vars,
+                    )
+                    if data is not None:
+                        dumped_flag["done"] = True
 
                 proc.wait()
                 if proc.returncode != 0:

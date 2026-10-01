@@ -73,6 +73,16 @@ class RbdWorkloadRunner(WorkloadRunner):
                 payload[key] = cfg[key]
         payload["env_vars"] = self.config.get_merged_env_vars(cfg.get("env_vars"))
 
+        # Client librados/librbd admin-socket for per-loadpoint perf dumps.
+        # The driver injects --admin-socket into CEPH_ARGS for fio.
+        perf_dump_cfg = cfg.get("perf_dump", {}) or {}
+        if perf_dump_cfg.get("enabled", False):
+            payload["rbd_perf_dump_enabled"] = True
+            payload["rbd_perf_dump_asok"] = perf_dump_cfg.get(
+                "asok", "/var/run/ceph/fio-rbd.asok"
+            )
+            payload["ceph_binary_path"] = self.config.resolve_ceph_binary("rbd")
+
         settings_json = json.dumps(payload)
         loadpoints_json = json.dumps(expanded_loadpoints)
         clients_json = json.dumps(self.config.clients)

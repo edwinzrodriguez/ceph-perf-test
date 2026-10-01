@@ -712,6 +712,8 @@ RBD images are created once per client before any loadpoints run and reused acro
 | `randrepeat` | int | | fio `randrepeat` setting |
 | `timestamp_progress` | bool | `false` | Prefix each progress line with an ISO 8601 UTC timestamp |
 | `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `fio`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
+| `perf_dump.enabled` | bool | `false` | Capture client librados/librbd `perf dump` per loadpoint via an admin socket |
+| `perf_dump.asok` | string | `/var/run/ceph/fio-rbd.asok` | Admin socket path. When enabled, the driver appends `--admin-socket=<asok>` to `CEPH_ARGS` for fio, resets counters at RUN start, and dumps near the end of each loadpoint |
 
 #### Profiling
 
@@ -761,6 +763,9 @@ rbd:
   recreate_images: false
   gtod_reduce: 1
   ramp_time: 5
+  perf_dump:
+    enabled: true
+    asok: "/var/run/ceph/fio-rbd.asok"
   loadpoints:
       duration: 60
       block-size: ["4MiB", "256KiB"]

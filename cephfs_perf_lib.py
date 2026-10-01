@@ -1921,6 +1921,11 @@ class CommonUtils:
             "ramp_time",
             "pool",
             "recreate_images",
+            "rbd_perf_dump_enabled",
+            "rbd_perf_dump_asok",
+            "ceph_binary_path",
+            "image_size",
+            "images_per_client",
             "mount_display_name",
             # Elbencho / RGW payload keys (must not land in result filenames)
             "conf_path",
