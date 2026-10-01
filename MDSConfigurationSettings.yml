@@ -1,133 +1,322 @@
 inventory:
-  mgrs:
-    mon-000:
-      ansible_ssh_host: 169.63.188.95
-      ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.69
-    mon-001:
-      ansible_ssh_host: 169.63.190.238
-      ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.71
-    mon-002:
-      ansible_ssh_host: 169.59.191.0
-      ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.68
   mons:
     mon-000:
-      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_host: 52.116.206.58
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.69
-      monitor_address: 10.241.64.69
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mons
+      public_network: 52.116.206.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.13
+      monitor_address: 10.240.64.13
     mon-001:
-      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_host: 52.116.195.34
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.71
-      monitor_address: 10.241.64.71
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mons
+      public_network: 52.116.195.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.14
+      monitor_address: 10.240.64.14
     mon-002:
-      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_host: 169.47.95.80
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.68
-      monitor_address: 10.241.64.68
-  ganeshas:
-    client-000:
-      ansible_ssh_host: 169.63.179.214
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mons
+      public_network: 169.47.95.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.17
+      monitor_address: 10.240.64.17
+  mgrs:
+    mon-000:
+      ansible_ssh_host: 52.116.206.58
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.70
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mgrs
+      public_network: 52.116.206.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.13
+    mon-001:
+      ansible_ssh_host: 52.116.195.34
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mgrs
+      public_network: 52.116.195.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.14
+    mon-002:
+      ansible_ssh_host: 169.47.95.80
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mgrs
+      public_network: 169.47.95.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.17
   mdss:
     mon-000:
-      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_host: 52.116.206.58
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.69
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mdss
+      public_network: 52.116.206.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.13
     mon-001:
-      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_host: 52.116.195.34
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.71
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mdss
+      public_network: 52.116.195.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.14
     mon-002:
-      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_host: 169.47.95.80
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.68
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: mdss
+      public_network: 169.47.95.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.17
   clients:
     client-000:
-      ansible_ssh_host: 169.63.179.214
+      ansible_ssh_host: 52.118.251.42
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.70
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-  osds:
-    mon-000:
-      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: clients
+      public_network: 52.118.251.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.35
+    client-001:
+      ansible_ssh_host: 52.116.195.74
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.69
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-    mon-001:
-      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: clients
+      public_network: 52.116.195.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.43
+    client2-000:
+      ansible_ssh_host: 150.239.165.64
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.71
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-    mon-002:
-      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: clients
+      public_network: 150.239.165.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.46
+    client2-001:
+      ansible_ssh_host: 52.116.198.32
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.68
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-  sambas:
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: clients
+      public_network: 52.116.198.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.45
+    client2-002:
+      ansible_ssh_host: 150.239.165.4
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: clients
+      public_network: 150.239.165.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.47
+    client2-003:
+      ansible_ssh_host: 52.118.255.18
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: clients
+      public_network: 52.118.255.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.44
+  ganeshas:
     client-000:
-      ansible_ssh_host: 169.63.179.214
+      ansible_ssh_host: 52.118.251.42
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      private_ip: 10.241.64.70
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: ganeshas
+      public_network: 52.118.251.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.35
+    client-001:
+      ansible_ssh_host: 52.116.195.74
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: ganeshas
+      public_network: 52.116.195.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.43
+    client2-000:
+      ansible_ssh_host: 150.239.165.64
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: ganeshas
+      public_network: 150.239.165.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.46
+    client2-001:
+      ansible_ssh_host: 52.116.198.32
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: ganeshas
+      public_network: 52.116.198.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.45
+    client2-002:
+      ansible_ssh_host: 150.239.165.4
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: ganeshas
+      public_network: 150.239.165.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.47
+    client2-003:
+      ansible_ssh_host: 52.118.255.18
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: ganeshas
+      public_network: 52.118.255.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.44
   grafanas:
     mon-000:
-      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_host: 52.116.206.58
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.69
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: grafanas
+      public_network: 52.116.206.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.13
+  osds:
+    mon-000:
+      ansible_ssh_host: 52.116.206.58
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: osds
+      public_network: 52.116.206.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.13
+    mon-001:
+      ansible_ssh_host: 52.116.195.34
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: osds
+      public_network: 52.116.195.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.14
+    mon-002:
+      ansible_ssh_host: 169.47.95.80
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: osds
+      public_network: 169.47.95.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.17
+  sambas:
+    client-000:
+      ansible_ssh_host: 52.118.251.42
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: sambas
+      public_network: 52.118.251.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.35
+    client-001:
+      ansible_ssh_host: 52.116.195.74
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: sambas
+      public_network: 52.116.195.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.43
+    client2-000:
+      ansible_ssh_host: 150.239.165.64
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: sambas
+      public_network: 150.239.165.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.46
+    client2-001:
+      ansible_ssh_host: 52.116.198.32
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: sambas
+      public_network: 52.116.198.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.45
+    client2-002:
+      ansible_ssh_host: 150.239.165.4
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: sambas
+      public_network: 150.239.165.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.47
+    client2-003:
+      ansible_ssh_host: 52.118.255.18
+      ansible_ssh_port: 22
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: sambas
+      public_network: 52.118.255.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.44
   rgws:
     mon-000:
-      ansible_ssh_host: 169.63.188.95
+      ansible_ssh_host: 52.116.206.58
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.69
-      monitor_address: 10.241.64.69
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: rgws
+      public_network: 52.116.206.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.13
     mon-001:
-      ansible_ssh_host: 169.63.190.238
+      ansible_ssh_host: 52.116.195.34
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.71
-      monitor_address: 10.241.64.71
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: rgws
+      public_network: 52.116.195.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.14
     mon-002:
-      ansible_ssh_host: 169.59.191.0
+      ansible_ssh_host: 169.47.95.80
       ansible_ssh_port: 22
-      ansible_ssh_user: "root"
-      ansible_ssh_private_key_file: "/home/vpcuser/.ssh/id_rsa"
-      private_ip: 10.241.64.68
-      monitor_address: 10.241.64.68
+      ansible_ssh_user: root
+      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
+      ceph_group: rgws
+      public_network: 169.47.95.0/24
+      cluster_network: 10.240.64.0/24
+      private_ip: 10.240.64.17
 
 fs_name: "perf_test_fs"
 # CephFSCephadmManager (or legacy CephFSManager) deploys MDS via `ceph orch`.
