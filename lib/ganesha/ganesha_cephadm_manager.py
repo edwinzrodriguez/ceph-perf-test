@@ -70,6 +70,15 @@ class GaneshaCephadmManager(GaneshaManager):
                     client_section += f"    client_oc_size = {oc_size}\n"
                 if self.config.ganesha_msgr_workers:
                     client_section += f"    ms_async_op_threads = {self.config.ganesha_msgr_workers}\n"
+                if self.config.ganesha_objecter_dispatch_to_session_strand is not None:
+                    val = (
+                        "true"
+                        if self.config.ganesha_objecter_dispatch_to_session_strand
+                        else "false"
+                    )
+                    client_section += (
+                        f"    objecter_dispatch_to_session_strand = {val}\n"
+                    )
 
                 escaped_client_section = client_section.replace("'", "'\\''")
                 # We use sudo bash to allow variable expansion if needed, but here we want literal $cluster and $name

@@ -58,6 +58,8 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             "ganesha_async",
             "ganesha_zerocopy",
             "ganesha_client_oc_size",
+            "ganesha_msgr_workers",
+            "ganesha_objecter_dispatch_to_session_strand",
             "ganesha_user_id",
             "ganesha_keyring_path",
             "ganesha_ceph_binary_path",

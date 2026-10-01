@@ -339,6 +339,7 @@ class BenchRunner:
                     "zerocopy",
                     "client_oc_size",
                     "msgr_workers",
+                    "objecter_dispatch_to_session_strand",
                     "slot_table_size",
                     "rpc_ioq_thrdmin",
                     "rpc_ioq_thrdmax",
