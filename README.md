@@ -25,7 +25,7 @@ The framework operates on a **Test Matrix** principle. It iterates through combi
 ./cephfs_fio_runner.py <config.yaml> --grafana systemd
 ```
 
-Workload-specific entry points: `cephfs_fio_runner.py`, `cephfs_sfs2020_runner.py`, `cephfs_tool_bench_runner.py`, `cephfs_rados_bench_runner.py`, `cephfs_rbd_runner.py`, `cephfs_elbencho_runner.py`, or `cephfs_all_bench_runner.py` to run the full suite.
+Workload-specific entry points: `cephfs_fio_runner.py`, `cephfs_sfs2020_runner.py`, `cephfs_tool_bench_runner.py`, `cephfs_mdsbench_runner.py`, `cephfs_rados_bench_runner.py`, `cephfs_rbd_runner.py`, `cephfs_elbencho_runner.py`, or `cephfs_all_bench_runner.py` to run the full suite.
 
 ---
 
@@ -490,6 +490,74 @@ Each entry in `loadpoints` is a dict (or expanded from lists via Cartesian produ
 
 ---
 
+### `mdsbench`
+
+Configuration for the `cephfs-mdsbench` SpecStorage-style metadata workload runner
+(`cephfs_mdsbench_runner.py`). Uses libcephfs (forces `StubMountManager`).
+
+Each loadpoint is a SpecStorage-like business metric ``N``: the driver launches
+``N`` processes with ``--clients N --client-id K`` and the ready-file barrier,
+round-robin across inventory client hosts. Aggregate ``ops_per_sec`` is split
+evenly so the cluster-offered rate matches the configured target. Default
+``mode: balanced`` targets software-build (SWBUILD) style metadata mix.
+
+```bash
+./cephfs_mdsbench_runner.py MDSConfigurationSettings.yml
+```
+
+#### Global Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `results_base_dir` | string | `/cephfs_perf/results` | Base directory for result files |
+| `run_command` | string | `/cephfs_perf/mdsbench/run_mdsbench_workload.py` | Remote driver script path |
+| `executable_path` | string | `/usr/local/bin/cephfs-mdsbench` | Path to `cephfs-mdsbench` binary |
+| `config_path` | string | `/etc/ceph/ceph.conf` | ceph.conf path |
+| `keyring` | string | | Keyring path |
+| `client_id` | string | `admin` | CephX client id |
+| `root_path` | string | `/` | Mount root inside the filesystem |
+| `workdir` | string | `/mdsbench` | Work directory in CephFS |
+| `mode` | string | `balanced` | Op mix: `balanced`, `journal-heavy`, `lookup-heavy` |
+| `ops_per_sec` | float | `12000` | Aggregate target ops/s (divided across processes) |
+| `duration` | int | `60` | Measured duration in seconds |
+| `warmup` | int | `5` | Warmup before measurement in seconds |
+| `progress` | bool | `true` | Show progress output |
+| `progress_interval` | int | `10` | Progress update interval (percent) |
+| `keep_tree` | bool | `false` | Leave per-client trees after each loadpoint |
+| `skip_precreate` | bool | `false` | Skip Init; use existing trees |
+| `env_vars` | dict | `{}` | Extra environment variables (e.g. `CEPH_ARGS`) |
+
+#### Profiling
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `perf_record` | bool | `false` | Enable client-side `perf record` |
+| `perf_record_script` | string | | Path to perf recording script |
+| `perf_record_executable` | string | `cephfs-mdsbench` | Executable to profile |
+| `perf_record_duration` | int | `30` | Profiling duration in seconds |
+
+#### Loadpoint Options
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `loadpoints` | list of int | SpecStorage-style business metrics (process counts), e.g. `[1, 2, 4, 8, 12, 18, 24]` |
+
+Dict loadpoints with a required `clients` key are also accepted (optional per-LP overrides for `mode`, `ops_per_sec`, `duration`, `warmup`, `extra_args`).
+
+```yaml
+mdsbench:
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/mdsbench/run_mdsbench_workload.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/cephfs-mdsbench"
+  mode: "balanced"
+  ops_per_sec: 12000
+  duration: 60
+  warmup: 5
+  loadpoints: [1, 2, 4, 8, 12, 18, 24]
+```
+
+---
+
 ### `fio`
 
 Configuration for the fio workload runner.
@@ -876,7 +944,7 @@ mount_nfs:
 
 ### `StubMountManager`
 
-No-op mount manager. Used for workloads that manage their own connectivity (e.g., `cephfs_tool` uses its own libcephfs handle).
+No-op mount manager. Used for workloads that manage their own connectivity (e.g., `cephfs_tool` / `mdsbench` use their own libcephfs handles).
 
 ---
 
@@ -960,7 +1028,7 @@ Output files follow the pattern:
 <workload>_<output_type>_<client>_lp<N>_<encoded_settings>.json
 ```
 
-- `workload`: `cephfs_tool`, `fio`, or `sfs2020`
+- `workload`: `cephfs_tool`, `mdsbench`, `fio`, or `sfs2020`
 - `output_type`: `result`, `perf_dump`
 - `N`: load point number
 - `encoded_settings`: abbreviated key-value pairs for the active parameters (e.g., `s5GiB_t32_oc1_ocs16GiB_bs4MiB_mw8`)

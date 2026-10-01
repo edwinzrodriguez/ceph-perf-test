@@ -519,7 +519,7 @@ def main():
     parser.add_argument(
         "--output-dir", default="/tmp", help="Output directory for generated files"
     )
-    parser.add_argument("--workload", help="Workload name (cephfs_tool, fio, sfs2020)")
+    parser.add_argument("--workload", help="Workload name (cephfs_tool, mdsbench, fio, sfs2020)")
     parser.add_argument("--options", help="Workload options string")
 
     args = parser.parse_args()

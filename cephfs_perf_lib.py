@@ -525,6 +525,8 @@ class PerformanceTestConfig:
             return self._config["mount_manager_type"]
         if "cephfs_tool" in self._config:
             return "StubMountManager"
+        if "mdsbench" in self._config:
+            return "StubMountManager"
         if "rados_bench" in self._config:
             return "StubMountManager"
         return "MountKernelManager"
@@ -998,6 +1000,10 @@ class PerformanceTestConfig:
         return self._config.get("cephfs_tool")
 
     @property
+    def mdsbench(self):
+        return self._config.get("mdsbench")
+
+    @property
     def rados_bench(self):
         return self._config.get("rados_bench")
 
@@ -1387,6 +1393,10 @@ class CommonUtils:
             "Mounts per Filesystem": "mpf",
             "File Size": "s",
             "Threads": "t",
+            "Clients": "c",
+            "Mode": "mode",
+            "Ops Per Sec": "ops",
+            "Warmup": "wu",
             "Block Size": "bs",
             "I/O Depth": "iod",
             "Read/Write Pattern": "rw",
@@ -1686,6 +1696,10 @@ class CommonUtils:
             "mounts_per_fs": "Mounts per Filesystem",
             "size": "File Size",
             "threads": "Threads",
+            "clients": "Clients",
+            "mode": "Mode",
+            "ops_per_sec": "Ops Per Sec",
+            "warmup": "Warmup",
             "block-size": "Block Size",
             "iodepth": "I/O Depth",
             "readwrite": "Read/Write Pattern",
@@ -1887,6 +1901,22 @@ class CommonUtils:
             "cephfs_tool_lockstat_path",
             "timestamp_progress",
             "no_cleanup",
+            "workdir",
+            "mode",
+            "ops_per_sec",
+            "warmup",
+            "seed",
+            "write_bytes",
+            "scratch_slots",
+            "init_file_bytes",
+            "init_fill_percent",
+            "init_threads",
+            "keep_tree",
+            "skip_precreate",
+            "barrier_timeout",
+            "progress",
+            "progress_interval",
+            "extra_args",
             "rbd_executable_path",
             "ramp_time",
             "pool",
@@ -1994,6 +2024,14 @@ class CommonUtils:
                 parts.append(f"{CommonUtils.get_short_name('File Size')}{lp_cfg['size']}")
             if "threads" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('Threads')}{lp_cfg['threads']}")
+            if "clients" in lp_cfg:
+                parts.append(f"{CommonUtils.get_short_name('Clients')}{lp_cfg['clients']}")
+            if "mode" in lp_cfg:
+                parts.append(f"{CommonUtils.get_short_name('Mode')}{lp_cfg['mode']}")
+            if "ops_per_sec" in lp_cfg:
+                parts.append(
+                    f"{CommonUtils.get_short_name('Ops Per Sec')}{CommonUtils.format_si_units(lp_cfg['ops_per_sec'])}"
+                )
             if "client-oc" in lp_cfg:
                 parts.append(f"{CommonUtils.get_short_name('Client Object Cache')}{CommonUtils.format_config_value(lp_cfg['client-oc'])}")
             if "client-oc-size" in lp_cfg:
@@ -2057,6 +2095,7 @@ class CommonUtils:
           * cephfs_tool: {read:  {agg_bw_mib, agg_iops},
                           write: {agg_bw_mib, agg_iops},
                           agg_bw_mib, agg_iops}
+          * mdsbench:    {agg_bw_mib, agg_iops}
           * sfs2020:     {agg_bw_mib, agg_iops}
         """
         test_params = data.get("test_parameters", {}) or {}
@@ -2131,6 +2170,15 @@ class CommonUtils:
                 "agg_bw_mib": read_bw + write_bw,
                 "agg_iops": read_iops + write_iops,
             }
+
+        if runner == "mdsbench":
+            root = data.get("mdsbench", data) or {}
+            summary = root.get("summary", {}) or {}
+            try:
+                ops_s = float(summary.get("ops_per_sec", 0) or 0)
+            except (TypeError, ValueError):
+                ops_s = 0.0
+            return {"agg_bw_mib": 0, "agg_iops": ops_s}
 
         if runner == "sfs2020":
             runs = data.get("runs", []) or []
