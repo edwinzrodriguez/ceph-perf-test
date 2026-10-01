@@ -26,14 +26,16 @@ for i in "$@"; do
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_INSTALL_PREFIX=/usr/local/$i \
             -DENABLE_GIT_VERSION=ON \
-            -DWITH_MGR_DASHBOARD_FRONTEND=OFF
+            -DWITH_MGR_DASHBOARD_FRONTEND=OFF \
+            -DWITH_RADOSGW_LANCEDB=OFF
         else
           pushd ~/git/$i/build
               cmake .. -DUSE_TRACEFLOW=OFF \
                 -DCMAKE_BUILD_TYPE=RelWithDebInfo \
                 -DCMAKE_INSTALL_PREFIX=/usr/local/$i \
                 -DENABLE_GIT_VERSION=ON \
-                -DWITH_MGR_DASHBOARD_FRONTEND=OFF
+                -DWITH_MGR_DASHBOARD_FRONTEND=OFF \
+                -DWITH_RADOSGW_LANCEDB=OFF
           popd
         fi
         pushd ~/git/$i/build
