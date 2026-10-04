@@ -15,8 +15,15 @@ mount_fuse:
   client_id: "admin"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   conf: "/etc/ceph/ceph.conf"
+  conf_path: "/etc/ceph/ceph-fuse-{host}.conf"
+  asok: "/var/run/ceph/ceph-fuse-{host}.asok"
   mount_options: ""
   env_vars: {}
+  logging:
+    enabled: false
+    debug_client: 0/5
+    debug_ms: 0/5
+    debug_fuse: 0/5
 
 env_vars:
   CEPH_INSTALL_PREFIX: "/usr/local"

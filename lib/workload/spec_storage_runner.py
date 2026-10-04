@@ -97,6 +97,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             config_section="specstorage",
             cephfs_manager=cephfs_manager,
             ganesha_manager=ganesha_manager,
+            mount_manager=mount_manager,
             results_dir=payload.get("results_dir"),
             settings=settings,
             payload=settings,

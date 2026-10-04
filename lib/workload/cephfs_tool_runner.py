@@ -133,6 +133,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             config_section="cephfs_tool",
             cephfs_manager=cephfs_manager,
             ganesha_manager=ganesha_manager,
+            mount_manager=mount_manager,
             results_dir=results_dir,
             settings=settings,
             payload=payload,

@@ -263,3 +263,42 @@ class WorkloadRunner(abc.ABC):
         from lib.workload.loadpoint_monitor import LoadpointMonitor
 
         return LoadpointMonitor(self, **kwargs)
+
+    @staticmethod
+    def as_fuse_manager(mount_manager):
+        from lib.mount.mount_fuse_manager import MountFuseManager
+
+        if isinstance(mount_manager, MountFuseManager):
+            return mount_manager
+        return None
+
+    def reset_fuse_perf_counters(self, mount_manager):
+        fuse_manager = self.as_fuse_manager(mount_manager)
+        if not fuse_manager:
+            return
+        log.info("Resetting ceph-fuse perf counters...")
+        fuse_manager.reset_perf_counters()
+
+    def dump_fuse_perf_and_logs(
+        self,
+        mount_manager,
+        loadpoint,
+        results_dir,
+        settings=None,
+        lp_cfg=None,
+    ):
+        fuse_manager = self.as_fuse_manager(mount_manager)
+        if not fuse_manager:
+            return
+        if results_dir:
+            log.info(
+                "Dumping ceph-fuse perf counters for Load Point %s...", loadpoint
+            )
+            fuse_manager.dump_perf_counters(
+                loadpoint, results_dir, settings=settings, lp_cfg=lp_cfg
+            )
+        if fuse_manager.is_logging_enabled() and results_dir:
+            log.info(
+                "Collecting ceph-fuse client logs for Load Point %s...", loadpoint
+            )
+            fuse_manager.collect_client_logs(loadpoint, results_dir)

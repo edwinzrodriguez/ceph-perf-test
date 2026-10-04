@@ -51,6 +51,7 @@ class LoadpointMonitor:
         run_phase_fallback=None,
         after_loadpoint_end=None,
         osd_observer=None,
+        mount_manager=None,
     ):
         self.runner = runner
         self.config = runner.config
@@ -59,6 +60,7 @@ class LoadpointMonitor:
         self.config_section = config_section or workload_name
         self.cephfs_manager = cephfs_manager
         self.ganesha_manager = ganesha_manager
+        self.mount_manager = mount_manager
         self.results_dir = results_dir
         self.settings = settings
         self.payload = payload if payload is not None else settings
@@ -196,6 +198,9 @@ class LoadpointMonitor:
             )
             self.start_client_lockstat()
 
+        if self.mount_manager:
+            self.runner.reset_fuse_perf_counters(self.mount_manager)
+
     def on_loadpoint_end(self):
         if self._ended_for == self.current_lp:
             return
@@ -258,6 +263,14 @@ class LoadpointMonitor:
             )
             self.ganesha_manager.collect_ganesha_client_logs(
                 self.current_lp, self.results_dir
+            )
+        if self.mount_manager:
+            self.runner.dump_fuse_perf_and_logs(
+                self.mount_manager,
+                self.current_lp,
+                self.results_dir,
+                settings=self.perf_settings,
+                lp_cfg=lp_cfg,
             )
         if self.after_loadpoint_end:
             self.after_loadpoint_end(self)

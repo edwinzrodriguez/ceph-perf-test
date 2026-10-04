@@ -937,9 +937,16 @@ Configured via the `mount_fuse` section:
 | `binary_path` | string | `${CEPH_INSTALL_PREFIX}/bin/ceph-fuse` | Path to the `ceph-fuse` executable |
 | `client_id` | string | `ceph.user_id` | Ceph client id passed to `--id` |
 | `keyring` | string | `ceph.keyring` | Keyring path passed to `-k` |
-| `conf` | string | `ceph.conf` | Ceph config path passed to `-c` |
+| `conf` | string | `ceph.conf` | Cluster Ceph config used as the source for `config generate-minimal-conf` |
+| `conf_path` | string | `/etc/ceph/ceph-fuse-{host}.conf` | Generated per-mount ceph-fuse conf passed to `-c`. Placeholders: `{host}`, `{fs}`, `{index}`. Extra suffixes are added when multiple filesystems or mounts share a host |
+| `asok` | string | `/var/run/ceph/ceph-fuse-{host}.asok` | Admin socket path written into the generated conf (`admin_socket`). Same placeholders as `conf_path`. Used to reset/dump `perf dump` at each loadpoint, like Ganesha |
+| `log_file` | string | `/var/log/ceph/ceph-fuse-{host}.log` | Client log path when `logging.enabled` is true |
 | `mount_options` | string | *(empty)* | Extra arguments appended to the `ceph-fuse` command |
 | `env_vars` | dict | *(empty)* | Extra env vars merged on top of top-level `env_vars` |
+| `ceph_binary_path` | string | `mds`/`ganesha` `ceph_binary_path`, else `ceph` | `ceph` CLI used for `generate-minimal-conf` and `--admin-daemon` |
+| `logging.enabled` | bool | `false` | Enable ceph-fuse client logging in the generated conf and copy logs at each loadpoint end |
+| `logging.debug_*` | int or string | | Debug level for a Ceph subsystem, written as `debug_<name>` (same style as `mds.logging`, e.g. `debug_client`, `debug_ms`, `debug_fuse`) |
+| `logging.*` | | | Other keys (except `enabled` and `memory`) are copied into the `[client.<id>]` section (`log_max_recent`, `log_to_file`, …) |
 
 ```yaml
 mount_manager_type: "MountFuseManager"
@@ -948,6 +955,13 @@ mount_fuse:
   client_id: "admin"
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   conf: "/etc/ceph/ceph.conf"
+  conf_path: "/etc/ceph/ceph-fuse-{host}.conf"
+  asok: "/var/run/ceph/ceph-fuse-{host}.asok"
+  logging:
+    enabled: false
+    debug_client: 0
+    debug_ms: 0
+    debug_fuse: 0
 ```
 
 ### `MountNfsManager`
