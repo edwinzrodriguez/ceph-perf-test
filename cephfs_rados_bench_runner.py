@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""CLI entrypoint for the rados bench benchmark.
+
+Matrix orchestrator: BenchRunner. Control-plane workload: RadosBenchWorkloadRunner.
+Remote driver: lib/workload/run_rados_workload.py.
+"""
 import os
 import sys
 
@@ -11,12 +16,12 @@ if project_root not in sys.path:
 from lib.runner.cephfs_benchmark_runner import BenchRunner
 from lib.fs.ceph_pool_manager import CephPoolManager
 from lib.mount.mount_manager import StubMountManager
-from lib.workload.rados_tool_runner import RadosToolWorkloadRunner
+from lib.workload.rados_bench_runner import RadosBenchWorkloadRunner
 
 
 class RadosBenchRunner(BenchRunner):
     def get_workload_runner(self, executor, config, fs_names):
-        return RadosToolWorkloadRunner(executor, config, fs_names)
+        return RadosBenchWorkloadRunner(executor, config, fs_names)
 
     def get_fs_manager(self, executor, config):
         # Rados bench doesn't need a CephFS — just a pool. Force the pool

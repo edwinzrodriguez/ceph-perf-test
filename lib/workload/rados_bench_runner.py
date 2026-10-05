@@ -1,0 +1,205 @@
+import base64
+import datetime
+import json
+import os
+import subprocess
+from lib.workload.workload_runner import WorkloadRunner
+from cephfs_perf_lib import CommonUtils
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
+
+
+class RadosBenchWorkloadRunner(WorkloadRunner):
+    """Control-plane workload for ``rados bench``.
+
+    The module name used to be ``rados_tool_runner``. CLI entrypoint remains
+    ``cephfs_rados_bench_runner.py``.
+    """
+    def run_workload(
+        self,
+        settings,
+        shared_ts=None,
+        cephfs_manager=None,
+        ganesha_manager=None,
+        results_dir=None,
+        mount_manager=None,
+        rgw_manager=None,
+    ):
+        cfg = self.config.rados_bench
+        loadpoints = cfg.get("loadpoints", [])
+        if isinstance(loadpoints, dict):
+            loadpoints = [loadpoints]
+        loadpoints = CommonUtils.expand_loadpoints(loadpoints)
+        run_cmd = cfg.get(
+            "run_command", "/cephfs_perf/rados_bench/run_rados_workload.py"
+        )
+        ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y%m%d-%H%M%S-%f"
+        )
+        results_dir = results_dir or self.get_results_dir(settings, ts)
+
+        self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
+
+        payload = settings.copy()
+        payload["fs_name"] = self.config.fs_name
+        payload["results_dir"] = results_dir
+
+        for key, config_val in [
+            ("config_path", self.config.ceph_conf_path),
+            ("keyring", self.config.ceph_keyring_path),
+            ("client_id", self.config.ceph_user_id),
+        ]:
+            if config_val:
+                payload[key] = config_val
+
+        for key in [
+            "executable_path",
+            "config_path",
+            "keyring",
+            "client_id",
+            "pool",
+            "no_cleanup",
+            "duration",
+        ]:
+            if key in cfg:
+                payload[key] = cfg[key]
+        payload["env_vars"] = self.config.get_merged_env_vars(cfg.get("env_vars"))
+
+        settings_json = json.dumps(payload)
+        loadpoints_json = json.dumps(loadpoints)
+        clients_json = json.dumps(self.config.clients)
+
+        log.info(f"Running Rados Bench Workload on {self.admin}...")
+        user, host, port = self.executor.get_ssh_details(self.admin)
+
+        tmp_settings = f"/tmp/rados_settings_{os.getpid()}.json"
+        tmp_loadpoints = f"/tmp/rados_loadpoints_{os.getpid()}.json"
+        tmp_clients = f"/tmp/rados_clients_{os.getpid()}.json"
+
+        settings_b64 = base64.b64encode(settings_json.encode()).decode()
+        loadpoints_b64 = base64.b64encode(loadpoints_json.encode()).decode()
+        clients_b64 = base64.b64encode(clients_json.encode()).decode()
+
+        setup_cmd = (
+            f"echo '{settings_b64}' | base64 -d > {tmp_settings} && "
+            f"echo '{loadpoints_b64}' | base64 -d > {tmp_loadpoints} && "
+            f"echo '{clients_b64}' | base64 -d > {tmp_clients}"
+        )
+        self.executor.run_remote(self.admin, setup_cmd)
+
+        full_cmd = (
+            f"python3 {run_cmd} "
+            f"--settings '@{tmp_settings}' "
+            f"--loadpoints '@{tmp_loadpoints}' "
+            f"--clients '@{tmp_clients}' "
+            f"--runner-name '{self.get_name()}'; "
+            f"rm -f {tmp_settings} {tmp_loadpoints} {tmp_clients}"
+        )
+
+        log.info(f"[{self.admin}] Executing workload with temp files...")
+        ssh_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-p",
+            port,
+            f"{user}@{host}",
+            "bash -s",
+        ]
+
+        monitor = self.make_loadpoint_monitor(
+            workload_name="rados_bench",
+            config_section="rados_bench",
+            cephfs_manager=cephfs_manager,
+            ganesha_manager=ganesha_manager,
+            results_dir=results_dir,
+            settings=settings,
+            payload=payload,
+            loadpoints=loadpoints,
+            finish_markers=("Finished Rados Bench Load Point:",),
+        )
+
+        process = subprocess.Popen(
+            ssh_cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        process.stdin.write(full_cmd + "\n")
+        process.stdin.close()
+
+        output, returncode = self.consume_remote_stdout(process, monitor)
+        if returncode != 0:
+            raise RuntimeError(
+                f"Rados bench failed on {self.admin} with return code {returncode}"
+            )
+        return output
+
+    def get_results_dir(self, settings, shared_ts=None):
+        cfg = self.config.rados_bench
+        base = cfg.get("results_base_dir", "/tmp/rados_bench_results")
+        ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y%m%d-%H%M%S-%f"
+        )
+        fs_p = (
+            f"{self.config.fs_name}-x{len(self.fs_names)}-c{len(self.config.clients)}"
+        )
+        mds_p = "-".join(
+            f"{k}{CommonUtils.format_si_units(v)}" for k, v in settings.items()
+        )
+        return os.path.join(
+            base,
+            f"{ts}_{self.get_name()}_{fs_p}_{mds_p}{CommonUtils.mount_name_suffix(self.config)}",
+        )
+
+    def get_name(self):
+        return "rados_bench"
+
+    def prepare_storage(self):
+        cfg = self.config.get("rados_bench", {})
+        run_cmd = cfg.get(
+            "run_command", "/cephfs_perf/rados_bench/run_rados_workload.py"
+        )
+        perf_script = cfg.get("perf_record_script", "/cephfs_perf/perf_record.py")
+
+        targets = set(
+            [self.admin]
+            + self.config.clients
+            + self.config.ganeshas
+            + self.config.mons
+            + self.config.mdss
+            + self.config.osds
+        )
+
+        for target in targets:
+            u, h, p = self.executor.get_ssh_details(target)
+            remote_dir = os.path.dirname(run_cmd)
+            self.executor.run_remote(
+                target,
+                f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}",
+            )
+
+            files_to_copy = [
+                ("lib/workload/run_rados_workload.py", run_cmd),
+                ("perf_record.py", perf_script),
+                ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
+            ]
+
+            for local_file, remote_path in files_to_copy:
+                if os.path.exists(local_file):
+                    log.info(f"Copying local {local_file} to {remote_path} on {target}...")
+                    subprocess.run(
+                        [
+                            "scp",
+                            "-o",
+                            "StrictHostKeyChecking=no",
+                            "-P",
+                            str(p),
+                            local_file,
+                            f"{u}@{h}:{remote_path}",
+                        ]
+                    )

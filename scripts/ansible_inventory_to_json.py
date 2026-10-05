@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-"""Convert an Ansible INI inventory to the nested inventory format used in
-MDSConfigurationSettings.yml (and sibling settings files).
+"""Convert an Ansible INI inventory to the nested inventory format used by
+the benchmark runners (``configs/inventory.yml``).
 
 Variables such as ``{{ ssh_user }}`` are expanded using (in order):
   1. ``group_vars/all.yml`` and ``cluster.json`` next to the project root
   2. ``--vars-file`` YAML/JSON files
   3. ``-e`` / ``--extra-var`` KEY=VALUE pairs
 
+The ``--yaml`` output is a valid runner inventory argument, and the default
+file the runners load when that argument is omitted (``configs/inventory.yml``).
+
 Example:
   ./scripts/ansible_inventory_to_json.py ansible_inventory \\
       -e ssh_user=root -e ssh_user_home=/home/vpcuser
 
   ./scripts/ansible_inventory_to_json.py ansible_inventory --yaml \\
-      -e ssh_user=root -e ssh_user_home=/home/vpcuser > inventory.yml
+      -e ssh_user=root -e ssh_user_home=/home/vpcuser > configs/inventory.yml
+
+  ./cephfs_fio_runner.py configs/workloads/fio.yml configs/inventory.yml
 """
 
 from __future__ import annotations
@@ -103,7 +108,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Convert an Ansible INI inventory to nested JSON/YAML inventory "
-            "matching MDSConfigurationSettings.yml"
+            "for configs/inventory.yml or the runner inventory argument"
         )
     )
     parser.add_argument(
@@ -129,7 +134,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--yaml",
         action="store_true",
-        help="Emit YAML instead of JSON (suitable for pasting into settings)",
+        help=(
+            "Emit YAML instead of JSON. The runner accepts this file as its "
+            "inventory argument, and as configs/inventory.yml"
+        ),
     )
     parser.add_argument(
         "--wrap",

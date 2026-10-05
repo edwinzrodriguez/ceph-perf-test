@@ -1,6 +1,10 @@
 import abc
 import json
 from cephfs_perf_lib import CommonUtils, FSManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class GaneshaManager(abc.ABC):
@@ -105,9 +109,9 @@ class GaneshaManager(abc.ABC):
     def reset_ganesha_perf(self, host_name):
         asok_path = self._get_asok_path(host_name)
         if not asok_path:
-            print(f"[{host_name}] Warning: Ganesha admin socket not found for reset.")
+            log.info(f"[{host_name}] Warning: Ganesha admin socket not found for reset.")
             return
-        print(f"[{host_name}] Resetting Ganesha perf counters via {asok_path}...")
+        log.info(f"[{host_name}] Resetting Ganesha perf counters via {asok_path}...")
         self.executor.run_remote(
             host_name,
             f"sudo {self.config.ganesha_ceph_binary_path} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} perf reset all",
@@ -116,9 +120,9 @@ class GaneshaManager(abc.ABC):
     def collect_ganesha_perf_dump(self, host_name):
         asok_path = self._get_asok_path(host_name)
         if not asok_path:
-            print(f"[{host_name}] Warning: Ganesha admin socket not found.")
+            log.info(f"[{host_name}] Warning: Ganesha admin socket not found.")
             return None
-        print(f"[{host_name}] Collecting Ganesha perf dump from {asok_path}...")
+        log.info(f"[{host_name}] Collecting Ganesha perf dump from {asok_path}...")
         dump_raw = self.executor.run_remote(
             host_name,
             f"sudo {self.config.ganesha_ceph_binary_path} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} perf dump",
@@ -128,11 +132,11 @@ class GaneshaManager(abc.ABC):
     def start_lockstat(self, host_name):
         asok_path = self._get_asok_path(host_name)
         if not asok_path:
-            print(
+            log.info(
                 f"[{host_name}] Warning: Ganesha admin socket not found for lockstat start."
             )
             return
-        print(f"[{host_name}] Starting Ganesha lockstat via {asok_path}...")
+        log.info(f"[{host_name}] Starting Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
             CommonUtils.with_env_exports(
@@ -144,11 +148,11 @@ class GaneshaManager(abc.ABC):
     def stop_lockstat(self, host_name):
         asok_path = self._get_asok_path(host_name)
         if not asok_path:
-            print(
+            log.info(
                 f"[{host_name}] Warning: Ganesha admin socket not found for lockstat stop."
             )
             return
-        print(f"[{host_name}] Stopping Ganesha lockstat via {asok_path}...")
+        log.info(f"[{host_name}] Stopping Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
             CommonUtils.with_env_exports(
@@ -160,11 +164,11 @@ class GaneshaManager(abc.ABC):
     def reset_lockstat(self, host_name):
         asok_path = self._get_asok_path(host_name)
         if not asok_path:
-            print(
+            log.info(
                 f"[{host_name}] Warning: Ganesha admin socket not found for lockstat reset."
             )
             return
-        print(f"[{host_name}] Resetting Ganesha lockstat via {asok_path}...")
+        log.info(f"[{host_name}] Resetting Ganesha lockstat via {asok_path}...")
         self.executor.run_remote(
             host_name,
             CommonUtils.with_env_exports(
@@ -176,12 +180,12 @@ class GaneshaManager(abc.ABC):
     def dump_lockstat(self, host_name):
         asok_path = self._get_asok_path(host_name)
         if not asok_path:
-            print(
+            log.info(
                 f"[{host_name}] Warning: Ganesha admin socket not found for lockstat dump."
             )
             return None
 
-        print(f"[{host_name}] Dumping Ganesha lockstat via {asok_path}...")
+        log.info(f"[{host_name}] Dumping Ganesha lockstat via {asok_path}...")
         output = self.executor.run_remote(
             host_name,
             f"ceph --admin-daemon {asok_path} lockstat dump 2>&1",
@@ -189,8 +193,8 @@ class GaneshaManager(abc.ABC):
         try:
             return json.loads(output)
         except json.JSONDecodeError as e:
-            print(f"[{host_name}] Failed to parse lockstat JSON: {e}")
-            print(f"[{host_name}] lockstat dump output: {repr(output)}")
+            log.info(f"[{host_name}] Failed to parse lockstat JSON: {e}")
+            log.info(f"[{host_name}] lockstat dump output: {repr(output)}")
             return {"raw": output, "parse_error": str(e)}
 
     def should_collect_client_logs(self):
@@ -217,7 +221,7 @@ class GaneshaManager(abc.ABC):
         for host_name in self.ganeshas:
             src_log = self._stage_client_log(host_name)
             if not src_log:
-                print(
+                log.info(
                     f"[{host_name}] Warning: Could not locate Ganesha Ceph client log; skipping"
                 )
                 continue
@@ -226,12 +230,12 @@ class GaneshaManager(abc.ABC):
                 f"test -f {src_log} && echo EXISTS || echo MISSING",
             ).strip()
             if "EXISTS" not in check:
-                print(
+                log.info(
                     f"[{host_name}] Warning: Ganesha Ceph client log {src_log} not found; skipping"
                 )
                 continue
             dest_log = f"ganesha_ceph_client_{host_name}_lp{lp_tag}.log"
-            print(
+            log.info(
                 f"[{host_name}] Collecting Ganesha Ceph client log to {results_dir}/{dest_log}..."
             )
             self.fs_manager._copy_log_to_results(

@@ -8,6 +8,10 @@ import re
 import time
 from cephfs_perf_lib import CommonUtils
 from lib.fs.cephfs_manager import CephFSManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class CephFSSystemdManager(CephFSManager):
@@ -118,7 +122,7 @@ class CephFSSystemdManager(CephFSManager):
                 )
         else:
             for host_name, mds_id in instances:
-                print(f"[{host_name}] Stopping local ceph-mds mds.{mds_id}")
+                log.info(f"[{host_name}] Stopping local ceph-mds mds.{mds_id}")
                 self._kill_mds(host_name, mds_id)
                 # Remove auth entity so recreate is clean
                 conf = self.config.ceph_conf_path
@@ -231,7 +235,7 @@ class CephFSSystemdManager(CephFSManager):
             env,
             sudo=True,
         )
-        print(f"[{host_name}] Starting local ceph-mds mds.{mds_id}")
+        log.info(f"[{host_name}] Starting local ceph-mds mds.{mds_id}")
         self.executor.run_remote(host_name, cmd, check=True)
 
         # Wait briefly for the admin socket / pid
@@ -240,11 +244,11 @@ class CephFSSystemdManager(CephFSManager):
                 self.executor.run_remote(
                     host_name, f"test -f {pid_path} || test -S {asok_path}", check=True
                 )
-                print(f"[{host_name}] ceph-mds mds.{mds_id} is up")
+                log.info(f"[{host_name}] ceph-mds mds.{mds_id} is up")
                 return
             except Exception:
                 if i == 29:
-                    print(
+                    log.info(
                         f"[{host_name}] Warning: ceph-mds mds.{mds_id} "
                         f"pid/asok not found after 30s"
                     )
@@ -296,6 +300,6 @@ class CephFSSystemdManager(CephFSManager):
                         host_name, src_log, dest_log, results_dir
                     )
                 else:
-                    print(
+                    log.info(
                         f"[{host_name}] Warning: MDS log {src_log} not found; skipping"
                     )

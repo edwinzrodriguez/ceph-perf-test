@@ -7,6 +7,10 @@ import subprocess
 import threading
 import time
 from cephfs_perf_lib import CommonUtils, FSManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class CephFSManager(FSManager):
@@ -86,15 +90,29 @@ class CephFSManager(FSManager):
         return CommonUtils.with_env_exports(inner, self._ceph_env(), sudo=True)
 
     def _mds_logging_cfg(self):
-        """Return the MDS logging block, preferring ``mds.logging``.
+        """Return the MDS logging block.
 
-        Falls back to a top-level ``logging`` section so older settings
-        files keep working until they are migrated.
+        Prefers ``observability.mds.logging`` (which already falls back to
+        ``mds.logging``). A top-level ``logging`` section is still accepted
+        for older settings files that never nested the block.
         """
+        if hasattr(self.config, "role_observability"):
+            cfg = self.config.role_observability("mds").get("logging") or {}
+            if cfg:
+                return cfg
         mds_cfg = self.config.get("mds", {}) or {}
         if "logging" in mds_cfg:
             return mds_cfg.get("logging") or {}
         return self.config.get("logging", {}) or {}
+
+    def _mds_lockstat_cfg(self):
+        """Lockstat path/threshold/enabled from observability, with legacy fallbacks."""
+        if hasattr(self.config, "role_observability"):
+            return self.config.role_observability("mds").get("lockstat") or {}
+        mds_ls = (self.config.get("mds") or {}).get("lockstat") or {}
+        if isinstance(mds_ls, dict) and mds_ls:
+            return mds_ls
+        return (self.config.get("specstorage") or {}).get("lockstat") or {}
 
     def _mds_logging_debug_levels(self):
         """Return ``(debug_mds, debug_ms)`` from ``mds.logging``."""
@@ -119,7 +137,7 @@ class CephFSManager(FSManager):
         """Apply baseline MDS logging from ``mds.logging`` after daemons are up."""
         if self.is_mds_logging_enabled():
             debug_mds, debug_ms = self._mds_logging_idle_levels()
-            print(f"Setting MDS debug_mds={debug_mds} debug_ms={debug_ms}")
+            log.info(f"Setting MDS debug_mds={debug_mds} debug_ms={debug_ms}")
             self._run_ceph(self.admin, f"config set mds debug_mds {debug_mds}")
             self._run_ceph(self.admin, f"config set mds debug_ms {debug_ms}")
             self._run_ceph(self.admin, "config set mds log_to_file true")
@@ -139,7 +157,7 @@ class CephFSManager(FSManager):
         if "log_max_recent" not in logging_cfg:
             return
         log_max_recent = logging_cfg["log_max_recent"]
-        print(f"Setting MDS log_max_recent={log_max_recent}")
+        log.info(f"Setting MDS log_max_recent={log_max_recent}")
         self._run_ceph(
             self.admin, f"config set mds log_max_recent {log_max_recent}", check=True
         )
@@ -154,12 +172,12 @@ class CephFSManager(FSManager):
         dumped = 0
         for host, mds_id, asok in self._iter_mds_admin_sockets():
             if not self._asok_exists(host, asok):
-                print(
+                log.info(
                     f"[{host}] Warning: MDS admin socket not found for "
                     f"mds.{mds_id} ({asok}); skip log dump"
                 )
                 continue
-            print(
+            log.info(
                 f"[{host}] Dumping MDS recent (memory) logs for mds.{mds_id} "
                 f"(Load Point {loadpoint}) via {asok}..."
             )
@@ -171,12 +189,12 @@ class CephFSManager(FSManager):
                 )
                 dumped += 1
             except Exception as e:
-                print(
+                log.info(
                     f"[{host}] Warning: MDS log dump failed for "
                     f"mds.{mds_id}: {e}"
                 )
         if dumped == 0:
-            print(
+            log.info(
                 "Warning: no MDS admin sockets found for memory log dump "
                 f"(Load Point {loadpoint})"
             )
@@ -188,7 +206,7 @@ class CephFSManager(FSManager):
         # while keeping on-disk log traffic low during the loadpoint.
         debug_mds, debug_ms = self._mds_logging_debug_levels()
         for server_name in self.mdss:
-            print(
+            log.info(
                 f"[{server_name}] Starting MDS debug logging for Load Point "
                 f"{loadpoint} (debug_mds={debug_mds} debug_ms={debug_ms})"
             )
@@ -202,7 +220,7 @@ class CephFSManager(FSManager):
             self._dump_mds_recent_logs(loadpoint)
         idle_mds, idle_ms = self._mds_logging_idle_levels()
         for server_name in self.mdss:
-            print(
+            log.info(
                 f"[{server_name}] Stopping MDS debug logging for Load Point "
                 f"{loadpoint} (debug_mds={idle_mds} debug_ms={idle_ms})"
             )
@@ -212,7 +230,7 @@ class CephFSManager(FSManager):
             self._collect_mds_logs(loadpoint, results_dir)
 
     def start_lockstat(self, fs):
-        lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
+        lockstat_cfg = self._mds_lockstat_cfg()
         lockstat_path = self.config.expand_env(
             lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         )
@@ -226,7 +244,7 @@ class CephFSManager(FSManager):
                 ).strip()
                 self.lockstat_exists[server_name] = "EXISTS" in check
             if self.lockstat_exists[server_name]:
-                print(
+                log.info(
                     f"[{server_name}] Starting lockstat for mds.{fs} via {lockstat_path} with threshold {threshold}"
                 )
                 self.executor.run_remote(
@@ -239,14 +257,14 @@ class CephFSManager(FSManager):
                 )
 
     def stop_lockstat(self, fs):
-        lockstat_cfg = self.config.get("specstorage", {}).get("lockstat", {})
+        lockstat_cfg = self._mds_lockstat_cfg()
         lockstat_path = self.config.expand_env(
             lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         )
         env_vars = self._ceph_env()
         for server_name in self.mdss:
             if self.lockstat_exists.get(server_name):
-                print(f"[{server_name}] Stopping lockstat for mds.{fs} via {lockstat_path}")
+                log.info(f"[{server_name}] Stopping lockstat for mds.{fs} via {lockstat_path}")
                 self.executor.run_remote(
                     server_name,
                     CommonUtils.with_env_exports(
@@ -266,7 +284,10 @@ class CephFSManager(FSManager):
             self.lockstat_exists[server_name] = "EXISTS" in check
 
     def reset_lockstat(self, config_section="specstorage"):
-        lockstat_cfg = self.config.get(config_section, {}).get("lockstat", {})
+        # config_section is retained for callers; path/threshold now come from
+        # observability.mds.lockstat (legacy mds.lockstat / specstorage.lockstat).
+        del config_section
+        lockstat_cfg = self._mds_lockstat_cfg()
         lockstat_path = self.config.expand_env(
             lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         )
@@ -275,7 +296,7 @@ class CephFSManager(FSManager):
             for server_name in self.mdss:
                 self._check_lockstat_exists(server_name, lockstat_path)
                 if self.lockstat_exists.get(server_name):
-                    print(f"[{server_name}] Resetting lockstat for mds.{fs}")
+                    log.info(f"[{server_name}] Resetting lockstat for mds.{fs}")
                     self.executor.run_remote(
                         server_name,
                         CommonUtils.with_env_exports(
@@ -286,7 +307,8 @@ class CephFSManager(FSManager):
                     )
 
     def dump_lockstat(self, loadpoint, results_dir=None, phase=None, settings=None, lp_cfg=None, config_section="specstorage"):
-        lockstat_cfg = self.config.get(config_section, {}).get("lockstat", {})
+        del config_section
+        lockstat_cfg = self._mds_lockstat_cfg()
         lockstat_path = self.config.expand_env(
             lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
         )
@@ -296,7 +318,7 @@ class CephFSManager(FSManager):
                 self._check_lockstat_exists(server_name, lockstat_path)
                 if self.lockstat_exists.get(server_name):
                     phase_label = f" ({phase} phase)" if phase else ""
-                    print(
+                    log.info(
                         f"[{server_name}] Dumping lockstat for mds.{fs} (Load Point {loadpoint}{phase_label})"
                     )
                     if results_dir:
@@ -388,13 +410,13 @@ class CephFSManager(FSManager):
         found = False
         for host, mds_id, asok in self._iter_mds_admin_sockets():
             if not self._asok_exists(host, asok):
-                print(
+                log.info(
                     f"[{host}] Warning: MDS admin socket not found for "
                     f"mds.{mds_id} ({asok}); skip perf reset"
                 )
                 continue
             found = True
-            print(
+            log.info(
                 f"[{host}] Resetting MDS perf counters for mds.{mds_id} via {asok}..."
             )
             self.executor.run_remote(
@@ -402,7 +424,7 @@ class CephFSManager(FSManager):
                 self._admin_daemon_cmd(asok, "perf reset all"),
             )
         if not found:
-            print("Warning: no MDS admin sockets found for perf counter reset")
+            log.info("Warning: no MDS admin sockets found for perf counter reset")
 
     def _mds_perf_dump_dest_file(
         self, target_name, base_output_type, host, loadpoint, phase, settings, lp_cfg
@@ -428,7 +450,7 @@ class CephFSManager(FSManager):
         counters cover the full RUN phase.
         """
         if not results_dir:
-            print(
+            log.info(
                 f"Skipping MDS perf dump for load point {loadpoint}: no results_dir"
             )
             return
@@ -436,14 +458,14 @@ class CephFSManager(FSManager):
         found = False
         for host, mds_id, asok in self._iter_mds_admin_sockets():
             if not self._asok_exists(host, asok):
-                print(
+                log.info(
                     f"[{host}] Warning: MDS admin socket not found for "
                     f"mds.{mds_id} ({asok}); skip perf dump"
                 )
                 continue
             found = True
             phase_label = f" ({phase} phase)" if phase else ""
-            print(
+            log.info(
                 f"[{host}] Dumping MDS perf counters for mds.{mds_id} "
                 f"(Load Point {loadpoint}{phase_label}) via {asok}..."
             )
@@ -469,7 +491,7 @@ class CephFSManager(FSManager):
             self._admin_perf_command_to_results(
                 host, asok, results_dir, "perf dump", perf_dest_file
             )
-            print(f"[{host}] Wrote MDS perf dump {perf_dest_file} → {results_dir}/")
+            log.info(f"[{host}] Wrote MDS perf dump {perf_dest_file} → {results_dir}/")
             self._admin_perf_command_to_results(
                 host,
                 asok,
@@ -477,18 +499,22 @@ class CephFSManager(FSManager):
                 "perf histogram dump mds",
                 hist_dest_file,
             )
-            print(
+            log.info(
                 f"[{host}] Wrote MDS perf histogram dump {hist_dest_file} "
                 f"→ {results_dir}/"
             )
 
         if not found:
-            print(
+            log.info(
                 f"Warning: no MDS admin sockets found for perf dump "
                 f"(load point {loadpoint})"
             )
 
     def _mds_perf_dump_cfg(self):
+        if hasattr(self.config, "role_observability"):
+            cfg = self.config.role_observability("mds").get("perf_dump") or {}
+            if cfg:
+                return cfg
         return (self.config.get("mds", {}) or {}).get("perf_dump", {}) or {}
 
     def _mds_periodic_perf_dump_interval(self):
@@ -597,7 +623,7 @@ class CephFSManager(FSManager):
             f"nohup {collector_cmd} >{shlex.quote(log_file)} 2>&1 </dev/null & "
             f"echo $! > {shlex.quote(pid_file)}"
         )
-        print(
+        log.info(
             f"[{host}] Starting local MDS perf dump collector for mds.{mds_id} "
             f"(interval={interval}s) → {local_dir}/"
         )
@@ -616,7 +642,7 @@ class CephFSManager(FSManager):
         host = job["host"]
         local_dir = job["local_dir"]
         pid_file = job["pid_file"]
-        print(
+        log.info(
             f"[{host}] Stopping local MDS perf dump collector for "
             f"mds.{job['mds_id']}..."
         )
@@ -641,7 +667,7 @@ class CephFSManager(FSManager):
         ).strip()
         files = [f for f in listing.split() if f]
         if files:
-            print(
+            log.info(
                 f"[{host}] Copying {len(files)} periodic MDS perf dump file(s) "
                 f"→ {dest_dir}/"
             )
@@ -653,7 +679,7 @@ class CephFSManager(FSManager):
             )
             self.executor.run_remote(host, copy_cmd)
         else:
-            print(f"[{host}] No periodic MDS perf dump files found in {local_dir}")
+            log.info(f"[{host}] No periodic MDS perf dump files found in {local_dir}")
 
         self.executor.run_remote(
             host,
@@ -671,13 +697,13 @@ class CephFSManager(FSManager):
         cfg = self._mds_perf_dump_cfg()
         if not self.is_mds_periodic_perf_dump_enabled():
             if cfg:
-                print(
+                log.info(
                     "Skipping periodic MDS perf dump: mds.perf_dump.enabled is false "
                     f"(set enabled: true to collect every {cfg.get('interval', 60)}s)"
                 )
             return
         if not results_dir:
-            print(
+            log.info(
                 f"Skipping periodic MDS perf dump for load point {loadpoint}: "
                 "no results_dir"
             )
@@ -691,7 +717,7 @@ class CephFSManager(FSManager):
         jobs = []
         for host, mds_id, asok in self._iter_mds_admin_sockets():
             if not self._asok_exists(host, asok):
-                print(
+                log.info(
                     f"[{host}] Warning: MDS admin socket not found for "
                     f"mds.{mds_id} ({asok}); skip periodic perf dump"
                 )
@@ -706,13 +732,13 @@ class CephFSManager(FSManager):
         self._periodic_perf_dump_jobs = jobs
         self._periodic_perf_dump_dest = dump_dir
         if jobs:
-            print(
+            log.info(
                 f"Started {len(jobs)} local MDS perf dump collector(s) "
                 f"(interval={self._mds_periodic_perf_dump_interval()}s); "
                 f"will copy to {dump_dir}/ at loadpoint end"
             )
         else:
-            print(
+            log.info(
                 f"Warning: no MDS admin sockets found for periodic perf dump "
                 f"(load point {loadpoint})"
             )
@@ -726,7 +752,7 @@ class CephFSManager(FSManager):
         if not jobs:
             return
         if not dest_dir:
-            print(
+            log.info(
                 "Warning: periodic MDS perf dump has no results dest; "
                 "stopping collectors without collecting files"
             )
@@ -755,7 +781,7 @@ class CephFSManager(FSManager):
         for t in threads:
             t.join(timeout=120)
             if t.is_alive():
-                print(
+                log.info(
                     f"Warning: periodic MDS perf dump stop thread {t.name} "
                     "still alive after 120s"
                 )
@@ -902,7 +928,7 @@ class CephFSManager(FSManager):
                 ):
                     return
             if i % 6 == 0:
-                print(
+                log.info(
                     f"[wait] {fs}: no active MDS yet "
                     f"(iter {i + 1}/{timeout_iters}); status={status_raw[:500]}"
                 )
@@ -1119,7 +1145,7 @@ class CephFSManager(FSManager):
             cluster_conf_text = self._read_ceph_conf_on_host(host)
             content = self._build_mds_settings_conf(cluster_conf_text, options)
             self._write_ceph_conf_on_host(host, conf_path, content)
-            print(
+            log.info(
                 f"[{host}] Wrote {conf_path} (merged from "
                 f"{cluster_conf}): "
                 + ", ".join(f"{k}={v}" for k, v in sorted(options.items()))
@@ -1338,7 +1364,7 @@ class CephFSManager(FSManager):
         return live
 
     def _collect_mds_config_diff(self, host, mds_id, asok):
-        print(f"[{host}] Running MDS 'config diff' for mds.{mds_id} via {asok}...")
+        log.info(f"[{host}] Running MDS 'config diff' for mds.{mds_id} via {asok}...")
         raw = self.executor.run_remote(
             host,
             self._admin_daemon_cmd(asok, "config diff"),
@@ -1349,7 +1375,7 @@ class CephFSManager(FSManager):
             pretty = json.dumps(parsed, indent=2, default=str)
         else:
             pretty = raw
-        print(f"[{host}] mds.{mds_id} config diff:\n{pretty}")
+        log.info(f"[{host}] mds.{mds_id} config diff:\n{pretty}")
         return raw
 
     def _live_mds_config_value(self, host, asok, key, diff_vals):
@@ -1377,7 +1403,7 @@ class CephFSManager(FSManager):
                 raw = self._collect_mds_config_diff(host, mds_id, asok)
             except Exception as e:
                 if self._asok_error_is_unusable(e):
-                    print(
+                    log.info(
                         f"[{host}] Skipping unusable MDS socket "
                         f"{asok}: {e}"
                     )
@@ -1398,7 +1424,7 @@ class CephFSManager(FSManager):
                         f"{key}: expected {exp!r}, live {got!r}"
                     )
                 else:
-                    print(
+                    log.info(
                         f"[{host}] mds.{mds_id} {key}="
                         f"{got!r} matches expected {exp!r}"
                     )
@@ -1429,7 +1455,7 @@ class CephFSManager(FSManager):
                 return
             except Exception as e:
                 if attempt + 1 < retries:
-                    print(
+                    log.info(
                         f"[wait] MDS conf-file options not live yet "
                         f"(attempt {attempt + 1}/{retries}): {e}"
                     )
@@ -1457,11 +1483,11 @@ class CephFSManager(FSManager):
                             raise RuntimeError(
                                 f"fs {fs} {k}: expected {val!r}, live {got!r}"
                             )
-                        print(f"[fs {fs}] {k}={got!r} matches expected {val!r}")
+                        log.info(f"[fs {fs}] {k}={got!r} matches expected {val!r}")
                 return
             except Exception as e:
                 if attempt + 1 < retries:
-                    print(
+                    log.info(
                         f"[wait] MDS settings not live yet "
                         f"(attempt {attempt + 1}/{retries}): {e}"
                     )
@@ -1512,16 +1538,19 @@ class CephFSManager(FSManager):
         pass
 
     def is_mds_lockstat_enabled(self):
-        # Prefer mds.lockstat; fall back to legacy specstorage.lockstat
-        mds_ls = (self.config.get("mds", {}) or {}).get("lockstat", {}) or {}
-        if "enabled" in mds_ls:
-            return bool(mds_ls.get("enabled"))
-        return bool(
-            self.config.get("specstorage", {}).get("lockstat", {}).get("enabled")
-        )
+        # observability.mds.lockstat, else mds.lockstat, else specstorage.lockstat
+        return bool(self._mds_lockstat_cfg().get("enabled"))
 
     def is_mds_perf_record_enabled(self):
-        return bool(self.config.get("mds", {}).get("perf_record", False))
+        if hasattr(self.config, "role_observability"):
+            perf = self.config.role_observability("mds").get("perf_record") or {}
+            if isinstance(perf, dict):
+                return bool(perf.get("enabled"))
+            return bool(perf)
+        raw = self.config.get("mds", {}).get("perf_record", False)
+        if isinstance(raw, dict):
+            return bool(raw.get("enabled"))
+        return bool(raw)
 
     def is_mds_periodic_perf_dump_enabled(self):
         return bool(self._mds_perf_dump_cfg().get("enabled", False))

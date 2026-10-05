@@ -1,0 +1,36 @@
+# cephfs-mdsbench control plane.
+extends: ../base.yml
+
+
+
+# MDS-Bench configuration (SpecStorage-style SWBUILD metadata via cephfs-mdsbench)
+# loadpoints are business-metric integers: for N, launch N processes with
+# --clients N --client-id K (barrier) distributed across inventory clients.
+mdsbench:
+  client:
+    perf_record:
+      enabled: true
+      script: "/cephfs_perf/perf_record.py"
+      executable: cephfs-mdsbench
+      duration: 30
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/mdsbench/run_mdsbench_workload.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/cephfs-mdsbench"
+  env_vars:
+    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/mdsbench.log"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  root_path: "/"
+  workdir: "/mdsbench"
+  mode: "balanced"
+  # Aggregate ops/s target; split evenly across the N processes at each loadpoint
+  ops_per_sec: 12000
+  duration: 60
+  warmup: 5
+  progress: true
+  progress_interval: 10
+  keep_tree: false
+  # SpecStorage-style loadpoints (process / session counts)
+  loadpoints2: [1, 2, 4, 8, 12, 18, 24]
+  loadpoints: [1, 2, 4]

@@ -5,6 +5,10 @@ import time
 import yaml
 
 from lib.samba.samba_manager import SambaManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class SambaCephadmManager(SambaManager):
@@ -119,12 +123,12 @@ class SambaCephadmManager(SambaManager):
             check=True,
         )
         os.remove(local_path)
-        print(f"Applying SMB resources from {self.admin}:{remote_path}...")
+        log.info(f"Applying SMB resources from {self.admin}:{remote_path}...")
         return self._run_ceph(f"smb apply -i {remote_path}", check=check)
 
     def provision_samba(self, results_dir=None):
         if self._provisioned:
-            print("Samba already provisioned. Skipping.")
+            log.info("Samba already provisioned. Skipping.")
             return
         if not self.sambas:
             raise RuntimeError("No Samba hosts configured in inventory group 'sambas'")
@@ -134,12 +138,12 @@ class SambaCephadmManager(SambaManager):
         self._ensure_smb_subvolumes()
         self._apply_resources(self._build_provision_resources(), check=True)
 
-        print(f"Waiting for SMB service {cluster_id} to be running...")
+        log.info(f"Waiting for SMB service {cluster_id} to be running...")
         self._wait_for_smb_running(cluster_id)
         self._provisioned = True
 
     def cleanup_samba(self):
-        print("Cleaning up SMB shares and service...")
+        log.info("Cleaning up SMB shares and service...")
         self._provisioned = False
         cluster_id = self.config.samba_cluster_id
         share_ids = set()
@@ -160,7 +164,7 @@ class SambaCephadmManager(SambaManager):
         cleanup_doc = self._build_cleanup_resources(share_ids)
         if cleanup_doc["resources"]:
             self._apply_resources(cleanup_doc, check=False)
-        print(f"Stopping SMB service smb.{cluster_id}...")
+        log.info(f"Stopping SMB service smb.{cluster_id}...")
         self._run_ceph(f"orch rm smb.{cluster_id} || true", check=False)
 
     def _wait_for_smb_running(self, cluster_id, timeout_iters=30, sleep_secs=10):
@@ -176,7 +180,7 @@ class SambaCephadmManager(SambaManager):
             ):
                 return
             time.sleep(sleep_secs)
-        print(
+        log.info(
             f"Warning: SMB service {cluster_id} may not be fully running after "
             f"{timeout_iters * sleep_secs}s"
         )

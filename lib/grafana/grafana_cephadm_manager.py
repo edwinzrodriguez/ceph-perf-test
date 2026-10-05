@@ -5,6 +5,10 @@ import time
 import yaml
 
 from lib.grafana.grafana_manager import GrafanaManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class GrafanaCephadmManager(GrafanaManager):
@@ -12,7 +16,7 @@ class GrafanaCephadmManager(GrafanaManager):
 
     def provision_monitoring(self):
         if self._provisioned:
-            print("Monitoring stack already provisioned. Skipping.")
+            log.info("Monitoring stack already provisioned. Skipping.")
             return
         if not self.grafana_hosts:
             raise RuntimeError(
@@ -27,7 +31,7 @@ class GrafanaCephadmManager(GrafanaManager):
         self._provisioned = True
 
     def cleanup_monitoring(self):
-        print("Removing cephadm monitoring services...")
+        log.info("Removing cephadm monitoring services...")
         self._provisioned = False
         for service_type in self.MONITORING_SERVICE_TYPES:
             self._run_ceph(f"orch rm {service_type} || true", check=False)
@@ -101,12 +105,12 @@ class GrafanaCephadmManager(GrafanaManager):
             check=True,
         )
         os.remove(local_path)
-        print(f"Applying monitoring stack from {self.admin}:{remote_path}...")
+        log.info(f"Applying monitoring stack from {self.admin}:{remote_path}...")
         self._run_ceph(f"orch apply -i {remote_path}", check=True)
 
     def _wait_for_monitoring_services(self, timeout_iters=30, sleep_secs=10):
         for service_type in ("ceph-exporter", "prometheus", "grafana"):
-            print(f"Waiting for {service_type} service to be running...")
+            log.info(f"Waiting for {service_type} service to be running...")
             for _ in range(timeout_iters):
                 svcs = self.safe_json_load(
                     self._run_ceph(
@@ -122,7 +126,7 @@ class GrafanaCephadmManager(GrafanaManager):
                     break
                 time.sleep(sleep_secs)
             else:
-                print(
+                log.info(
                     f"Warning: {service_type} may not be fully running after "
                     f"{timeout_iters * sleep_secs}s"
                 )

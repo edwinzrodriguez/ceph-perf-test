@@ -4,6 +4,10 @@ import subprocess
 import time
 from lib.ganesha.ganesha_manager import GaneshaManager
 from cephfs_perf_lib import CommonUtils, FSManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class GaneshaSystemdManager(GaneshaManager):
@@ -12,7 +16,7 @@ class GaneshaSystemdManager(GaneshaManager):
 
     def provision_ganesha(self, use_custom=True, results_dir=None):
         if self._provisioned:
-            print("Ganesha already provisioned. Skipping.")
+            log.info("Ganesha already provisioned. Skipping.")
             return
 
         # Ceph CLI might restrict manual creation of pools starting with '.',
@@ -27,7 +31,7 @@ class GaneshaSystemdManager(GaneshaManager):
         #     self.admin, f"sudo {ceph_bin} {self._get_ceph_args()} osd pool application enable .nfs nfs || true"
         # )
 
-        print("Setting up Ganesha configuration on ganesha nodes...")
+        log.info("Setting up Ganesha configuration on ganesha nodes...")
         # setup_ganesha_config is called per host in the loop below
         # to support per-host Ceph_Conf paths
 
@@ -105,25 +109,25 @@ class GaneshaSystemdManager(GaneshaManager):
             redirect = "> /dev/null 2>&1" if self.config.ganesha_log_level else "> /var/log/ganesha.log 2>&1"
             cmd = f"sudo bash -c 'ulimit -c unlimited; {env_vars} nohup {' '.join(args)} {redirect} &'"
             self.executor.run_remote(host_name, cmd, check=True)
-            print(f"[{host_name}] Ganesha started with PID file {pid_path}")
+            log.info(f"[{host_name}] Ganesha started with PID file {pid_path}")
 
             # Enable lockstat immediately after start
             self.start_lockstat(host_name)
 
             # Wait for the admin socket to appear, indicating Ganesha has started
             asok_path = f"/var/run/ceph/ganesha-{host_name}.asok"
-            print(f"[{host_name}] Waiting for Ganesha admin socket {asok_path}...")
+            log.info(f"[{host_name}] Waiting for Ganesha admin socket {asok_path}...")
             for i in range(30):
                 check_asok = f"test -S {asok_path}"
                 try:
                     self.executor.run_remote(host_name, check_asok, check=True)
-                    print(
+                    log.info(
                         f"[{host_name}] Ganesha admin socket {asok_path} is available."
                     )
                     break
                 except Exception:
                     if i == 29:
-                        print(
+                        log.info(
                             f"[{host_name}] Warning: Ganesha admin socket {asok_path} NOT found after 30 seconds."
                         )
                     time.sleep(1)
@@ -133,7 +137,7 @@ class GaneshaSystemdManager(GaneshaManager):
             self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
             for host_name in self.ganeshas:
                 asok_path = f"/var/run/ceph/ganesha-{host_name}.asok"
-                print(f"[{host_name}] Running 'config diff' via {asok_path}...")
+                log.info(f"[{host_name}] Running 'config diff' via {asok_path}...")
                 try:
                     ceph_bin = self.config.ganesha_ceph_binary_path
                     diff_output = self.executor.run_remote(
@@ -162,12 +166,12 @@ class GaneshaSystemdManager(GaneshaManager):
                     )
                     os.remove(local_temp)
                 except Exception as e:
-                    print(f"[{host_name}] Failed to collect config diff: {e}")
+                    log.info(f"[{host_name}] Failed to collect config diff: {e}")
 
         self._provisioned = True
 
     def cleanup_ganesha(self):
-        print("Cleaning up Ganesha on ganesha nodes (stopping NFS server)...")
+        log.info("Cleaning up Ganesha on ganesha nodes (stopping NFS server)...")
         pid_path = self.config.ganesha_pid_path
         for host_name in self.ganeshas:
             # Kill using pid file

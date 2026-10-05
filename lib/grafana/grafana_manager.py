@@ -3,6 +3,10 @@ import os
 import time
 
 from cephfs_perf_lib import CommonUtils, FSManager, RegistryCredentials
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class GrafanaManager(abc.ABC):
@@ -95,20 +99,20 @@ class GrafanaManager(abc.ABC):
         return hosts
 
     def _enable_prometheus_module(self):
-        print("Enabling mgr prometheus module...")
+        log.info("Enabling mgr prometheus module...")
         self._run_ceph("mgr module enable prometheus || true")
         self._run_ceph("mgr module ls | grep -q prometheus || true")
 
     def _apply_exporter_prio_limit(self):
         prio = self.config.grafana_exporter_prio_limit
-        print(f"Setting exporter_prio_limit={prio}...")
+        log.info(f"Setting exporter_prio_limit={prio}...")
         self._run_ceph(
             f"config set global exporter_prio_limit {prio} || true", check=False
         )
 
     def _remove_cephadm_monitoring(self, wait=True):
         """Remove cephadm monitoring services so the benchmark stack can take over."""
-        print("Removing cephadm monitoring services (grafana, prometheus, ...)...")
+        log.info("Removing cephadm monitoring services (grafana, prometheus, ...)...")
         for service_type in self.CEPHADM_MONITORING_SERVICE_TYPES:
             self._run_ceph(f"orch rm {service_type} || true", check=False)
 
@@ -132,7 +136,7 @@ class GrafanaManager(abc.ABC):
                     break
                 time.sleep(5)
             else:
-                print(
+                log.info(
                     f"Warning: cephadm {service_type} may still be running after "
                     "orch rm"
                 )
@@ -141,7 +145,7 @@ class GrafanaManager(abc.ABC):
         creds = self._registry_credentials.credentials_for_image(image)
         if creds is None:
             registry = RegistryCredentials.registry_from_image(image)
-            print(
+            log.info(
                 f"[{host_name}] No registry credentials configured for {registry}; "
                 f"assuming public pull for {image}"
             )
@@ -158,7 +162,7 @@ class GrafanaManager(abc.ABC):
                 f"Create it or set grafana.credentials_file."
             )
 
-        print(f"[{host_name}] Logging in to {creds['url']} for {image}...")
+        log.info(f"[{host_name}] Logging in to {creds['url']} for {image}...")
         login_cmd = RegistryCredentials.podman_login_command(
             creds["url"], creds["username"], creds["password"]
         )

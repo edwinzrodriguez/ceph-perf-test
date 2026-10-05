@@ -1,5 +1,9 @@
 import time
 from cephfs_perf_lib import CommonUtils, FSManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class CephPoolManager(FSManager):
@@ -133,7 +137,7 @@ class CephPoolManager(FSManager):
         self._run_ceph(self.admin, "config set global mon_max_pg_per_osd 1000")
 
         if self.recreate and self._pool_exists(self.pool_name):
-            print(f"Deleting existing pool {self.pool_name}...")
+            log.info(f"Deleting existing pool {self.pool_name}...")
             self._run_ceph(
                 self.admin,
                 f"osd pool delete {self.pool_name} {self.pool_name} "
@@ -142,7 +146,7 @@ class CephPoolManager(FSManager):
             self._wait_for_pool(self.pool_name, exists=False, raise_on_timeout=False)
 
         if not self._pool_exists(self.pool_name):
-            print(f"Creating pool {self.pool_name}...")
+            log.info(f"Creating pool {self.pool_name}...")
             create_args = f"osd pool create {self.pool_name}"
             if self.pg_num is not None:
                 create_args += f" {self.pg_num}"

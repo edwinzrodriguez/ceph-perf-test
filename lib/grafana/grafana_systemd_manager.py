@@ -7,6 +7,10 @@ from pathlib import Path
 import yaml
 
 from lib.grafana.grafana_manager import GrafanaManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class GrafanaSystemdManager(GrafanaManager):
@@ -26,7 +30,7 @@ class GrafanaSystemdManager(GrafanaManager):
 
     def provision_monitoring(self):
         if self._provisioned:
-            print("Monitoring stack already provisioned. Skipping.")
+            log.info("Monitoring stack already provisioned. Skipping.")
             return
         if not self.grafana_hosts:
             raise RuntimeError(
@@ -47,7 +51,7 @@ class GrafanaSystemdManager(GrafanaManager):
         self._provisioned = True
 
     def cleanup_monitoring(self):
-        print("Stopping systemd monitoring stack...")
+        log.info("Stopping systemd monitoring stack...")
         self._provisioned = False
         for host_name in self.exporter_hosts():
             self._stop_ceph_exporter(host_name)
@@ -85,7 +89,7 @@ class GrafanaSystemdManager(GrafanaManager):
             f"--tcp-port {port} -f "
             f"> {log_path} 2>&1 & echo $! | sudo tee {pid_path} > /dev/null"
         )
-        print(f"[{host_name}] Starting ceph-exporter (prio_limit={prio})...")
+        log.info(f"[{host_name}] Starting ceph-exporter (prio_limit={prio})...")
         self.executor.run_remote(
             host_name, self._sudo_with_grafana_env(start_cmd), check=True
         )
@@ -177,7 +181,7 @@ class GrafanaSystemdManager(GrafanaManager):
             f"--storage.tsdb.path=/prometheus "
             f"--web.listen-address=0.0.0.0:{port}"
         )
-        print(f"[{host_name}] Starting Prometheus container on port {port}...")
+        log.info(f"[{host_name}] Starting Prometheus container on port {port}...")
         self.executor.run_remote(host_name, run_cmd, check=True)
         self._verify_container_running(host_name, container)
 
@@ -244,7 +248,7 @@ class GrafanaSystemdManager(GrafanaManager):
         remote_dir = self.GRAFANA_DASHBOARDS_HOST_DIR
         self.executor.run_remote(host_name, f"sudo mkdir -p {remote_dir}")
         u, h, p = self.executor.get_ssh_details(host_name)
-        print(f"[{host_name}] Copying Ceph Grafana dashboards to {remote_dir}...")
+        log.info(f"[{host_name}] Copying Ceph Grafana dashboards to {remote_dir}...")
         subprocess.run(
             [
                 "scp",
@@ -291,7 +295,7 @@ class GrafanaSystemdManager(GrafanaManager):
             f"-e GF_INSTALL_PLUGINS= "
             f"{image}"
         )
-        print(
+        log.info(
             f"[{host_name}] Starting Grafana container on port {port} "
             f"(prometheus at {prometheus_url})..."
         )

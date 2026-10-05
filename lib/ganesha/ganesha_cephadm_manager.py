@@ -5,6 +5,10 @@ import time
 import yaml
 from lib.ganesha.ganesha_manager import GaneshaManager
 from cephfs_perf_lib import CommonUtils, FSManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class GaneshaCephadmManager(GaneshaManager):
@@ -13,7 +17,7 @@ class GaneshaCephadmManager(GaneshaManager):
 
     def provision_ganesha(self, use_custom=True, results_dir=None):
         if self._provisioned:
-            print("Ganesha already provisioned. Skipping.")
+            log.info("Ganesha already provisioned. Skipping.")
             return
         sid = self.config.ganesha_service_id
         # Ceph CLI might restrict manual creation of pools starting with '.',
@@ -95,7 +99,7 @@ class GaneshaCephadmManager(GaneshaManager):
             self.start_lockstat(host_name)
 
         # Wait for the NFS service to be running BEFORE applying exports
-        print(f"Waiting for NFS service {sid} to be running...")
+        log.info(f"Waiting for NFS service {sid} to be running...")
         fs_names = self.get_fs_names()
         for _ in range(30):
             ceph_bin = self.config.ganesha_ceph_binary_path
@@ -166,7 +170,7 @@ class GaneshaCephadmManager(GaneshaManager):
                 except Exception as e:
                     if i == 11:
                         raise
-                    print(f"Retrying export apply for {fs} ({i + 1}/12): {e}")
+                    log.info(f"Retrying export apply for {fs} ({i + 1}/12): {e}")
                     time.sleep(10)
         ceph_bin = self.config.ganesha_ceph_binary_path
         self.executor.run_remote(
@@ -177,25 +181,25 @@ class GaneshaCephadmManager(GaneshaManager):
         )
 
         # After ganesha starts, run 'config diff' via the admin socket and store results in the output directory
-        print("Waiting for Ganesha nodes to start and admin socket to be available...")
+        log.info("Waiting for Ganesha nodes to start and admin socket to be available...")
         for g_host in self.ganeshas:
             asok_pattern = "/var/run/ceph/ganesha-*.asok"
-            print(
+            log.info(
                 f"[{g_host}] Waiting for Ganesha admin socket matching {asok_pattern}..."
             )
             for i in range(30):
                 cmd = f"ls {asok_pattern} | grep -v 'client.admin.asok' | head -n 1"
                 asok_path = self.executor.run_remote(g_host, cmd).strip()
                 if asok_path and "No such file" not in asok_path:
-                    print(f"[{g_host}] Ganesha admin socket {asok_path} is available.")
+                    log.info(f"[{g_host}] Ganesha admin socket {asok_path} is available.")
                     break
                 if i == 29:
-                    print(
+                    log.info(
                         f"[{g_host}] Warning: Ganesha admin socket NOT found after 300 seconds."
                     )
                 time.sleep(10)
 
-        print("Collecting Ganesha 'config diff' from all ganesha nodes...")
+        log.info("Collecting Ganesha 'config diff' from all ganesha nodes...")
         if results_dir:
             self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
         for g_host in self.ganeshas:
@@ -203,12 +207,12 @@ class GaneshaCephadmManager(GaneshaManager):
             asok_path = self.executor.run_remote(g_host, cmd).strip()
 
             if not asok_path or "No such file" in asok_path:
-                print(
+                log.info(
                     f"[{g_host}] Warning: Ganesha admin socket not found for 'config diff'."
                 )
                 continue
 
-            print(f"[{g_host}] Running 'config diff' via {asok_path}...")
+            log.info(f"[{g_host}] Running 'config diff' via {asok_path}...")
             ceph_bin = self.config.ganesha_ceph_binary_path
             diff_output = self.executor.run_remote(
                 g_host,
@@ -240,12 +244,12 @@ class GaneshaCephadmManager(GaneshaManager):
                 ]
             )
             os.remove(local_temp)
-            print(f"[{g_host}] Config diff saved to {self.admin}:{remote_path}")
+            log.info(f"[{g_host}] Config diff saved to {self.admin}:{remote_path}")
 
         self._provisioned = True
 
     def cleanup_ganesha(self):
-        print("Cleaning up Ganesha NFS exports and service...")
+        log.info("Cleaning up Ganesha NFS exports and service...")
         self._provisioned = False
         sid = self.config.ganesha_service_id
         ceph_bin = self.config.ganesha_ceph_binary_path
@@ -263,14 +267,14 @@ class GaneshaCephadmManager(GaneshaManager):
                 path = e.get("path") if isinstance(e, dict) else e
                 if not path:
                     continue
-                print(f"Removing NFS export {path} from cluster {sid}...")
+                log.info(f"Removing NFS export {path} from cluster {sid}...")
                 self.executor.run_remote(
                     self.admin,
                     self._sudo_with_ganesha_env(
                         f"{ceph_bin} {self._get_ceph_args()} nfs export rm {sid} {path} || true"
                     ),
                 )
-        print(f"Stopping NFS service nfs.{sid}...")
+        log.info(f"Stopping NFS service nfs.{sid}...")
         self.executor.run_remote(
             self.admin,
             self._sudo_with_ganesha_env(
@@ -279,7 +283,7 @@ class GaneshaCephadmManager(GaneshaManager):
         )
 
     def setup_ganesha_config(self):
-        print("Setting up custom Ganesha configuration on ganesha nodes...")
+        log.info("Setting up custom Ganesha configuration on ganesha nodes...")
         worker_threads = self.config.ganesha_worker_threads
         worker_threads_block = (
             ("    _9P {\n" f"        Nb_Worker = {worker_threads};\n" "    }\n")
@@ -389,7 +393,7 @@ class GaneshaCephadmManager(GaneshaManager):
             )
 
     def generate_ganesha_yaml(self, sid, hosts, custom=False):
-        print(f"Generating ganesha.yaml for {sid} (custom_config={custom})...")
+        log.info(f"Generating ganesha.yaml for {sid} (custom_config={custom})...")
 
         ganesha_spec = {
             "service_type": "nfs",

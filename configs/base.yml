@@ -1,0 +1,260 @@
+# Shared cluster, deploy, and observability settings.
+# Workload files extend this and add only their own section.
+# Hosts are configs/inventory.yml (gitignored). See configs/inventory.example.yml.
+#   ./cephfs_fio_runner.py configs/workloads/fio.yml [inventory]
+
+fs_name: "perf_test_fs"
+# CephFSCephadmManager (or legacy CephFSManager) deploys MDS via `ceph orch`.
+# CephFSSystemdManager runs a local ceph-mds process on each MDS host.
+fs_manager_type: "CephFSCephadmManager"
+mount_manager_type: "MountKernelManager"
+
+# Ceph-fuse client settings (used when mount_manager_type is MountFuseManager)
+mount_fuse:
+  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-fuse"
+  client_id: "admin"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  conf: "/etc/ceph/ceph.conf"
+  mount_options: ""
+  env_vars: {}
+
+env_vars:
+  CEPH_INSTALL_PREFIX: "/usr/local"
+  LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
+  PATH: "${CEPH_INSTALL_PREFIX}/bin:${PATH}"
+
+mount_nfs:
+  mount_options: "nfsvers=4.1,proto=tcp,sec=sys"
+mount_smb:
+  mount_options: "vers=3.0,cache=strict,file_mode=0664,dir_mode=0775,noperm"
+num_filesystems: 1
+mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec (cephadm only)
+
+# Local ceph-mds settings (used when fs_manager_type is CephFSSystemdManager)
+mds:
+  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-mds"
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  data_dir: "/var/lib/ceph/mds"
+  log_dir: "/var/log/ceph"
+  run_dir: "/var/run/ceph"
+  conf_path: "/etc/ceph/mds-settings.conf"
+  env_vars:
+    ENABLE_LOCKSTAT: "true"
+
+# Role-based daemon observability. Workload-local client capture lives
+# under <workload>.client (fio, rbd, cephfs-tool, mdsbench, rados bench).
+observability:
+  mds:
+    lockstat:
+      enabled: true
+      path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
+      threshold: 0
+    perf_record:
+      enabled: true
+      script: "/cephfs_perf/perf_record.py"
+      executable: ceph-mds
+      duration: 5
+    perf_dump:
+      enabled: false
+      interval: 5
+      script: "/cephfs_perf/mds_perf_dump_collector.py"
+    logging:
+      enabled: false
+      debug_mds: 1
+      debug_ms: 1
+      # memory: true
+    #    log_max_recent: 50000  # default daemon value; raise for longer capture windows
+    #    mds_enable_op_tracker: true
+    #    mds_op_complaint_time: 30
+    #    mds_op_history_size: 200          # default 20 is too small
+    #    mds_op_history_duration: 3600
+    #    mds_op_history_slow_op_size: 100
+    #    mds_op_history_slow_op_threshold: 5  # capture ops >5s even if not "blocked"
+    #    mds_reactor_queue_len_abort: 500000 # Abort the MDS when the reactor dispatch queue depth reaches this value, default 0
+    #    mds_reactor_lane_slice_control: 10 # Max wall time per Control lane visit in a reactor scheduling round, default 10
+    #    mds_reactor_lane_slice_io: 5 # Max wall time per IOComplete lane visit in a reactor scheduling round, default 10
+    #    mds_reactor_lane_slice_maintenance: 2 # Max wall time per Maintenance lane visit in a reactor scheduling round, default 2
+    #    mds_reactor_lane_slice_client: 5 # Max wall time per Client lane visit in a reactor scheduling round, default 2
+    #    mds_reactor_slice_exec_window: 256 # Rolling window size for per-lane reactor execute-time average, default 256
+    #    mds_reactor_slice_backlog_target: 500 # Soft Client backlog that starts adapting reactor lane slices, default 500
+    #    mds_reactor_client_enqueue_high: 250000 # Stall Client-lane reactor enqueues when Client depth reaches this value, default 250K
+    #    mds_reactor_client_enqueue_low: 125000 # Resume Client-lane reactor enqueues when Client depth drops below this value, default 125K
+    #    mds_reactor_lane_slice_client_min: 5 # Minimum Client lane slice when another lane has the dominant backlog, default 1
+    #    mds_reactor_lane_slice_client_max: 20 # Maximum Client lane slice under backlog adaptation, default 20
+    #    mds_reactor_lane_slice_maintenance_min: 1 # Minimum Maintenance lane slice when another lane has the dominant backlog, default 1
+    #    mds_reactor_lane_slice_maintenance_max: 5 # Maximum Maintenance lane slice when Maintenance has the dominant backlog, default 5
+    #    mds_reactor_lane_slice_io_min: 1 #Minimum IOComplete lane slice when another lane has the dominant backlog, default 2
+    #    mds_reactor_lane_slice_io_max: 20 # Maximum IOComplete lane slice when IO has the dominant backlog, default 20
+    #    mds_reactor_io_enqueue_high: 100000 # Stall IOComplete-lane reactor enqueues when IOComplete depth reaches this value, default 100K
+    #    mds_reactor_io_enqueue_low: 50000 # Resume IOComplete-lane reactor enqueues when IOComplete depth drops below this value, default 50K
+    #    mds_cap_revoke_eviction_timeout: 0 # number of seconds after which clients which have not responded to cap revoke messages by the MDS are evicted
+    #    mds_cap_revoke_abort_timeout: 60 # Abort the MDS when a client has not responded to a cap revoke for this many seconds
+  osd:
+    lockstat:
+      enabled: false
+      path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
+      threshold: 0
+    perf_record:
+      enabled: false
+      script: "/cephfs_perf/perf_record.py"
+      executable: ceph-osd
+      duration: 30
+    perf_dump:
+      enabled: false
+      interval: 5
+      script: "/cephfs_perf/mds_perf_dump_collector.py"
+  ganesha:
+    lockstat:
+      enabled: true
+      path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
+      threshold: 0
+    perf_record:
+      enabled: true
+      script: "/cephfs_perf/perf_record.py"
+      executable: ganesha.nfsd
+      duration: 5
+
+# Framework transcript (console + file). Not Ceph daemon debug levels.
+run_logging:
+  level: INFO
+  console: true
+  file: true
+  # file_path: /cephfs_perf/results/run.log
+
+ceph:
+  conf: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  user_id: "admin"
+  fsid: "12345678-1234-1234-1234-123456789012"
+
+# Grafana / monitoring stack configuration
+grafana:
+  enabled: true
+  # type = cephadm|systemd (defaults to systemd when fs_manager_type is CephFSSystemdManager)
+  type: "systemd"
+  # ceph-exporter perf counter priority threshold; 0 exports all counters
+  exporter_prio_limit: 0
+  yaml_path: "/cephfs_perf/monitoring.yaml"
+  port: 3000
+  prometheus_port: 9095
+  prometheus_scrape_interval: 5s
+  # Must match the ``cluster`` label on mgr metrics so dashboards see exporter MDS data
+  prometheus_cluster_label: ceph
+  exporter_port: 9926
+  mgr_prometheus_port: 9283
+  anonymous_access: true
+  # UI timezone. UTC matches Ceph daemon log timestamps (IANA name or browser).
+  timezone: UTC
+  protocol: http
+  ssl: false
+  credentials_file: "ibm-credentials.env"
+  registry_list:
+    - url: "quay.io"
+      username: "ibm-credentials.env:QUAY_IO_USERNAME"
+      password: "ibm-credentials.env:QUAY_IO_PASSWORD"
+    - url: "quay.ceph.io"
+      username: "ibm-credentials.env:QUAY_CEPH_IO_USERNAME"
+      password: "ibm-credentials.env:QUAY_CEPH_IO_PASSWORD"
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  exporter_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-exporter"
+  image: "quay.io/ceph/grafana:12.3.1"
+  prometheus_image: "quay.io/prometheus/prometheus:v3.6.0"
+
+ganesha:
+  enabled: false
+  service_id: "ganesha"
+  # type = systemd|cephadm
+  type: "systemd"
+  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ganesha.nfsd"
+  # Optional: extra env_vars merged on top of top-level env_vars
+  # env_vars: {}
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  pid_path: "/var/run/ganesha.pid"
+  config_path: "/etc/ganesha/ganesha.conf"
+  user_id: "admin"
+  keyring_path: "/etc/ceph/ceph.client.admin.keyring"
+#  client_log_level: 10
+#  finisher_log_level: 10
+#  log_level: FULL_DEBUG # DO NOT USE NIV_* here, those only apply on the command line
+#  worker_threads: 8
+  client_oc: [false, true]
+  syncdataonly: [false, true]
+  async: [false, true]
+#  client_fsync_to_rados: [ true, false ]
+  zerocopy: false
+  client_oc_size: [ "16GiB" ]
+  msgr_workers: [3, 8, 12]
+#  slot_table_size: 1024 # or [64, 180, 1024] for matrix expansio
+  #rpc_ioq_thrdmin: 4
+#  rpc_ioq_thrdmax: [20, 40, 60]
+
+samba:
+  enabled: false
+  cluster_id: "samba"
+  # type = systemd|cephadm
+  type: "cephadm"
+  username: "cephuser"
+  password: "cephpass"
+  workgroup: "WORKGROUP"
+  clustering: "never"
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  user_id: "admin"
+  keyring_path: "/etc/ceph/ceph.client.admin.keyring"
+  samba_resources_path: "/cephfs_perf/samba/resources.yaml"
+  subvolume_group: "smb"
+  subvolume_mode: "0777"
+  # systemd-only: local ceph mount + smb.conf paths
+  mount_base: "/srv/samba"
+  config_path: "/etc/samba/smb.conf"
+  # systemd-only: use Samba vfs_ceph instead of kernel-mounted share paths
+  ceph_vfs: true
+  ceph_conf_dir: "/etc/ceph"
+#  client_log_level: 1
+#  finisher_log_level: 10
+  client_oc_size: "16GiB"
+  msgr_workers: 8
+#  env_vars: {}
+
+rgw:
+  enabled: false
+  service_id: "eot"
+  # type = systemd|cephadm (defaults from fs_manager_type when unset)
+  type: "cephadm"
+  # Cephadm orch host label applied to inventory 'rgws' hosts
+  host_label: "rgw"
+  # Number of radosgw daemons per RGW host (consecutive ports)
+  count_per_host: 4
+  # First beast frontend port; instances use port .. port+count_per_host-1
+  frontend_port: 7480
+  yaml_path: "/cephfs_perf/rgw.yaml"
+  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
+  radosgw_binary_path: "${CEPH_INSTALL_PREFIX}/bin/radosgw"
+  radosgw_admin_binary_path: "${CEPH_INSTALL_PREFIX}/bin/radosgw-admin"
+  # systemd-only
+  pid_dir: "/var/run/ceph"
+  user_id: "admin"
+  keyring_path: "/etc/ceph/ceph.client.admin.keyring"
+  manage_firewall: true
+  # S3 user created via radosgw-admin (keys optional; auto-generated if omitted)
+  uid: "perfuser"
+  display_name: "Perf User"
+  access_key: "PERFACCESSKEY"
+  secret_key: "PERFSECRETKEY0123456789"
+  credentials_path: "/cephfs_perf/rgw/s3_credentials.json"
+
+# Ranges for MDS settings (start, stop, step)
+mds_settings:
+#  max_mds: [1, 2, 1]
+  mds_cache_memory_limit: [64Gi]
+#  mds_cache_memory_limit: [1Gi, 4Gi, 16Gi, 64Gi, 192Gi]
+#  cpus: [1, 2, 3, 4]
+#  mds_max_caps_per_client: [100k, 200k, 100k]
+#  mds_recall_max_caps: [5k, 10k, 5k]
+#  mds_recall_max_decay_rate: [1, 2, 1]
+#  mds_cache_trim_threshold: [64Ki, 128Ki, 64Ki]
+##  mds_cache_reservation: [5, 10, 5]
+##  mds_log_max_segments: [30, 60, 30]
+#  mds_dispatch_engine: [classic, reactor]
+# For vstart / uniform wip mons, use monitor config store instead of ceph.conf:
+#mds:
+#  dispatch_engine_via: ceph-config

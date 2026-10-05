@@ -2,10 +2,13 @@ import datetime
 import json
 import os
 import subprocess
-import threading
 import yaml
 from lib.workload.workload_runner import WorkloadRunner
 from cephfs_perf_lib import CommonUtils
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class SpecStorageWorkloadRunner(WorkloadRunner):
@@ -22,11 +25,6 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         cmd = self.config["specstorage"]["run_command"]
         cfg = self.config["specstorage"]["output_path"]
         workload_dir = self.config["specstorage"].get("workload_dir")
-        # MDS-side perf record gate lives on the FS manager (reads mds.perf_record).
-        # specstorage.perf_record is no longer consulted for the MDS-target call.
-        mds_perf_record_enabled = bool(
-            cephfs_manager and cephfs_manager.is_mds_perf_record_enabled()
-        )
         payload = settings.copy()
         payload["fs_name"] = self.config.fs_name
         payload["num_filesystems"] = self.config.num_filesystems
@@ -78,10 +76,10 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                     payload[k] = val
 
         settings_json = json.dumps(payload)
-        print(f"Running SPECSTORAGE on {self.admin}...")
+        log.info(f"Running SPECSTORAGE on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
         full_cmd = f"{cmd} -f {cfg} --settings '{settings_json}' --runner-name '{self.get_name()}'"
-        print(f"[{self.admin}] Executing: {full_cmd}")
+        log.info(f"[{self.admin}] Executing: {full_cmd}")
         ssh_cmd = [
             "ssh",
             "-o",
@@ -91,51 +89,24 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             f"{user}@{host}",
             full_cmd,
         ]
-        current_lp, run_phase_started = 0, False
-        perf_triggered, ganesha_perf_triggered, logging_triggered = False, False, False
-        ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
-        perf_threads = []
-        total_lps = len(self.config["specstorage"].get("loadpoints", []))
-
-        def on_run_phase_start(fallback=False):
-            nonlocal run_phase_started, logging_triggered
-            if run_phase_started:
-                return
-            run_phase_started = True
-            if fallback:
-                print(
-                    f"Detected RUN phase start from run progress "
-                    f"(Prime did not log 'Starting RUN phase') "
-                    f"for Load Point {current_lp}..."
-                )
-            if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                print(f"Resetting MDS lockstat for Load Point {current_lp}...")
-                cephfs_manager.reset_lockstat()
-            if cephfs_manager:
-                print(f"Resetting MDS perf counters for Load Point {current_lp}...")
-                cephfs_manager.reset_perf_counters()
-            if cephfs_manager:
-                cephfs_manager.start_periodic_perf_dump(
-                    current_lp, payload.get("results_dir")
-                )
-            if (
-                cephfs_manager
-                and cephfs_manager.is_mds_logging_enabled()
-                and not logging_triggered
-            ):
-                print(f"Triggering MDS logging for Load Point {current_lp}...")
-                cephfs_manager.start_fs_logging(current_lp)
-                logging_triggered = True
-            if ganesha_perf_enabled:
-                print(
-                    f"Resetting Ganesha perf counters for Load Point {current_lp}..."
-                )
-                for g_host in self.config.ganeshas:
-                    ganesha_manager.reset_ganesha_perf(g_host)
-                    if self.config.get("ganesha", {}).get("lockstat", {}).get(
-                        "enabled", False
-                    ):
-                        ganesha_manager.reset_lockstat(g_host)
+        loadpoints = self.config["specstorage"].get("loadpoints", [])
+        monitor = self.make_loadpoint_monitor(
+            workload_name="sfs2020",
+            config_section="specstorage",
+            cephfs_manager=cephfs_manager,
+            ganesha_manager=ganesha_manager,
+            results_dir=payload.get("results_dir"),
+            settings=settings,
+            payload=settings,
+            loadpoints=loadpoints,
+            total_loadpoints=len(loadpoints),
+            finish_markers=("Tests finished",),
+            mds_perf_trigger="progress",
+            run_phase_fallback=lambda line: (
+                "Run " in line and " percent complete" in line
+            ),
+            after_loadpoint_end=self._publish_spec_ganesha,
+        )
 
         process = subprocess.Popen(
             ssh_cmd,
@@ -144,119 +115,29 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             text=True,
             stdin=subprocess.DEVNULL,
         )
-        output = []
-        for line in process.stdout:
-            print(f"[{self.admin}] {line}", end="")
-            output.append(line)
-            if "Starting tests..." in line:
-                current_lp += 1
-                (
-                    run_phase_started,
-                    perf_triggered,
-                    ganesha_perf_triggered,
-                    logging_triggered,
-                ) = (False, False, False, False)
-                pct = int(100 * current_lp / total_lps) if total_lps else 0
-                print(
-                    f"Detected Starting tests... Load Point: "
-                    f"{current_lp}/{total_lps} ({pct}% done)"
-                )
-            if "Starting RUN phase" in line:
-                on_run_phase_start()
-            elif (
-                not run_phase_started
-                and "Run " in line
-                and " percent complete" in line
-            ):
-                on_run_phase_start(fallback=True)
-            if "Tests finished" in line:
-                r_dir = payload.get("results_dir")
-                if cephfs_manager:
-                    cephfs_manager.stop_periodic_perf_dump()
-                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                    print(f"Dumping MDS lockstat for Load Point {current_lp}...")
-                    cephfs_manager.dump_lockstat(
-                        current_lp, r_dir, settings=settings
-                    )
-                if cephfs_manager and r_dir:
-                    print(
-                        f"Dumping MDS perf counters for Load Point {current_lp}..."
-                    )
-                    cephfs_manager.dump_perf_counters(
-                        current_lp, r_dir, settings=settings
-                    )
-                if logging_triggered and cephfs_manager:
-                    print(f"Stopping MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.stop_fs_logging(current_lp, r_dir)
-                if ganesha_perf_enabled and r_dir:
-                    print(
-                        f"Collecting Ganesha perf dumps for Load Point {current_lp}..."
-                    )
-                    lp_tag = f"{int(current_lp):02d}"
-                    ganesha_lockstat_enabled = self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False)
-                    for g_host in self.config.ganeshas:
-                        dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
-                        if ganesha_lockstat_enabled:
-                            lockstat_json = ganesha_manager.dump_lockstat(g_host)
-                            if lockstat_json:
-                                if dump is None:
-                                    dump = {}
-                                dump["lockstat_results"] = lockstat_json
-                        if dump:
-                            self.save_json_to_results(
-                                f"{g_host}_lp{lp_tag}_ganesha_perf.json", dump, r_dir
-                            )
-                if ganesha_manager and ganesha_manager.should_collect_client_logs():
-                    print(
-                        f"Collecting Ganesha Ceph client logs for Load Point {current_lp}..."
-                    )
-                    ganesha_manager.collect_ganesha_client_logs(current_lp, r_dir)
-            if run_phase_started:
-                if mds_perf_record_enabled and not perf_triggered:
-                    if "Run " in line and " percent complete" in line:
-                        print(
-                            f"Triggering MDS perf record for Load Point {current_lp}..."
-                        )
-                        r_dir = payload.get("results_dir")
-                        t = threading.Thread(
-                            target=self.execute_mds_perf_record,
-                            args=(current_lp, r_dir, settings, None),
-                        )
-                        t.start()
-                        perf_threads.append(t)
-                        perf_triggered = True
+        output, returncode = self.consume_remote_stdout(process, monitor)
+        if returncode != 0:
+            raise RuntimeError(
+                f"SPECSTORAGE failed on {self.admin} with return code {returncode}"
+            )
+        return output
 
-                if (
-                    self.config.ganesha_enabled
-                    and self.config.ganesha_perf_record
-                    and not ganesha_perf_triggered
-                ):
-                    print(
-                        f"Triggering Ganesha perf recording for Load Point {current_lp}..."
-                    )
-                    r_dir = payload.get("results_dir")
-                    t = threading.Thread(
-                        target=self.execute_perf_record,
-                        args=(
-                            "ganesha",
-                            self.config.ganeshas,
-                            current_lp,
-                            r_dir,
-                            settings,
-                            None,
-                        ),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-                    ganesha_perf_triggered = True
-        process.wait()
-        if cephfs_manager:
-            cephfs_manager.stop_periodic_perf_dump()
-        for t in perf_threads:
-            t.join()
-        if process.returncode != 0:
-            raise RuntimeError(f"SPECSTORAGE failed on {self.admin} with return code {process.returncode}")
-        return "".join(output)
+    def _publish_spec_ganesha(self, monitor):
+        """Save Ganesha perf dumps (with lockstat embedded) beside SFS results."""
+        if not monitor.results_dir:
+            return
+        lp_tag = f"{int(monitor.current_lp):02d}"
+        hosts = set(monitor.ganesha_perf_dumps) | set(monitor.ganesha_lockstat)
+        for host in hosts:
+            dump = dict(monitor.ganesha_perf_dumps.get(host) or {})
+            if host in monitor.ganesha_lockstat:
+                dump["lockstat_results"] = monitor.ganesha_lockstat[host]
+            if dump:
+                self.save_json_to_results(
+                    f"{host}_lp{lp_tag}_ganesha_perf.json",
+                    dump,
+                    monitor.results_dir,
+                )
 
     def save_json_to_results(self, filename, data, results_dir):
         local_temp = f"/tmp/{filename}"
@@ -290,19 +171,19 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                 target, "[ -d /SM2020 ] && echo 'EXISTS' || echo 'MISSING'"
             )
             if "EXISTS" in check_result:
-                print(
+                log.info(
                     f"SPECStorage already installed on {target} (/SM2020 exists). Skipping setup."
                 )
                 return
         except Exception as e:
-            print(
+            log.info(
                 f"Warning: Could not check for /SM2020 on {target}: {e}. Proceeding with setup."
             )
 
         u, h, p = self.executor.get_ssh_details(target)
 
         # Copy the archive
-        print(f"Copying {sfs2020_archive} to {remote_archive_path} on {target}...")
+        log.info(f"Copying {sfs2020_archive} to {remote_archive_path} on {target}...")
         subprocess.run(
             [
                 "scp",
@@ -321,19 +202,19 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         if sfs2020_archive.endswith(".tgz") or sfs2020_archive.endswith(".tar.gz"):
             untar_cmd = f"tar -C {remote_dir} -zxf {remote_archive_path}"
 
-        print(f"Untarring {remote_archive_path} on {target}...")
+        log.info(f"Untarring {remote_archive_path} on {target}...")
         self.executor.run_remote(target, untar_cmd)
 
         # Run pyupgrade on SM2020
         spec_dir = os.path.join(remote_dir, "SPECstorage2020")
         pyupgrade_cmd = f"pyupgrade --py3-plus {spec_dir}/SM2020"
-        print(f"Running pyupgrade on {spec_dir}/SM2020 on {target}...")
+        log.info(f"Running pyupgrade on {spec_dir}/SM2020 on {target}...")
         self.executor.run_remote(target, pyupgrade_cmd)
 
         # Run SM2020 installation
         # cd remote_dir/SPECstorage2020 && python3 SM2020 --install-dir=/SPEC2020
         install_cmd = f"cd {spec_dir} && python3 SM2020 --install-dir=/SM2020"
-        print(f"Running SM2020 install on {target}...")
+        log.info(f"Running SM2020 install on {target}...")
         self.executor.run_remote(target, install_cmd)
 
     def _parse_netmist_env(self):
@@ -352,7 +233,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
                     k, v = line.split("=", 1)
                     env_data[k.strip()] = v.strip().strip('"').strip("'")
         except Exception as e:
-            print(f"Warning: Could not read netmist_env from {netmist_env_path}: {e}")
+            log.info(f"Warning: Could not read netmist_env from {netmist_env_path}: {e}")
         return env_data
 
     def _generate_spec_file(self):
@@ -455,7 +336,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
 
         for local_file, remote_path in files_to_copy:
             if os.path.exists(local_file):
-                print(f"Copying local {local_file} to {remote_path} on {target}...")
+                log.info(f"Copying local {local_file} to {remote_path} on {target}...")
                 subprocess.run(
                     [
                         "scp",
@@ -481,12 +362,12 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         skip_setup = False
 
         if not sfs2020_archive:
-            print(
+            log.info(
                 "Warning: sfs2020_archive not found in netmist.env. Skipping SPECstorage setup."
             )
             skip_setup = True
         elif not os.path.exists(sfs2020_archive):
-            print(
+            log.info(
                 f"Warning: SPECstorage archive {sfs2020_archive} not found. Skipping SPECstorage setup."
             )
             skip_setup = True
@@ -495,7 +376,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             or sfs2020_archive.endswith(".tgz")
             or sfs2020_archive.endswith(".tar.gz")
         ):
-            print(
+            log.info(
                 f"Warning: SPECstorage archive {sfs2020_archive} has unsupported extension. Skipping SPECstorage setup."
             )
             skip_setup = True
@@ -507,6 +388,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
             + self.config.ganeshas
             + self.config.mons
             + self.config.mdss
+            + self.config.osds
         )
 
         remote_dir = os.path.dirname(run_cmd)

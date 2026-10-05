@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""CLI entrypoint for the RBD fio benchmark.
+
+Matrix orchestrator: BenchRunner. Control-plane workload: RbdWorkloadRunner.
+Remote driver: lib/workload/run_rbd_workload.py.
+"""
 import os
 import sys
 

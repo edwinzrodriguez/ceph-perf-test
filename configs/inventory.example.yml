@@ -1,0 +1,109 @@
+# Example cluster inventory. Copy to configs/inventory.yml (gitignored) and
+# fill in this cluster's hosts. The runner loads configs/inventory.yml when
+# the inventory argument is omitted.
+#
+# Generate that file from an Ansible INI inventory:
+#   ./scripts/ansible_inventory_to_json.py path/to/ansible_inventory --yaml \
+#       -e ssh_user=root -e ssh_user_home=/home/vpcuser > configs/inventory.yml
+#
+# The same YAML (this shape, or wrapped under a top-level inventory: key)
+# can be passed as the runner inventory argument:
+#   ./cephfs_fio_runner.py configs/workloads/fio.yml configs/inventory.yml
+#
+# An Ansible INI file is still accepted as that argument.
+# A mons group is required; the first mon is the admin host.
+# Optional groups: mgrs, mdss, osds, ganeshas, sambas, rgws, grafanas.
+
+mons:
+  mon-000:
+    ansible_ssh_host: 10.0.0.11
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: mons
+    public_network: 10.0.0.0/24
+    cluster_network: 10.0.1.0/24
+    private_ip: 10.0.1.11
+    monitor_address: 10.0.1.11
+  mon-001:
+    ansible_ssh_host: 10.0.0.12
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: mons
+    public_network: 10.0.0.0/24
+    cluster_network: 10.0.1.0/24
+    private_ip: 10.0.1.12
+    monitor_address: 10.0.1.12
+
+mgrs:
+  mon-000:
+    ansible_ssh_host: 10.0.0.11
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: mgrs
+    private_ip: 10.0.1.11
+
+mdss:
+  mon-000:
+    ansible_ssh_host: 10.0.0.11
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: mdss
+    private_ip: 10.0.1.11
+
+osds:
+  osd-000:
+    ansible_ssh_host: 10.0.0.21
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: osds
+    private_ip: 10.0.1.21
+
+clients:
+  client-000:
+    ansible_ssh_host: 10.0.0.31
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: clients
+    private_ip: 10.0.1.31
+
+ganeshas:
+  client-000:
+    ansible_ssh_host: 10.0.0.31
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: ganeshas
+    private_ip: 10.0.1.31
+
+grafanas:
+  mon-000:
+    ansible_ssh_host: 10.0.0.11
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: grafanas
+    private_ip: 10.0.1.11
+
+rgws:
+  mon-000:
+    ansible_ssh_host: 10.0.0.11
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: rgws
+    private_ip: 10.0.1.11
+
+sambas:
+  client-000:
+    ansible_ssh_host: 10.0.0.31
+    ansible_ssh_port: 22
+    ansible_ssh_user: root
+    ansible_ssh_private_key_file: /home/user/.ssh/id_rsa
+    ceph_group: sambas
+    private_ip: 10.0.1.31

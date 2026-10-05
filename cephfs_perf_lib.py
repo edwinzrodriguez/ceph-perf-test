@@ -9,6 +9,10 @@ import subprocess
 import threading
 import time
 import yaml
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class RegistryCredentials:
@@ -371,10 +375,10 @@ class AnsibleInventoryProvider(InventoryProvider):
         self.vars = extra_vars or {}
         self._load_global_vars()
         self.hosts_meta = self._parse_inventory(inventory_path)
-        print(f"Loaded inventory from {inventory_path}")
-        print(f"Loaded global vars: {self.vars}")
-        print(f"Hosts: {self.all_hosts}")
-        print(f"Hosts meta: {self.hosts_meta}")
+        log.info(f"Loaded inventory from {inventory_path}")
+        log.info(f"Loaded global vars: {self.vars}")
+        log.info(f"Hosts: {self.all_hosts}")
+        log.info(f"Hosts meta: {self.hosts_meta}")
 
     def _load_global_vars(self):
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -489,6 +493,81 @@ class DirectInventoryProvider(InventoryProvider):
         return self.all_hosts
 
 
+# Groups the runners look up. An unwrapped inventory file must name at least one
+# so a settings YAML is not mistaken for a host list.
+_INVENTORY_GROUPS = frozenset(
+    {
+        "mons",
+        "mgrs",
+        "mdss",
+        "osds",
+        "clients",
+        "ganeshas",
+        "sambas",
+        "rgws",
+        "grafanas",
+    }
+)
+
+
+def _is_host_group(value):
+    """True for ``{hostname: {var: value}}`` or ``[{name: ...}, ...]``."""
+    if isinstance(value, dict):
+        return all(isinstance(meta, dict) for meta in value.values())
+    if isinstance(value, list):
+        return all(isinstance(item, dict) and "name" in item for item in value)
+    return False
+
+
+def nested_inventory_groups(data):
+    """Return host groups from a nested inventory document, or None.
+
+    Accepts the YAML/JSON written by ``ansible_inventory_to_json --yaml``
+    (groups at the top level) and the same document wrapped as
+    ``inventory: {groups...}``.
+    """
+    if not isinstance(data, dict) or not data:
+        return None
+    wrapped = data.get("inventory")
+    if isinstance(wrapped, dict) and wrapped and all(
+        _is_host_group(value) for value in wrapped.values()
+    ):
+        return wrapped
+    if not all(_is_host_group(value) for value in data.values()):
+        return None
+    if not any(key in _INVENTORY_GROUPS for key in data):
+        return None
+    return data
+
+
+def inventory_provider_from_file(path, extra_vars=None):
+    """Load an inventory file as Ansible INI or nested YAML/JSON.
+
+    Nested YAML is the output of ``scripts/ansible_inventory_to_json.py --yaml``.
+    Anything that is not that shape is parsed as an Ansible INI inventory,
+    except ``.yml`` / ``.yaml`` / ``.json`` files, which must be nested inventories.
+    """
+    with open(path, "r", encoding="utf-8") as handle:
+        text = handle.read()
+    parsed = None
+    try:
+        parsed = yaml.safe_load(text)
+    except yaml.YAMLError:
+        parsed = None
+    groups = nested_inventory_groups(parsed)
+    if groups is not None:
+        log.info("Loaded nested inventory from %s", path)
+        return DirectInventoryProvider(groups, vars=extra_vars)
+    suffix = os.path.splitext(path)[1].lower()
+    if suffix in (".yml", ".yaml", ".json"):
+        raise ValueError(
+            f"{path} is not a nested inventory. Expected the YAML from "
+            "ansible_inventory_to_json --yaml (group maps, optionally under "
+            "an inventory: key), or pass an Ansible INI file."
+        )
+    return AnsibleInventoryProvider(path, extra_vars=extra_vars)
+
+
 class PerformanceTestConfig:
     def __init__(self, config_dict, inventory_provider):
         self._config = config_dict
@@ -561,6 +640,38 @@ class PerformanceTestConfig:
             h["name"]
             for h in (self.hosts_meta.get("mdss") or self.hosts_meta.get("osds", []))
         ]
+
+    @property
+    def osds(self):
+        """Inventory hosts in the ``osds`` group.
+
+        Distinct from ``mdss``, which falls back to OSD hosts when no MDS
+        group is present. Grafana exporter placement reads this list directly.
+        """
+        return [h["name"] for h in self.hosts_meta.get("osds", [])]
+
+    def role_observability(self, role):
+        """Merged ``observability.<role>`` with legacy ``mds`` / ``ganesha`` / ``specstorage`` keys underneath."""
+        from lib.config_loader import role_observability
+
+        return role_observability(self._config, role)
+
+    def client_perf_record(self, workload, default_executable=None, default_duration=30):
+        from lib.config_loader import client_perf_record
+
+        return client_perf_record(
+            self._config, workload, default_executable, default_duration
+        )
+
+    def client_lockstat(self, workload):
+        from lib.config_loader import client_lockstat
+
+        return client_lockstat(self._config, workload)
+
+    def workload_perf_dump(self, workload):
+        from lib.config_loader import workload_perf_dump
+
+        return workload_perf_dump(self._config, workload)
 
     @property
     def clients(self):
@@ -769,15 +880,30 @@ class PerformanceTestConfig:
 
     @property
     def ganesha_lockstat_path(self):
-        return self.expand_env(
-            self._config.get("ganesha", {}).get("lockstat", {}).get("path")
-            or self._config.get("specstorage", {}).get("lockstat", {}).get("path")
-            or "ceph-lockstat"
-        )
+        lockstat = (self.role_observability("ganesha").get("lockstat") or {})
+        path = lockstat.get("path")
+        if not path:
+            path = (
+                self._config.get("specstorage", {}).get("lockstat", {}).get("path")
+            )
+        return self.expand_env(path or "ceph-lockstat")
 
     @property
     def ganesha_perf_record(self):
-        return self._config.get("ganesha", {}).get("perf_record", False)
+        """True when Ganesha ``perf record`` should run.
+
+        Reads ``observability.ganesha.perf_record.enabled``, falling back to
+        the legacy boolean ``ganesha.perf_record``.
+        """
+        block = self.role_observability("ganesha").get("perf_record") or {}
+        if isinstance(block, dict):
+            return bool(block.get("enabled"))
+        return bool(block)
+
+    @property
+    def ganesha_lockstat_enabled(self):
+        lockstat = self.role_observability("ganesha").get("lockstat") or {}
+        return bool(lockstat.get("enabled"))
 
     @property
     def samba_enabled(self):
@@ -1149,7 +1275,7 @@ class SSHExecutor:
     def run_remote(self, host_name, cmd, stream=False, check=False):
         user, host, port = self.get_ssh_details(host_name)
         ssh_target = f"{user}@{host}"
-        print(f"[{host_name}] Executing: {cmd}")
+        log.info(f"[{host_name}] Executing: {cmd}")
         # Pass command via stdin to avoid "Argument list too long" errors
         # when cmd contains very long arguments (e.g., long CEPH_ARGS)
         ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-p", port, ssh_target, "bash -s"]
@@ -1162,7 +1288,7 @@ class SSHExecutor:
             process.stdin.close()
             output = []
             for line in process.stdout:
-                print(f"[{host_name}] {line}", end="")
+                log.info(f"[{host_name}] {line}", end="")
                 output.append(line)
             process.wait()
             if process.returncode != 0 and check:
@@ -1216,10 +1342,10 @@ class CommonUtils:
     def collect_journal_logs(executor, hosts, results_dir):
         """Collect the last 5 minutes of journal logs from all specified hosts in parallel."""
         if not results_dir or not os.path.exists(results_dir):
-            print(f"Warning: Results directory {results_dir} does not exist. Skipping log collection.")
+            log.info(f"Warning: Results directory {results_dir} does not exist. Skipping log collection.")
             return
 
-        print(f"Collecting journal logs from {len(hosts)} hosts for the last 5 minutes into {results_dir}...")
+        log.info(f"Collecting journal logs from {len(hosts)} hosts for the last 5 minutes into {results_dir}...")
         threads = []
 
         def collect_host_logs(host):
@@ -1230,9 +1356,9 @@ class CommonUtils:
                 output = executor.run_remote(host, cmd, check=False)
                 with open(log_file, "w") as f:
                     f.write(output)
-                print(f"[{host}] Logs collected.")
+                log.info(f"[{host}] Logs collected.")
             except Exception as ex:
-                print(f"[{host}] Failed to collect logs: {ex}")
+                log.info(f"[{host}] Failed to collect logs: {ex}")
 
         for host in hosts:
             t = threading.Thread(target=collect_host_logs, args=(host,))
@@ -1242,7 +1368,7 @@ class CommonUtils:
         for t in threads:
             t.join(timeout=60)  # Wait up to 60 seconds per host (though they run in parallel)
             if t.is_alive():
-                print(f"Warning: Thread for host log collection still alive after timeout.")
+                log.info(f"Warning: Thread for host log collection still alive after timeout.")
 
     @staticmethod
     def parse_si_unit(value):
@@ -1601,9 +1727,9 @@ class CommonUtils:
                     executor.run_remote(
                         host_name, "sudo firewall-cmd --reload", check=False
                     )
-                    print(f"[{host_name}] firewalld allowed {port_spec}/tcp")
+                    log.info(f"[{host_name}] firewalld allowed {port_spec}/tcp")
                 else:
-                    print(
+                    log.info(
                         f"[{host_name}] firewalld already allows {port_spec}/tcp"
                     )
 
@@ -1630,7 +1756,7 @@ class CommonUtils:
                         ">/dev/null || true",
                         check=False,
                     )
-                    print(f"[{host_name}] iptables allowed {first}:{last}/tcp")
+                    log.info(f"[{host_name}] iptables allowed {first}:{last}/tcp")
 
     @staticmethod
     def format_si_units(value):
@@ -2338,5 +2464,5 @@ class CommonUtils:
         output_path = os.path.join(results_dir, filename)
         with open(output_path, "w") as f:
             json.dump(summary_data, f, indent=4)
-        print(f"Wrote multi-client results summary to {output_path}")
+        log.info(f"Wrote multi-client results summary to {output_path}")
         return output_path

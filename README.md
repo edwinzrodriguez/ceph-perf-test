@@ -6,7 +6,15 @@ A structured framework for running performance benchmarks on CephFS using variou
 
 The framework operates on a **Test Matrix** principle. It iterates through combinations of MDS settings and Ganesha settings, automatically provisioning the environment for each iteration.
 
-1.  **Configuration**: Defined in a YAML file (e.g., `MDSConfigurationSettings.yml`).
+| Layer | Where | Role |
+|-------|--------|------|
+| CLI entrypoint | `cephfs_*_runner.py` | Parses args and starts one workload |
+| Matrix orchestrator | `BenchRunner` | Expands settings, rebuilds the cluster, mounts, collects |
+| Control-plane workload | `lib/workload/*_runner.py` | Ships the remote driver and watches its stdout |
+| Remote driver | `lib/workload/run_*_workload.py` | Runs on the admin host; prints the stdout markers |
+| Loadpoint monitor | `lib/workload/loadpoint_monitor.py` | Shared RUN-start and loadpoint-end observability |
+
+1.  **Configuration**: A workload file such as `configs/workloads/fio.yml` with `extends: ../base.yml`. `configs/base.yml` holds deploy and `observability`. Hosts live in `configs/inventory.yml` (gitignored; copy `configs/inventory.example.yml`). `MDSConfigurationSettings.yml` is a shim that still composes every workload onto that base. A YAML file with no `extends` is loaded unchanged.
 2.  **Matrix Expansion**: If any setting in `mds_settings` or `ganesha` is a list, the framework calculates the Cartesian product of all combinations.
 3.  **Iteration Lifecycle**:
     -   Unmount clients.
@@ -21,9 +29,14 @@ The framework operates on a **Test Matrix** principle. It iterates through combi
 ## Usage
 
 ```bash
-./cephfs_fio_runner.py <config.yaml> [<ansible_inventory>]
-./cephfs_fio_runner.py <config.yaml> --grafana systemd
+./cephfs_fio_runner.py configs/workloads/fio.yml
+./cephfs_fio_runner.py configs/workloads/fio.yml configs/inventory.yml
+./cephfs_fio_runner.py configs/workloads/fio.yml --grafana systemd
 ```
+
+With no inventory argument the runner uses `configs/inventory.yml` when that file exists, then an `inventory:` block in the config (older settings files). The argument itself may be an Ansible INI file or the YAML/JSON from `scripts/ansible_inventory_to_json.py --yaml`.
+
+Other entry points take the matching file under `configs/workloads/`: `sfs2020.yml`, `cephfs_tool.yml`, `mdsbench.yml`, `rados_bench.yml`, `rbd.yml`, `elbencho.yml`. `MDSConfigurationSettings.yml` remains a combined shim.
 
 Workload-specific entry points: `cephfs_fio_runner.py`, `cephfs_sfs2020_runner.py`, `cephfs_tool_bench_runner.py`, `cephfs_mdsbench_runner.py`, `cephfs_rados_bench_runner.py`, `cephfs_rbd_runner.py`, `cephfs_elbencho_runner.py`, or `cephfs_all_bench_runner.py` to run the full suite.
 
@@ -45,7 +58,7 @@ Workload-specific entry points: `cephfs_fio_runner.py`, `cephfs_sfs2020_runner.p
 
 ### `mds`
 
-Settings for local `ceph-mds` processes when `fs_manager_type` is `CephFSSystemdManager`.
+Settings for local `ceph-mds` processes when `fs_manager_type` is `CephFSSystemdManager`. Daemon lockstat, `perf record`, perf dump, and debug logging are `observability.mds`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -159,15 +172,14 @@ Default container images match the upstream Ceph cephadm monitoring stack:
 
 #### Inventory
 
-Add a `grafanas` group to the inventory (same pattern as `ganeshas` or `sambas`) for hosts that run Grafana and Prometheus. If omitted, the first `mons` host is used.
+Add a `grafanas` group to `configs/inventory.yml` (same pattern as `ganeshas` or `sambas`) for hosts that run Grafana and Prometheus. If omitted, the first `mons` host is used.
 
 ```yaml
-inventory:
-  grafanas:
-    mon-000:
-      ansible_ssh_host: 169.63.188.95
-      ansible_ssh_user: root
-      private_ip: 10.241.64.69
+grafanas:
+  mon-000:
+    ansible_ssh_host: 169.63.188.95
+    ansible_ssh_user: root
+    private_ip: 10.241.64.69
 ```
 
 #### Example Configuration
@@ -202,9 +214,9 @@ This runs `ceph-monitoring-host-prep.yml`, which opens firewall ports (3000, 909
 2. **Run benchmarks with monitoring**:
 
 ```bash
-./cephfs_fio_runner.py MDSConfigurationSettings.yml
+./cephfs_fio_runner.py configs/workloads/fio.yml
 # or override deployment type:
-./cephfs_fio_runner.py MDSConfigurationSettings.yml --grafana systemd
+./cephfs_fio_runner.py configs/workloads/fio.yml --grafana systemd
 ```
 
 3. **Access dashboards** (default ports on the `grafanas` host):
@@ -280,22 +292,9 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 |-----|------|---------|-------------|
 | `env_vars` | dict | `{}` | Extra environment variables for `ganesha.nfsd`. Merge order: top-level `env_vars`, then framework defaults (`ENABLE_LOCKSTAT`, `GSS_USE_HOSTNAME`, `CEPH_CONF`), then this section (later wins). Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
 
-#### Profiling
+#### Profiling and lockstat
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `perf_record` | bool | `false` | Enable `perf record` profiling on Ganesha |
-| `perf_record_script` | string | | Path to perf recording script |
-| `perf_record_executable` | string | `ganesha.nfsd` | Executable name to attach perf to |
-| `perf_record_duration` | int | | Profiling duration in seconds |
-
-#### Lock Statistics
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `lockstat.enabled` | bool | `false` | Collect lock contention statistics |
-| `lockstat.path` | string | `/usr/local/bin/ceph-lockstat` | Path to `ceph-lockstat` binary |
-| `lockstat.threshold` | int | `0` | Lock contention reporting threshold |
+Ganesha `perf record` and lockstat live under `observability.ganesha` (`executable: ganesha.nfsd`). Flat `ganesha.perf_record` and `ganesha.lockstat` are still read when the observability block is absent.
 
 ---
 
@@ -426,7 +425,7 @@ elbencho:
 ```
 
 ```bash
-./cephfs_elbencho_runner.py MDSConfigurationSettings.yml --rgw cephadm
+./cephfs_elbencho_runner.py configs/workloads/elbencho.yml --rgw cephadm
 ```
 
 ---
@@ -456,19 +455,14 @@ Configuration for the `cephfs-tool bench` workload runner.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `perf_record` | bool | `false` | Enable `perf record` profiling |
-| `perf_record_script` | string | | Path to perf recording script |
-| `perf_record_executable` | string | `cephfs-tool` | Executable to profile |
-| `perf_record_duration` | int | `30` | Profiling duration in seconds |
-
-#### Lock Statistics
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `lockstat.enabled` | bool | `false` | Collect lock contention statistics |
-| `lockstat.path` | string | `/usr/local/bin/ceph-lockstat` | Path to `ceph-lockstat` |
-| `lockstat.asok` | string | `/var/run/ceph/cephfs-tool.asok` | Admin socket path |
-| `lockstat.threshold` | int | `0` | Reporting threshold |
+| `client.perf_record.enabled` | bool | `false` | `perf record` on the `cephfs-tool` process |
+| `client.perf_record.executable` | string | `cephfs-tool` | Process to attach to |
+| `client.perf_record.duration` | int | `30` | Profiling duration in seconds |
+| `client.perf_record.script` | string | `/cephfs_perf/perf_record.py` | Remote perf script |
+| `client.lockstat.enabled` | bool | `false` | Collect client lock contention |
+| `client.lockstat.path` | string | | Path to `ceph-lockstat` |
+| `client.lockstat.asok` | string | `/var/run/ceph/cephfs-tool.asok` | Admin socket path |
+| `client.lockstat.threshold` | int | `0` | Reporting threshold |
 
 #### Loadpoint Options
 
@@ -502,7 +496,7 @@ evenly so the cluster-offered rate matches the configured target. Default
 ``mode: balanced`` targets software-build (SWBUILD) style metadata mix.
 
 ```bash
-./cephfs_mdsbench_runner.py MDSConfigurationSettings.yml
+./cephfs_mdsbench_runner.py configs/workloads/mdsbench.yml
 ```
 
 #### Global Options
@@ -531,10 +525,10 @@ evenly so the cluster-offered rate matches the configured target. Default
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `perf_record` | bool | `false` | Enable client-side `perf record` |
-| `perf_record_script` | string | | Path to perf recording script |
-| `perf_record_executable` | string | `cephfs-mdsbench` | Executable to profile |
-| `perf_record_duration` | int | `30` | Profiling duration in seconds |
+| `client.perf_record.enabled` | bool | `false` | `perf record` on the `cephfs-mdsbench` process |
+| `client.perf_record.executable` | string | `cephfs-mdsbench` | Process to attach to |
+| `client.perf_record.duration` | int | `30` | Profiling duration in seconds |
+| `client.perf_record.script` | string | `/cephfs_perf/perf_record.py` | Remote perf script |
 
 #### Loadpoint Options
 
@@ -577,12 +571,14 @@ Configuration for the fio workload runner.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `perf_record` | bool | `false` | Enable `perf record` profiling |
-| `perf_record_script` | string | | Path to perf recording script |
-| `perf_record_executable` | string | `ganesha.nfsd` | Executable to profile |
-| `perf_record_duration` | int | | Profiling duration in seconds |
-| `flamegraph_path` | string | | Path to FlameGraph tools for SVG generation |
-| `stap_script` | string | | Path to a SystemTap script to run alongside fio |
+| `client.perf_record.enabled` | bool | `false` | `perf record` on the fio process on inventory clients |
+| `client.perf_record.executable` | string | `fio` | Process to attach to |
+| `client.perf_record.duration` | int | `30` | Profiling duration in seconds |
+| `client.perf_record.script` | string | `/cephfs_perf/perf_record.py` | Remote perf script |
+| `client.perf_record.flamegraph_path` | string | | Path to FlameGraph tools for SVG generation |
+| `client.perf_record.stap_script` | string | | SystemTap script to run alongside fio |
+
+Flat `fio.perf_record*` is obsolete and is ignored when the executable is not `fio`. MDS profiling is `observability.mds.perf_record`.
 
 #### Loadpoint Options
 
@@ -633,10 +629,10 @@ Set `mount_manager_type: StubMountManager` when running rados bench only — no 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `perf_record` | bool | `false` | Enable `perf record` profiling |
-| `perf_record_script` | string | | Path to perf recording script |
-| `perf_record_executable` | string | `rados` | Executable to profile |
-| `perf_record_duration` | int | `30` | Profiling duration in seconds |
+| `client.perf_record.enabled` | bool | `false` | `perf record` on the `rados` process on inventory clients |
+| `client.perf_record.executable` | string | `rados` | Process to attach to |
+| `client.perf_record.duration` | int | `30` | Profiling duration in seconds |
+| `client.perf_record.script` | string | `/cephfs_perf/perf_record.py` | Remote perf script |
 
 #### Loadpoint Options
 
@@ -712,18 +708,19 @@ RBD images are created once per client before any loadpoints run and reused acro
 | `randrepeat` | int | | fio `randrepeat` setting |
 | `timestamp_progress` | bool | `false` | Prefix each progress line with an ISO 8601 UTC timestamp |
 | `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `fio`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. |
-| `perf_dump.enabled` | bool | `false` | Capture client librados/librbd `perf dump` per loadpoint via an admin socket |
-| `perf_dump.asok` | string | `/var/run/ceph/fio-rbd.asok` | Admin socket path. When enabled, the driver appends `--admin-socket=<asok>` to `CEPH_ARGS` for fio, resets counters at RUN start, and dumps near the end of each loadpoint |
+| `client.perf_dump.enabled` | bool | `false` | Capture client librados/librbd `perf dump` per loadpoint via an admin socket |
+| `client.perf_dump.asok` | string | `/var/run/ceph/fio-rbd.asok` | Admin socket path. When enabled, the driver appends `--admin-socket=<asok>` to `CEPH_ARGS` for fio, resets counters at RUN start, and dumps near the end of each loadpoint |
 
 #### Profiling
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `perf_record` | bool | `false` | Enable `perf record` profiling |
-| `perf_record_script` | string | | Path to perf recording script |
-| `perf_record_executable` | string | `fio` | Executable to profile |
-| `perf_record_duration` | int | `30` | Profiling duration in seconds |
-| `flamegraph_path` | string | | Path to FlameGraph tools for SVG generation |
+| `client.perf_record.enabled` | bool | `false` | `perf record` on the fio process on inventory clients |
+| `client.perf_record.executable` | string | `fio` | Process to attach to |
+| `client.perf_record.duration` | int | `30` | Profiling duration in seconds |
+| `client.perf_record.script` | string | `/cephfs_perf/perf_record.py` | Remote perf script |
+
+OSD lockstat, perf dump, and `perf record` are `observability.osd`, not an RBD MDS target. Legacy flat `rbd.perf_record` is still honored when its executable is `fio`, and it runs on clients.
 
 #### Loadpoint Options
 
@@ -798,20 +795,7 @@ Configuration for the SPECstorage 2020 workload runner.
 
 #### Profiling
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `perf_record` | bool | `false` | Enable `perf record` profiling |
-| `perf_record_script` | string | | Path to perf recording script |
-| `perf_record_executable` | string | `ceph-mds` | Executable to profile |
-| `perf_record_duration` | int | | Profiling duration in seconds |
-
-#### Lock Statistics
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `lockstat.enabled` | bool | `false` | Collect lock contention statistics |
-| `lockstat.path` | string | `/usr/local/bin/ceph-lockstat` | Path to `ceph-lockstat` |
-| `lockstat.threshold` | int | `0` | Reporting threshold |
+MDS `perf record` and lockstat for this workload come from `observability.mds`. `specstorage.perf_record*` and `specstorage.lockstat` are legacy fallbacks and are not set on the split workload file.
 
 #### Loadpoint Options
 
@@ -831,10 +815,47 @@ sfs2020_archive: "/path/to/SPECstorage2020.tgz"  # optional
 
 ---
 
+### `observability`
+
+Role-based daemon capture. This is the place for MDS, OSD, and Ganesha lockstat, `perf record`, periodic perf dump, and MDS debug logging. Workload processes (fio, rados, cephfs-tool) stay under `<workload>.client`.
+
+```yaml
+observability:
+  mds:
+    lockstat: { enabled: true, path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat", threshold: 0 }
+    perf_record: { enabled: true, script: "/cephfs_perf/perf_record.py", executable: ceph-mds, duration: 5 }
+    perf_dump: { enabled: false, interval: 5, script: "/cephfs_perf/mds_perf_dump_collector.py" }
+    logging: { enabled: false, debug_mds: 1, debug_ms: 1 }
+  osd:
+    lockstat: { enabled: false, path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat", threshold: 0 }
+    perf_record: { enabled: false, script: "/cephfs_perf/perf_record.py", executable: ceph-osd, duration: 30 }
+    perf_dump: { enabled: false, interval: 5, script: "/cephfs_perf/mds_perf_dump_collector.py" }
+  ganesha:
+    lockstat: { enabled: true, path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat", threshold: 0 }
+    perf_record: { enabled: true, script: "/cephfs_perf/perf_record.py", executable: ganesha.nfsd, duration: 5 }
+```
+
+Older files are still read: `mds.lockstat` / `mds.perf_record` / `mds.logging`, then `specstorage.lockstat` for the MDS lockstat path. Flat `fio.perf_record*` and `specstorage.perf_record*` are not MDS gates. A flat `fio.perf_record_executable` of `ganesha.nfsd` does not attach to the fio process; use `fio.client.perf_record` with `executable: fio`.
+
+OSD lockstat, perf dump, and `perf record` run for every workload, including RBD and rados bench. Output names include the daemon id and PID so several OSDs on one host do not overwrite each other.
+
+### `run_logging`
+
+Framework transcript only. This is not Ceph daemon debug (`observability.mds.logging`).
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `level` | string | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` |
+| `console` | bool | `true` | Mirror records to stdout |
+| `file` | bool | `true` | Write the same records to a file |
+| `file_path` | string | | Override the log path. Default is `<first workload results_base_dir>/run_<utc>.log` |
+
+Remote drivers keep plain `print()` so their markers stay scrape-friendly. The control plane copies each of those lines into this log. At the end of each matrix iteration the file is copied into that iteration's results directory.
+
 ### `logging`
 
-Controls MDS debug logging during tests. Prefer nesting under ``mds.logging``;
-a top-level ``logging`` section is still accepted for older settings files.
+MDS debug logging during tests. Prefer ``observability.mds.logging``.
+``mds.logging`` is still accepted, and a top-level ``logging`` section is still accepted for older settings files.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -953,15 +974,30 @@ No-op mount manager. Used for workloads that manage their own connectivity (e.g.
 
 ---
 
-## Inventory Providers
+## Inventory
 
-### `DirectInventoryProvider`
+Hosts are not part of `configs/base.yml`. Copy `configs/inventory.example.yml` to `configs/inventory.yml` (gitignored) once per cluster:
 
-Parses a YAML-based inventory defined directly in the config file under `inventory`. Used automatically when no external Ansible inventory file is provided.
+```bash
+cp configs/inventory.example.yml configs/inventory.yml
+# or expand an Ansible INI inventory:
+./scripts/ansible_inventory_to_json.py path/to/ansible_inventory --yaml \
+    -e ssh_user=root -e ssh_user_home=/home/vpcuser > configs/inventory.yml
+```
+
+That file is used when the inventory argument is omitted and the config has no `inventory:` block. Pass a path (nested YAML/JSON or an Ansible INI file) to override it for one run. A settings file that still contains an `inventory:` block keeps those hosts.
 
 > **Note**: A `mons` group is required. The first host in `mons` is designated the **admin host**.
 
 Supported groups: `mons`, `mgrs`, `clients`, `ganeshas`, `sambas`, `rgws`, `grafanas`, `mdss`, `osds`.
+
+### Nested YAML (`ansible_inventory_to_json --yaml`)
+
+Group names at the top level, each host name mapping to its variables. A top-level `inventory:` key around those groups is also accepted (the old in-config shape). JSON from the same script is the same document.
+
+### `DirectInventoryProvider`
+
+Parses that nested YAML, whether it comes from `configs/inventory.yml`, the inventory argument, or an `inventory:` block in the config file.
 
 Per-host fields:
 
@@ -974,22 +1010,21 @@ Per-host fields:
 | `private_ip` | no | Cluster-internal IP for client-to-cluster traffic |
 
 ```yaml
-inventory:
-  mons:
-    mon-000:
-      ansible_ssh_host: 169.63.188.95
-      ansible_ssh_user: root
-      private_ip: 10.241.64.69
-  clients:
-    client-000:
-      ansible_ssh_host: 169.63.179.214
-      ansible_ssh_user: root
-      private_ip: 10.241.64.70
-  grafanas:
-    mon-000:
-      ansible_ssh_host: 169.63.188.95
-      ansible_ssh_user: root
-      private_ip: 10.241.64.69
+mons:
+  mon-000:
+    ansible_ssh_host: 169.63.188.95
+    ansible_ssh_user: root
+    private_ip: 10.241.64.69
+clients:
+  client-000:
+    ansible_ssh_host: 169.63.179.214
+    ansible_ssh_user: root
+    private_ip: 10.241.64.70
+grafanas:
+  mon-000:
+    ansible_ssh_host: 169.63.188.95
+    ansible_ssh_user: root
+    private_ip: 10.241.64.69
 ```
 
 The `grafanas` group identifies hosts for Grafana and Prometheus placement. When `grafana.enabled` is true and no `grafanas` group is defined, the first `mons` host is used.
@@ -1017,11 +1052,12 @@ client-000 ansible_ssh_user=root ansible_ssh_host=10.241.64.70
 
 | Option | Description |
 |--------|-------------|
-| `perf_record: true` | Captures `perf.data`, generates text reports and SVG flamegraphs via FlameGraph |
-| `perf_record_executable` | Name of the process to attach `perf record` to |
-| `perf_record_duration` | How long to record in seconds |
-| `flamegraph_path` | Path to FlameGraph tool directory (fio only) |
-| `stap_script` | Path to a SystemTap `.stp` script to run alongside the workload (fio only) |
+| `observability.<role>.perf_record` | Daemon `perf record` for `mds`, `osd`, or `ganesha` |
+| `<workload>.client.perf_record` | Process-local capture (`fio`, `cephfs-tool`, `cephfs-mdsbench`, `rados`, RBD fio) |
+| `rbd.client.perf_dump` | librbd admin-socket `perf dump` on the client (`asok` defaults to `/var/run/ceph/fio-rbd.asok`) |
+| `duration` / `executable` / `script` | How long to record, which process to attach, and the remote helper script |
+
+Filenames include the service id and PID (`osd.0_pid1234`) so multiple daemons on one host do not collide.
 
 ---
 

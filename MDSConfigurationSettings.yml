@@ -1,534 +1,284 @@
-inventory:
-  mons:
-    mon-000:
-      ansible_ssh_host: 52.116.206.58
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mons
-      public_network: 52.116.206.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.13
-      monitor_address: 10.240.64.13
-    mon-001:
-      ansible_ssh_host: 52.116.195.34
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mons
-      public_network: 52.116.195.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.14
-      monitor_address: 10.240.64.14
-    mon-002:
-      ansible_ssh_host: 169.47.95.80
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mons
-      public_network: 169.47.95.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.17
-      monitor_address: 10.240.64.17
-  mgrs:
-    mon-000:
-      ansible_ssh_host: 52.116.206.58
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mgrs
-      public_network: 52.116.206.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.13
-    mon-001:
-      ansible_ssh_host: 52.116.195.34
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mgrs
-      public_network: 52.116.195.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.14
-    mon-002:
-      ansible_ssh_host: 169.47.95.80
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mgrs
-      public_network: 169.47.95.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.17
-  mdss:
-    mon-000:
-      ansible_ssh_host: 52.116.206.58
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mdss
-      public_network: 52.116.206.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.13
-    mon-001:
-      ansible_ssh_host: 52.116.195.34
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mdss
-      public_network: 52.116.195.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.14
-    mon-002:
-      ansible_ssh_host: 169.47.95.80
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: mdss
-      public_network: 169.47.95.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.17
-  clients:
-    client-000:
-      ansible_ssh_host: 52.118.251.42
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: clients
-      public_network: 52.118.251.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.35
-    client-001:
-      ansible_ssh_host: 52.116.195.74
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: clients
-      public_network: 52.116.195.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.43
-    client2-000:
-      ansible_ssh_host: 150.239.165.64
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: clients
-      public_network: 150.239.165.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.46
-    client2-001:
-      ansible_ssh_host: 52.116.198.32
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: clients
-      public_network: 52.116.198.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.45
-    client2-002:
-      ansible_ssh_host: 150.239.165.4
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: clients
-      public_network: 150.239.165.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.47
-    client2-003:
-      ansible_ssh_host: 52.118.255.18
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: clients
-      public_network: 52.118.255.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.44
-  ganeshas:
-    client-000:
-      ansible_ssh_host: 52.118.251.42
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: ganeshas
-      public_network: 52.118.251.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.35
-    client-001:
-      ansible_ssh_host: 52.116.195.74
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: ganeshas
-      public_network: 52.116.195.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.43
-    client2-000:
-      ansible_ssh_host: 150.239.165.64
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: ganeshas
-      public_network: 150.239.165.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.46
-    client2-001:
-      ansible_ssh_host: 52.116.198.32
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: ganeshas
-      public_network: 52.116.198.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.45
-    client2-002:
-      ansible_ssh_host: 150.239.165.4
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: ganeshas
-      public_network: 150.239.165.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.47
-    client2-003:
-      ansible_ssh_host: 52.118.255.18
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: ganeshas
-      public_network: 52.118.255.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.44
-  grafanas:
-    mon-000:
-      ansible_ssh_host: 52.116.206.58
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: grafanas
-      public_network: 52.116.206.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.13
-  osds:
-    mon-000:
-      ansible_ssh_host: 52.116.206.58
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: osds
-      public_network: 52.116.206.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.13
-    mon-001:
-      ansible_ssh_host: 52.116.195.34
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: osds
-      public_network: 52.116.195.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.14
-    mon-002:
-      ansible_ssh_host: 169.47.95.80
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: osds
-      public_network: 169.47.95.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.17
-  sambas:
-    client-000:
-      ansible_ssh_host: 52.118.251.42
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: sambas
-      public_network: 52.118.251.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.35
-    client-001:
-      ansible_ssh_host: 52.116.195.74
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: sambas
-      public_network: 52.116.195.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.43
-    client2-000:
-      ansible_ssh_host: 150.239.165.64
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: sambas
-      public_network: 150.239.165.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.46
-    client2-001:
-      ansible_ssh_host: 52.116.198.32
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: sambas
-      public_network: 52.116.198.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.45
-    client2-002:
-      ansible_ssh_host: 150.239.165.4
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: sambas
-      public_network: 150.239.165.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.47
-    client2-003:
-      ansible_ssh_host: 52.118.255.18
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: sambas
-      public_network: 52.118.255.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.44
-  rgws:
-    mon-000:
-      ansible_ssh_host: 52.116.206.58
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: rgws
-      public_network: 52.116.206.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.13
-    mon-001:
-      ansible_ssh_host: 52.116.195.34
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: rgws
-      public_network: 52.116.195.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.14
-    mon-002:
-      ansible_ssh_host: 169.47.95.80
-      ansible_ssh_port: 22
-      ansible_ssh_user: root
-      ansible_ssh_private_key_file: /home/vpcuser/.ssh/id_rsa
-      ceph_group: rgws
-      public_network: 169.47.95.0/24
-      cluster_network: 10.240.64.0/24
-      private_ip: 10.240.64.17
+# Retired combined settings file.
+# Prefer a workload config:
+#   ./cephfs_fio_runner.py configs/workloads/fio.yml [inventory.yml]
+#   ./cephfs_sfs2020_runner.py configs/workloads/sfs2020.yml [inventory.yml]
+#   ./cephfs_tool_bench_runner.py configs/workloads/cephfs_tool.yml [inventory.yml]
+#   ./cephfs_mdsbench_runner.py configs/workloads/mdsbench.yml [inventory.yml]
+#   ./cephfs_rados_bench_runner.py configs/workloads/rados_bench.yml [inventory.yml]
+#   ./cephfs_rbd_runner.py configs/workloads/rbd.yml [inventory.yml]
+#   ./cephfs_elbencho_runner.py configs/workloads/elbencho.yml [inventory.yml]
+#
+# This shim still composes every workload onto configs/base.yml so
+# existing commands that pass MDSConfigurationSettings.yml keep working.
+extends: configs/base.yml
 
-fs_name: "perf_test_fs"
-# CephFSCephadmManager (or legacy CephFSManager) deploys MDS via `ceph orch`.
-# CephFSSystemdManager runs a local ceph-mds process on each MDS host.
-fs_manager_type: "CephFSCephadmManager"
-mount_manager_type: "MountKernelManager"
 
-# Ceph-fuse client settings (used when mount_manager_type is MountFuseManager)
-mount_fuse:
-  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-fuse"
-  client_id: "admin"
-  keyring: "/etc/ceph/ceph.client.admin.keyring"
-  conf: "/etc/ceph/ceph.conf"
-  mount_options: ""
-  env_vars: {}
-
-env_vars:
-  CEPH_INSTALL_PREFIX: "/usr/local"
-  LD_LIBRARY_PATH: "${CEPH_INSTALL_PREFIX}/lib64/ceph:${CEPH_INSTALL_PREFIX}/lib64:${CEPH_INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
-  PATH: "${CEPH_INSTALL_PREFIX}/bin:${PATH}"
-
-mount_nfs:
-  mount_options: "nfsvers=4.1,proto=tcp,sec=sys"
-mount_smb:
-  mount_options: "vers=3.0,cache=strict,file_mode=0664,dir_mode=0775,noperm"
-num_filesystems: 1
-mds_yaml_path: "/cephfs_perf/mds.yaml" # Contains 'service_type: mds' spec (cephadm only)
-
-# Local ceph-mds settings (used when fs_manager_type is CephFSSystemdManager)
-mds:
-  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-mds"
-  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
-  data_dir: "/var/lib/ceph/mds"
-  log_dir: "/var/log/ceph"
-  run_dir: "/var/run/ceph"
-  conf_path: "/etc/ceph/mds-settings.conf"
-  env_vars:
-    ENABLE_LOCKSTAT: "true"
-  lockstat:
-    enabled: true
-    path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
-    threshold: 0
-  perf_record: true
-  perf_record_script: "/cephfs_perf/perf_record.py"
-  perf_record_executable: "ceph-mds"
-  perf_record_duration: 5
-  perf_dump:
-    enabled: false
-    interval: 5  # seconds between perf dump + perf histogram dump mds per MDS
-    script: "/cephfs_perf/mds_perf_dump_collector.py"
-  logging:
-    enabled: false
-    debug_mds: 1
-    debug_ms: 1
-#    memory: true
-#    log_max_recent: 50000  # default daemon value; raise for longer capture windows
-#    mds_enable_op_tracker: true
-#    mds_op_complaint_time: 30
-#    mds_op_history_size: 200          # default 20 is too small
-#    mds_op_history_duration: 3600
-#    mds_op_history_slow_op_size: 100
-#    mds_op_history_slow_op_threshold: 5  # capture ops >5s even if not "blocked"
-#    mds_reactor_queue_len_abort: 500000 # Abort the MDS when the reactor dispatch queue depth reaches this value, default 0
-#    mds_reactor_lane_slice_control: 10 # Max wall time per Control lane visit in a reactor scheduling round, default 10
-#    mds_reactor_lane_slice_io: 5 # Max wall time per IOComplete lane visit in a reactor scheduling round, default 10
-#    mds_reactor_lane_slice_maintenance: 2 # Max wall time per Maintenance lane visit in a reactor scheduling round, default 2
-#    mds_reactor_lane_slice_client: 5 # Max wall time per Client lane visit in a reactor scheduling round, default 2
-#    mds_reactor_slice_exec_window: 256 # Rolling window size for per-lane reactor execute-time average, default 256
-#    mds_reactor_slice_backlog_target: 500 # Soft Client backlog that starts adapting reactor lane slices, default 500
-#    mds_reactor_client_enqueue_high: 250000 # Stall Client-lane reactor enqueues when Client depth reaches this value, default 250K
-#    mds_reactor_client_enqueue_low: 125000 # Resume Client-lane reactor enqueues when Client depth drops below this value, default 125K
-#    mds_reactor_lane_slice_client_min: 5 # Minimum Client lane slice when another lane has the dominant backlog, default 1
-#    mds_reactor_lane_slice_client_max: 20 # Maximum Client lane slice under backlog adaptation, default 20
-#    mds_reactor_lane_slice_maintenance_min: 1 # Minimum Maintenance lane slice when another lane has the dominant backlog, default 1
-#    mds_reactor_lane_slice_maintenance_max: 5 # Maximum Maintenance lane slice when Maintenance has the dominant backlog, default 5
-#    mds_reactor_lane_slice_io_min: 1 #Minimum IOComplete lane slice when another lane has the dominant backlog, default 2
-#    mds_reactor_lane_slice_io_max: 20 # Maximum IOComplete lane slice when IO has the dominant backlog, default 20
-#    mds_reactor_io_enqueue_high: 100000 # Stall IOComplete-lane reactor enqueues when IOComplete depth reaches this value, default 100K
-#    mds_reactor_io_enqueue_low: 50000 # Resume IOComplete-lane reactor enqueues when IOComplete depth drops below this value, default 50K
-#    mds_cap_revoke_eviction_timeout: 0 # number of seconds after which clients which have not responded to cap revoke messages by the MDS are evicted
-#    mds_cap_revoke_abort_timeout: 60 # Abort the MDS when a client has not responded to a cap revoke for this many seconds
-
-ceph:
-  conf: "/etc/ceph/ceph.conf"
-  keyring: "/etc/ceph/ceph.client.admin.keyring"
-  user_id: "admin"
-  fsid: "12345678-1234-1234-1234-123456789012"
-
-# Grafana / monitoring stack configuration
-grafana:
-  enabled: true
-  # type = cephadm|systemd (defaults to systemd when fs_manager_type is CephFSSystemdManager)
-  type: "systemd"
-  # ceph-exporter perf counter priority threshold; 0 exports all counters
-  exporter_prio_limit: 0
-  yaml_path: "/cephfs_perf/monitoring.yaml"
-  port: 3000
-  prometheus_port: 9095
-  prometheus_scrape_interval: 5s
-  # Must match the ``cluster`` label on mgr metrics so dashboards see exporter MDS data
-  prometheus_cluster_label: ceph
-  exporter_port: 9926
-  mgr_prometheus_port: 9283
-  anonymous_access: true
-  # UI timezone. UTC matches Ceph daemon log timestamps (IANA name or browser).
-  timezone: UTC
-  protocol: http
-  ssl: false
-  credentials_file: "ibm-credentials.env"
-  registry_list:
-    - url: "quay.io"
-      username: "ibm-credentials.env:QUAY_IO_USERNAME"
-      password: "ibm-credentials.env:QUAY_IO_PASSWORD"
-    - url: "quay.ceph.io"
-      username: "ibm-credentials.env:QUAY_CEPH_IO_USERNAME"
-      password: "ibm-credentials.env:QUAY_CEPH_IO_PASSWORD"
-  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
-  exporter_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-exporter"
-  image: "quay.io/ceph/grafana:12.3.1"
-  prometheus_image: "quay.io/prometheus/prometheus:v3.6.0"
-
-ganesha:
-  enabled: false
-  service_id: "ganesha"
-  # type = systemd|cephadm
-  type: "systemd"
-  binary_path: "${CEPH_INSTALL_PREFIX}/bin/ganesha.nfsd"
+# Fio configuration (Uncomment to use FioWorkloadRunner instead of SpecStorageWorkloadRunner)
+fio:
+  client:
+    # Attach perf to the fio process on inventory clients.
+    perf_record:
+      enabled: true
+      script: "/cephfs_perf/perf_record.py"
+      executable: fio
+      duration: 30
+      flamegraph_path: "/cephfs_perf/FlameGraph"
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/fio/run_fio_workload.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
   # Optional: extra env_vars merged on top of top-level env_vars
   # env_vars: {}
-  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
-  pid_path: "/var/run/ganesha.pid"
-  config_path: "/etc/ganesha/ganesha.conf"
-  user_id: "admin"
-  keyring_path: "/etc/ceph/ceph.client.admin.keyring"
-#  client_log_level: 10
-#  finisher_log_level: 10
-#  log_level: FULL_DEBUG # DO NOT USE NIV_* here, those only apply on the command line
-#  worker_threads: 8
-  perf_record: true
-  perf_record_script: "/cephfs_perf/perf_record.py"
-  perf_record_executable: "ganesha.nfsd"
-  perf_record_duration: 5
-  # CEPH FSAL options
-  # umask: 0
-  client_oc: [false, true]
-  syncdataonly: [false, true]
-  async: [false, true]
-#  client_fsync_to_rados: [ true, false ]
-  zerocopy: false
-  client_oc_size: [ "16GiB" ]
-  msgr_workers: [3, 8, 12]
-#  slot_table_size: 1024 # or [64, 180, 1024] for matrix expansio
-  #rpc_ioq_thrdmin: 4
-#  rpc_ioq_thrdmax: [20, 40, 60]
-  lockstat:
-    enabled: true
-    path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
-    threshold: 0
+  mounts_per_fs: 1
+  # Remount test directories on each client before every loadpoint and unmount
+  # after it completes, to clear client-side caches between runs.
+  remount_per_loadpoint: true
+  gtod_reduce: 1
+  ramp_time: 30
+  loadpoints:
+      duration: 180
+      size: "5GiB"
+      block-size: ["4MiB", "1MiB", "256KiB"]
+      iodepth: [1, 8]
+      readwrite: ["randrw", "randread", "randwrite"]
+      #rwmixread: [75, 50, 25]
+      ioengine: ["libaio"]
+      direct: [1, 0]
+#      buffered: 0
+      create_serialize: 1
+      threads: [32, 16, 8, 1]
+      extra_args: ""
+  loadpoints:
+      - duration: 90
+        size: "5GiB"
+        block-size: ["4MiB", "256KiB"]
+        iodepth: [1, 8]
+        readwrite: ["randread"]
+        #rwmixread: [75, 50, 25]
+        ioengine: ["libaio"]
+        direct: [1, 0]
+  #      buffered: 0
+        create_serialize: 1
+        threads: [32, 8, 1]
+        extra_args: ""
+      - duration: 90
+        size: "5GiB"
+        block-size: ["4MiB", "256KiB"]
+        iodepth: [1, 8]
+        readwrite: ["randwrite"]
+        #rwmixread: [75, 50, 25]
+        ioengine: ["libaio"]
+        direct: [1, 0]
+  #      buffered: 0
+        create_serialize: 1
+        threads: [32, 8, 1]
+        extra_args: ""
 
-samba:
-  enabled: false
-  cluster_id: "samba"
-  # type = systemd|cephadm
-  type: "cephadm"
-  username: "cephuser"
-  password: "cephpass"
-  workgroup: "WORKGROUP"
-  clustering: "never"
-  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
-  user_id: "admin"
-  keyring_path: "/etc/ceph/ceph.client.admin.keyring"
-  samba_resources_path: "/cephfs_perf/samba/resources.yaml"
-  subvolume_group: "smb"
-  subvolume_mode: "0777"
-  # systemd-only: local ceph mount + smb.conf paths
-  mount_base: "/srv/samba"
-  config_path: "/etc/samba/smb.conf"
-  # systemd-only: use Samba vfs_ceph instead of kernel-mounted share paths
-  ceph_vfs: true
-  ceph_conf_dir: "/etc/ceph"
-#  client_log_level: 1
-#  finisher_log_level: 10
-  client_oc_size: "16GiB"
-  msgr_workers: 8
-#  env_vars: {}
 
-rgw:
-  enabled: false
-  service_id: "eot"
-  # type = systemd|cephadm (defaults from fs_manager_type when unset)
-  type: "cephadm"
-  # Cephadm orch host label applied to inventory 'rgws' hosts
-  host_label: "rgw"
-  # Number of radosgw daemons per RGW host (consecutive ports)
-  count_per_host: 4
-  # First beast frontend port; instances use port .. port+count_per_host-1
-  frontend_port: 7480
-  yaml_path: "/cephfs_perf/rgw.yaml"
-  ceph_binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph"
-  radosgw_binary_path: "${CEPH_INSTALL_PREFIX}/bin/radosgw"
-  radosgw_admin_binary_path: "${CEPH_INSTALL_PREFIX}/bin/radosgw-admin"
-  # systemd-only
-  pid_dir: "/var/run/ceph"
-  user_id: "admin"
-  keyring_path: "/etc/ceph/ceph.client.admin.keyring"
-  manage_firewall: true
-  # S3 user created via radosgw-admin (keys optional; auto-generated if omitted)
-  uid: "perfuser"
-  display_name: "Perf User"
-  access_key: "PERFACCESSKEY"
-  secret_key: "PERFSECRETKEY0123456789"
-  credentials_path: "/cephfs_perf/rgw/s3_credentials.json"
+# SpecStorage configuration
+specstorage:
+  output_path: "/cephfs_perf/sfs2020/spec_2020.txt"
+  run_command: "/cephfs_perf/sfs2020/run_sfs2020_workload.py"
+  workload_dir: "/cephfs_perf/sfs2020/SPECstorage2020"
+  results_base_dir: "/cephfs_perf/results"
+  mounts_per_fs: 1
+  benchmark: "SWBUILD"
+  # loadpoints are either a starting value, or a sequence of ints
+  loadpoints: [1]
+  loadpoints2: [1, 2, 4, 8, 12, 18, 24, 30, 36, 42, 48, 54, 60]
+  # When loadpoints is a starting value, num_runs is how many loadpoints
+  # are run, and increment is added to starting loadpoint between runs
+  increment: 1
+  # Only used if increment is specified
+  num_runs: 1
+  netmist_env: "netmist.env"
+
+
+# CephFS-Tool configuration
+cephfs_tool:
+  client:
+    perf_record:
+      enabled: true
+      script: "/cephfs_perf/perf_record.py"
+      executable: cephfs-tool
+      duration: 30
+    lockstat:
+      enabled: true
+      path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
+      asok: "/var/run/ceph/cephfs-tool.asok"
+      threshold: 0
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/cephfs-tool"
+  env_vars:
+    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  root_path: "/"
+  duration: 60
+  progress: true
+  progress_interval: 10
+  loadpoints:
+    - files: 1024
+      size: "5GiB"
+      iterations: 3
+      extra_args: ""
+      threads: [32, 16, 8, 1]
+      msgr_workers: [3, 8, 12]
+      async: false
+      client-oc: [1, 0]
+      client-oc-size: ["16GiB", "1GiB", "200MiB"]
+      block-size: ["4MiB", "1MiB", "256KiB"]
+      fsync-every: [false, true]
+    - files: 1024
+      size: "5GiB"
+      iterations: 3
+      extra_args: ""
+      threads: [32, 16, 8, 1]
+      msgr_workers: [3, 8, 12]
+      async: true
+      queue-depth: [1, 2, 4]
+      client-oc: [1, 0]
+      client-oc-size: ["16GiB", "1GiB", "200MiB"]
+      block-size: ["4MiB", "1MiB", "256KiB"]
+      fsync-every: [false, true]
+
+
+
+# MDS-Bench configuration (SpecStorage-style SWBUILD metadata via cephfs-mdsbench)
+# loadpoints are business-metric integers: for N, launch N processes with
+# --clients N --client-id K (barrier) distributed across inventory clients.
+mdsbench:
+  client:
+    perf_record:
+      enabled: true
+      script: "/cephfs_perf/perf_record.py"
+      executable: cephfs-mdsbench
+      duration: 30
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/mdsbench/run_mdsbench_workload.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/cephfs-mdsbench"
+  env_vars:
+    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/mdsbench.log"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  root_path: "/"
+  workdir: "/mdsbench"
+  mode: "balanced"
+  # Aggregate ops/s target; split evenly across the N processes at each loadpoint
+  ops_per_sec: 12000
+  duration: 60
+  warmup: 5
+  progress: true
+  progress_interval: 10
+  keep_tree: false
+  # SpecStorage-style loadpoints (process / session counts)
+  loadpoints2: [1, 2, 4, 8, 12, 18, 24]
+  loadpoints: [1, 2, 4]
+
+
+
+# Rados bench configuration
+rados_bench:
+  client:
+    # rados bench process on inventory clients. Off unless explicitly enabled.
+    perf_record:
+      enabled: false
+      script: "/cephfs_perf/perf_record.py"
+      executable: rados
+      duration: 30
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/rados_bench/run_rados_workload.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/rados"
+  env_vars:
+    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  # Pool to run 'rados bench' against. CephPoolManager will create it if it
+  # doesn't already exist. Set pool_recreate: true to wipe between iterations.
+  pool: "rados_bench_pool"
+  # pool_pg_num: 128
+  # pool_size: 3
+  # pool_min_size: 2
+  # pool_recreate: false
+  # Keep bench objects after write phase so subsequent seq/rand reads can find them.
+  no_cleanup: true
+  # Default duration (in seconds) if not overridden per-loadpoint via --run-length.
+  duration: 30
+  loadpoints:
+    - readwrite: ["seqwrite", "randwrite"]
+      threads: [32, 16, 8 , 1]
+      duration: 30
+      min-object-size: "4MiB"
+      max-object-size: "4MiB"
+#      read-percent: 0
+      extra_args: ""
+    - readwrite: ["seqread", "randread"]
+      threads: [32, 16, 8 , 1]
+      duration: 30
+      min-object-size: "4MiB"
+      max-object-size: "4MiB"
+#      read-percent: 100
+      extra_args: ""
+
+
+# RBD (fio --ioengine=rbd) configuration
+rbd:
+  client:
+    # fio --ioengine=rbd on inventory clients (not MDS/MON hosts).
+    perf_record:
+      enabled: true
+      script: "/cephfs_perf/perf_record.py"
+      executable: fio
+      duration: 30
+      flamegraph_path: "/cephfs_perf/FlameGraph"
+    perf_dump:
+      enabled: true
+      asok: "/var/run/ceph/fio-rbd.asok"
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/rbd/run_rbd_workload.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
+  rbd_executable_path: "${CEPH_INSTALL_PREFIX}/bin/rbd"
+  env_vars:
+    CEPH_ARGS: "--log-to-stderr=false --log-to-file=true --log-file=/tmp/bench.log"
+  # Client librados/librbd admin socket. When enabled, the driver appends
+  # --admin-socket=<asok> to CEPH_ARGS for fio and dumps `perf dump` once
+  # per loadpoint (near end of the RUN window) into results_dir.
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  # Pool to hold the RBD images. CephPoolManager creates it and runs
+  # 'rbd pool init' when application defaults to 'rbd'.
+  pool: "rbd_bench_pool"
+  # pool_pg_num: 128
+  # pool_size: 3
+  # pool_min_size: 2
+  # pool_recreate: false
+  # RBD image size and per-client image count. One image per client is the
+  # common case; set images_per_client > 1 to stripe fio across multiple images.
+  image_size: "10GiB"
+  images_per_client: 1
+  # If true, delete existing images before creating new ones each iteration.
+  recreate_images: false
+  gtod_reduce: 1
+  ramp_time: 5
+  threads_fio: true
+  loadpoints:
+      duration: 60
+      size: "5GiB"
+      block-size: ["4MiB", "256KiB"]
+      iodepth: [8]
+      readwrite: ["randwrite", "randread"]
+      create_serialize: 1
+      direct: [1]
+      # Do NOT set create_serialize: 0 for rbd. fio's rbd ioengine races on
+      # concurrent connect when numjobs > 1 and setup runs inside each thread
+      # instead of sequentially in the main thread. Leave at fio's default (1).
+      threads: [32, 8]
+      extra_args: ""
+
 #  env_vars: {}
 
 # Elbencho S3 / RGW workload (used by cephfs_elbencho_runner.py)
@@ -698,279 +448,3 @@ elbencho:
       blockvarpct: 4
       s3fastget: true
 
-# SpecStorage configuration
-specstorage:
-  output_path: "/cephfs_perf/sfs2020/spec_2020.txt"
-  run_command: "/cephfs_perf/sfs2020/run_sfs2020_workload.py"
-  workload_dir: "/cephfs_perf/sfs2020/SPECstorage2020"
-  results_base_dir: "/cephfs_perf/results"
-  mounts_per_fs: 1
-  perf_record: true
-  perf_record_script: "/cephfs_perf/perf_record.py"
-  perf_record_executable: "ceph-mds"
-  perf_record_duration: 5
-  lockstat:
-    enabled: true
-    path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
-    threshold: 0
-# Official BENCHMARK values are
-#       SWBUILD, VDA, EDA_BLENDED, AI_IMAGE, ENOMICS
-  benchmark: "SWBUILD"
-  # loadpoints are either a starting value, or a sequence of ints
-  loadpoints: [1]
-  loadpoints2: [1, 2, 4, 8, 12, 18, 24, 30, 36, 42, 48, 54, 60]
-  # When loadpoints is a starting value, num_runs is how many loadpoints
-  # are run, and increment is added to starting loadpoint between runs
-  increment: 1
-  # Only used if increment is specified
-  num_runs: 1
-  netmist_env: "netmist.env"
-
-# Fio configuration (Uncomment to use FioWorkloadRunner instead of SpecStorageWorkloadRunner)
-fio:
-  results_base_dir: "/cephfs_perf/results"
-  run_command: "/cephfs_perf/fio/run_fio_workload.py"
-  executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
-  # Optional: extra env_vars merged on top of top-level env_vars
-  # env_vars: {}
-  perf_record_script: "/cephfs_perf/perf_record.py"
-  perf_record: false
-  perf_record_executable: "ganesha.nfsd"
-  perf_record_duration: 30
-  flamegraph_path: "/cephfs_perf/FlameGraph"
-#  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
-  mounts_per_fs: 1
-  # Remount test directories on each client before every loadpoint and unmount
-  # after it completes, to clear client-side caches between runs.
-  remount_per_loadpoint: true
-  gtod_reduce: 1
-  ramp_time: 30
-  loadpoints:
-      duration: 180
-      size: "5GiB"
-      block-size: ["4MiB", "1MiB", "256KiB"]
-      iodepth: [1, 8]
-      readwrite: ["randrw", "randread", "randwrite"]
-      #rwmixread: [75, 50, 25]
-      ioengine: ["libaio"]
-      direct: [1, 0]
-#      buffered: 0
-      create_serialize: 1
-      threads: [32, 16, 8, 1]
-      extra_args: ""
-  loadpoints:
-      - duration: 90
-        size: "5GiB"
-        block-size: ["4MiB", "256KiB"]
-        iodepth: [1, 8]
-        readwrite: ["randread"]
-        #rwmixread: [75, 50, 25]
-        ioengine: ["libaio"]
-        direct: [1, 0]
-  #      buffered: 0
-        create_serialize: 1
-        threads: [32, 8, 1]
-        extra_args: ""
-      - duration: 90
-        size: "5GiB"
-        block-size: ["4MiB", "256KiB"]
-        iodepth: [1, 8]
-        readwrite: ["randwrite"]
-        #rwmixread: [75, 50, 25]
-        ioengine: ["libaio"]
-        direct: [1, 0]
-  #      buffered: 0
-        create_serialize: 1
-        threads: [32, 8, 1]
-        extra_args: ""
-
-# CephFS-Tool configuration
-cephfs_tool:
-  results_base_dir: "/cephfs_perf/results"
-  run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
-  perf_record_script: "/cephfs_perf/perf_record.py"
-  perf_record: true
-  perf_record_executable: "cephfs-tool"
-  perf_record_duration: 30
-#  stap_script: "/cephfs_perf/fio/rdtsc-para-callgraph-verbose.stp"
-  executable_path: "${CEPH_INSTALL_PREFIX}/bin/cephfs-tool"
-  env_vars:
-    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
-  config_path: "/etc/ceph/ceph.conf"
-  keyring: "/etc/ceph/ceph.client.admin.keyring"
-  client_id: "admin"
-  root_path: "/"
-  duration: 60
-  progress: true
-  progress_interval: 10
-  lockstat:
-    enabled: true
-    path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
-    asok: "/var/run/ceph/cephfs-tool.asok"
-    threshold: 0
-  loadpoints:
-    - files: 1024
-      size: "5GiB"
-      iterations: 3
-      extra_args: ""
-      threads: [32, 16, 8, 1]
-      msgr_workers: [3, 8, 12]
-      async: false
-      client-oc: [1, 0]
-      client-oc-size: ["16GiB", "1GiB", "200MiB"]
-      block-size: ["4MiB", "1MiB", "256KiB"]
-      fsync-every: [false, true]
-    - files: 1024
-      size: "5GiB"
-      iterations: 3
-      extra_args: ""
-      threads: [32, 16, 8, 1]
-      msgr_workers: [3, 8, 12]
-      async: true
-      queue-depth: [1, 2, 4]
-      client-oc: [1, 0]
-      client-oc-size: ["16GiB", "1GiB", "200MiB"]
-      block-size: ["4MiB", "1MiB", "256KiB"]
-      fsync-every: [false, true]
-
-
-# MDS-Bench configuration (SpecStorage-style SWBUILD metadata via cephfs-mdsbench)
-# loadpoints are business-metric integers: for N, launch N processes with
-# --clients N --client-id K (barrier) distributed across inventory clients.
-mdsbench:
-  results_base_dir: "/cephfs_perf/results"
-  run_command: "/cephfs_perf/mdsbench/run_mdsbench_workload.py"
-  perf_record_script: "/cephfs_perf/perf_record.py"
-  perf_record: true
-  perf_record_executable: "cephfs-mdsbench"
-  perf_record_duration: 30
-  executable_path: "${CEPH_INSTALL_PREFIX}/bin/cephfs-mdsbench"
-  env_vars:
-    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/mdsbench.log"
-  config_path: "/etc/ceph/ceph.conf"
-  keyring: "/etc/ceph/ceph.client.admin.keyring"
-  client_id: "admin"
-  root_path: "/"
-  workdir: "/mdsbench"
-  mode: "balanced"
-  # Aggregate ops/s target; split evenly across the N processes at each loadpoint
-  ops_per_sec: 12000
-  duration: 60
-  warmup: 5
-  progress: true
-  progress_interval: 10
-  keep_tree: false
-  # SpecStorage-style loadpoints (process / session counts)
-  loadpoints2: [1, 2, 4, 8, 12, 18, 24]
-  loadpoints: [1, 2, 4]
-
-
-# Rados bench configuration
-rados_bench:
-  results_base_dir: "/cephfs_perf/results"
-  run_command: "/cephfs_perf/rados_bench/run_rados_workload.py"
-  perf_record_script: "/cephfs_perf/perf_record.py"
-  perf_record: false
-  perf_record_executable: "rados"
-  perf_record_duration: 30
-  executable_path: "${CEPH_INSTALL_PREFIX}/bin/rados"
-  env_vars:
-    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false"
-  config_path: "/etc/ceph/ceph.conf"
-  keyring: "/etc/ceph/ceph.client.admin.keyring"
-  client_id: "admin"
-  # Pool to run 'rados bench' against. CephPoolManager will create it if it
-  # doesn't already exist. Set pool_recreate: true to wipe between iterations.
-  pool: "rados_bench_pool"
-  # pool_pg_num: 128
-  # pool_size: 3
-  # pool_min_size: 2
-  # pool_recreate: false
-  # Keep bench objects after write phase so subsequent seq/rand reads can find them.
-  no_cleanup: true
-  # Default duration (in seconds) if not overridden per-loadpoint via --run-length.
-  duration: 30
-  loadpoints:
-    - readwrite: ["seqwrite", "randwrite"]
-      threads: [32, 16, 8 , 1]
-      duration: 30
-      min-object-size: "4MiB"
-      max-object-size: "4MiB"
-#      read-percent: 0
-      extra_args: ""
-    - readwrite: ["seqread", "randread"]
-      threads: [32, 16, 8 , 1]
-      duration: 30
-      min-object-size: "4MiB"
-      max-object-size: "4MiB"
-#      read-percent: 100
-      extra_args: ""
-
-# RBD (fio --ioengine=rbd) configuration
-rbd:
-  results_base_dir: "/cephfs_perf/results"
-  run_command: "/cephfs_perf/rbd/run_rbd_workload.py"
-  perf_record_script: "/cephfs_perf/perf_record.py"
-  perf_record: false
-  perf_record_executable: "fio"
-  perf_record_duration: 30
-  flamegraph_path: "/cephfs_perf/FlameGraph"
-  executable_path: "${CEPH_INSTALL_PREFIX}/bin/fio"
-  rbd_executable_path: "${CEPH_INSTALL_PREFIX}/bin/rbd"
-  env_vars:
-    CEPH_ARGS: "--log-to-stderr=false --log-to-file=true --log-file=/tmp/bench.log"
-  # Client librados/librbd admin socket. When enabled, the driver appends
-  # --admin-socket=<asok> to CEPH_ARGS for fio and dumps `perf dump` once
-  # per loadpoint (near end of the RUN window) into results_dir.
-  perf_dump:
-    enabled: true
-    asok: "/var/run/ceph/fio-rbd.asok"
-  config_path: "/etc/ceph/ceph.conf"
-  keyring: "/etc/ceph/ceph.client.admin.keyring"
-  client_id: "admin"
-  # Pool to hold the RBD images. CephPoolManager creates it and runs
-  # 'rbd pool init' when application defaults to 'rbd'.
-  pool: "rbd_bench_pool"
-  # pool_pg_num: 128
-  # pool_size: 3
-  # pool_min_size: 2
-  # pool_recreate: false
-  # RBD image size and per-client image count. One image per client is the
-  # common case; set images_per_client > 1 to stripe fio across multiple images.
-  image_size: "10GiB"
-  images_per_client: 1
-  # If true, delete existing images before creating new ones each iteration.
-  recreate_images: false
-  gtod_reduce: 1
-  ramp_time: 5
-  threads_fio: true
-  loadpoints:
-      duration: 60
-      size: "5GiB"
-      block-size: ["4MiB", "256KiB"]
-      iodepth: [8]
-      readwrite: ["randwrite", "randread"]
-      create_serialize: 1
-      direct: [1]
-      # Do NOT set create_serialize: 0 for rbd. fio's rbd ioengine races on
-      # concurrent connect when numjobs > 1 and setup runs inside each thread
-      # instead of sequentially in the main thread. Leave at fio's default (1).
-      threads: [32, 8]
-      extra_args: ""
-
-# Ranges for MDS settings (start, stop, step)
-mds_settings:
-#  max_mds: [1, 2, 1]
-  mds_cache_memory_limit: [64Gi]
-#  mds_cache_memory_limit: [1Gi, 4Gi, 16Gi, 64Gi, 192Gi]
-#  cpus: [1, 2, 3, 4]
-#  mds_max_caps_per_client: [100k, 200k, 100k]
-#  mds_recall_max_caps: [5k, 10k, 5k]
-#  mds_recall_max_decay_rate: [1, 2, 1]
-#  mds_cache_trim_threshold: [64Ki, 128Ki, 64Ki]
-##  mds_cache_reservation: [5, 10, 5]
-##  mds_log_max_segments: [30, 60, 30]
-#  mds_dispatch_engine: [classic, reactor]
-# For vstart / uniform wip mons, use monitor config store instead of ceph.conf:
-#mds:
-#  dispatch_engine_via: ceph-config

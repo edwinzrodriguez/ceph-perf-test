@@ -3,9 +3,12 @@ import datetime
 import json
 import os
 import subprocess
-import threading
 from lib.workload.workload_runner import WorkloadRunner
 from cephfs_perf_lib import CommonUtils
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class RbdWorkloadRunner(WorkloadRunner):
@@ -35,7 +38,6 @@ class RbdWorkloadRunner(WorkloadRunner):
         expanded_loadpoints = CommonUtils.expand_loadpoints(loadpoints)
 
         run_cmd = cfg.get("run_command", "/cephfs_perf/rbd/run_rbd_workload.py")
-        perf_record_enabled = cfg.get("perf_record", False)
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )
@@ -75,7 +77,8 @@ class RbdWorkloadRunner(WorkloadRunner):
 
         # Client librados/librbd admin-socket for per-loadpoint perf dumps.
         # The driver injects --admin-socket into CEPH_ARGS for fio.
-        perf_dump_cfg = cfg.get("perf_dump", {}) or {}
+        # Prefer rbd.client.perf_dump; fall back to the legacy rbd.perf_dump block.
+        perf_dump_cfg = self.config.workload_perf_dump("rbd")
         if perf_dump_cfg.get("enabled", False):
             payload["rbd_perf_dump_enabled"] = True
             payload["rbd_perf_dump_asok"] = perf_dump_cfg.get(
@@ -87,7 +90,7 @@ class RbdWorkloadRunner(WorkloadRunner):
         loadpoints_json = json.dumps(expanded_loadpoints)
         clients_json = json.dumps(self.config.clients)
 
-        print(f"Running RBD Workload on {self.admin}...")
+        log.info(f"Running RBD Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
 
         tmp_settings = f"/tmp/rbd_settings_{os.getpid()}.json"
@@ -114,7 +117,7 @@ class RbdWorkloadRunner(WorkloadRunner):
             f"rm -f {tmp_settings} {tmp_loadpoints} {tmp_clients}"
         )
 
-        print(f"[{self.admin}] Executing workload with temp files...")
+        log.info(f"[{self.admin}] Executing workload with temp files...")
         ssh_cmd = [
             "ssh",
             "-o",
@@ -125,9 +128,17 @@ class RbdWorkloadRunner(WorkloadRunner):
             "bash -s",
         ]
 
-        current_lp, run_phase_started = 0, False
-        perf_triggered = False
-        perf_threads = []
+        monitor = self.make_loadpoint_monitor(
+            workload_name="rbd",
+            config_section="rbd",
+            cephfs_manager=cephfs_manager,
+            ganesha_manager=ganesha_manager,
+            results_dir=results_dir,
+            settings=settings,
+            payload=payload,
+            loadpoints=expanded_loadpoints,
+            finish_markers=("Finished RBD Load Point:",),
+        )
 
         process = subprocess.Popen(
             ssh_cmd,
@@ -140,51 +151,12 @@ class RbdWorkloadRunner(WorkloadRunner):
         process.stdin.write(full_cmd + "\n")
         process.stdin.close()
 
-        output = []
-        for line in process.stdout:
-            print(f"[{self.admin}] {line}", end="")
-            output.append(line)
-            if "Starting tests..." in line:
-                current_lp += 1
-                run_phase_started, perf_triggered = False, False
-                total_lps = len(expanded_loadpoints)
-                pct = int(100 * current_lp / total_lps) if total_lps else 0
-                print(
-                    f"Detected Starting tests... Load Point: "
-                    f"{current_lp}/{total_lps} ({pct}% done)"
-                )
-            if "Starting RUN phase" in line:
-                run_phase_started = True
-
-            if run_phase_started and not perf_triggered:
-                if perf_record_enabled:
-                    print(f"Triggering perf recording for Load Point {current_lp}...")
-                    lp_cfg = expanded_loadpoints[current_lp - 1]
-                    t = threading.Thread(
-                        target=self.execute_perf_record,
-                        args=(
-                            "rbd",
-                            self.config.mdss or self.config.mons,
-                            current_lp,
-                            results_dir,
-                            payload,
-                            lp_cfg,
-                        ),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-                perf_triggered = True
-
-        process.wait()
-        for t in perf_threads:
-            t.join()
-
-        if process.returncode != 0:
+        output, returncode = self.consume_remote_stdout(process, monitor)
+        if returncode != 0:
             raise RuntimeError(
-                f"RBD workload failed on {self.admin} with return code {process.returncode}"
+                f"RBD workload failed on {self.admin} with return code {returncode}"
             )
-
-        return "".join(output)
+        return output
 
     def get_results_dir(self, settings, shared_ts=None):
         cfg = self.config.rbd
@@ -217,6 +189,7 @@ class RbdWorkloadRunner(WorkloadRunner):
             + self.config.ganeshas
             + self.config.mons
             + self.config.mdss
+            + self.config.osds
         )
 
         for target in targets:
@@ -235,7 +208,7 @@ class RbdWorkloadRunner(WorkloadRunner):
 
             for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
-                    print(f"Copying local {local_file} to {remote_path} on {target}...")
+                    log.info(f"Copying local {local_file} to {remote_path} on {target}...")
                     subprocess.run(
                         [
                             "scp",

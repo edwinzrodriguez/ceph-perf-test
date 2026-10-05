@@ -583,18 +583,19 @@ def main():
 
     record_processes = []
     for pid in pids:
-        # Try to identify the specific service ID if it's ceph-mds
-        service_id = pid
+        # Identify the daemon id so multi-PID hosts (several ceph-osd processes)
+        # never share one output basename. Always include the PID as well.
+        service_id = None
         try:
             with open(f"/proc/{pid}/cmdline", "rb") as f:
                 cmdline = f.read().split(b"\0")
-                # For ceph-mds, the service id follows -n or --id
+                # ceph-osd uses -i <osd-num>; ceph-mds uses -i/--id/-n <name>.
                 for i in range(len(cmdline)):
-                    if cmdline[i] in [b"-n", b"--id"] and i + 1 < len(cmdline):
+                    if cmdline[i] in [b"-i", b"-n", b"--id", b"--name"] and i + 1 < len(cmdline):
                         service_id = cmdline[i + 1].decode("utf-8")
-                        # service_id might be mds.perf_test_fs.ceph-server-1.pkcizc
-                        # Let's simplify it to mds.perf_test_fs
-                        if service_id.startswith("mds."):
+                        if service_id.isdigit():
+                            service_id = f"osd.{service_id}"
+                        elif service_id.startswith("mds."):
                             parts = service_id.split(".")
                             if len(parts) >= 2:
                                 service_id = f"{parts[0]}.{parts[1]}"
@@ -603,13 +604,18 @@ def main():
             print(f"Could not read cmdline for PID {pid}: {e}")
 
         lp_tag = f"lp{int(loadpoint):02d}"
+        raw_id = service_id or f"pid{pid}"
+        safe_id = re.sub(r"[^A-Za-z0-9._-]+", "_", raw_id)
+        if not safe_id.endswith(f"pid{pid}") and f"pid{pid}" not in safe_id:
+            safe_id = f"{safe_id}_pid{pid}"
 
-        if args.workload and args.options:
+        if args.workload:
+            opt = f"_{args.options}" if args.options else ""
             base_filename = (
-                f"{args.workload}_perf_record_{s_name}_{lp_tag}_{args.options}"
+                f"{args.workload}_perf_record_{s_name}_{safe_id}_{lp_tag}{opt}"
             )
         else:
-            base_filename = f"{s_name}_{lp_tag}_{service_id}"
+            base_filename = f"{s_name}_{lp_tag}_{safe_id}"
 
         report_file = os.path.join(output_dir, f"{base_filename}_perf_report.txt")
         script_file = os.path.join(output_dir, f"{base_filename}_perf_script.txt")

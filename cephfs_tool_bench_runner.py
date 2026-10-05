@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""CLI entrypoint for the cephfs-tool benchmark.
+
+Matrix orchestrator: BenchRunner. Control-plane workload: CephfsToolWorkloadRunner.
+Remote driver: lib/workload/run_cephfs_workload.py.
+"""
 import os
 import sys
 

@@ -1,10 +1,14 @@
+import base64
 import datetime
 import json
 import os
 import subprocess
-import threading
 from lib.workload.workload_runner import WorkloadRunner
 from cephfs_perf_lib import CommonUtils
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class CephFSToolWorkloadRunner(WorkloadRunner):
@@ -23,12 +27,6 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         loadpoints = CommonUtils.expand_loadpoints(loadpoints)
         run_cmd = cfg.get(
             "run_command", "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
-        )
-        # Client-side (cephfs-tool binary) perf record is gated by cephfs_tool.perf_record.
-        # MDS-side perf record is gated by mds.perf_record via the FS manager.
-        perf_record_enabled = cfg.get("perf_record", False)
-        mds_perf_record_enabled = bool(
-            cephfs_manager and cephfs_manager.is_mds_perf_record_enabled()
         )
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
@@ -65,7 +63,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                 payload[key] = cfg[key]
         payload["env_vars"] = self.config.get_merged_env_vars(cfg.get("env_vars"))
 
-        lockstat_cfg = cfg.get("lockstat", {})
+        lockstat_cfg = self.config.client_lockstat("cephfs_tool")
         if lockstat_cfg.get("enabled", False):
             payload["cephfs_tool_lockstat_enabled"] = True
             payload["cephfs_tool_lockstat_asok"] = lockstat_cfg.get(
@@ -79,13 +77,12 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         loadpoints_json = json.dumps(loadpoints)
         clients_json = json.dumps(self.config.clients)
 
-        print(f"Running CephFS-Tool Workload on {self.admin}...")
+        log.info(f"Running CephFS-Tool Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
-        
+
         # To avoid "Argument list too long" errors when loadpoints JSON is very large,
-        # we write JSON data to temporary files and pass file paths with @ prefix
-        import base64
-        
+        # we write JSON data to temporary files and pass file paths with @ prefix.
+
         # Create temporary file paths on remote host
         tmp_settings = f"/tmp/cephfs_settings_{os.getpid()}.json"
         tmp_loadpoints = f"/tmp/cephfs_loadpoints_{os.getpid()}.json"
@@ -115,7 +112,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             f"rm -f {tmp_settings} {tmp_loadpoints} {tmp_clients}"
         )
         
-        print(f"[{self.admin}] Executing workload with temp files...")
+        log.info(f"[{self.admin}] Executing workload with temp files...")
         ssh_cmd = [
             "ssh",
             "-o",
@@ -126,18 +123,22 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             "bash -s",
         ]
 
-        current_lp, run_phase_started = 0, False
-        perf_triggered, logging_triggered = False, False
-        lockstat_cfg = self.config.get("cephfs_tool", {}).get("lockstat", {})
-        cephfs_lockstat_enabled = lockstat_cfg.get("enabled", False)
-        lockstat_path = lockstat_cfg.get("path", "/usr/local/bin/ceph-lockstat")
-        lockstat_asok = lockstat_cfg.get("asok", "/var/run/ceph/cephfs-tool.asok")
-        lockstat_started = False
-        write_lockstat_dumped = False
-        read_lockstat_dumped = False
-        current_phase = None
-        perf_threads = []
-        lockstat_data = {}
+        phase_state = {
+            "write_dumped": False,
+            "read_dumped": False,
+            "data": {},
+        }
+        monitor = self.make_loadpoint_monitor(
+            workload_name="cephfs_tool",
+            config_section="cephfs_tool",
+            cephfs_manager=cephfs_manager,
+            ganesha_manager=ganesha_manager,
+            results_dir=results_dir,
+            settings=settings,
+            payload=payload,
+            loadpoints=loadpoints,
+            finish_markers=("Finished CephFS-Tool Load Point:",),
+        )
 
         process = subprocess.Popen(
             ssh_cmd,
@@ -151,226 +152,62 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         process.stdin.write(full_cmd + "\n")
         process.stdin.close()
 
-        output = []
-        for line in process.stdout:
-            print(f"[{self.admin}] {line}", end="")
-            output.append(line)
-            if "Starting tests..." in line:
-                current_lp += 1
-                run_phase_started, perf_triggered, logging_triggered = (
-                    False,
-                    False,
-                    False,
-                )
-                current_phase = None
-                write_lockstat_dumped = False
-                read_lockstat_dumped = False
-                lockstat_data = {}
-                total_lps = len(loadpoints)
-                pct = int(100 * current_lp / total_lps) if total_lps else 0
-                print(
-                    f"Detected Starting tests... Load Point: "
-                    f"{current_lp}/{total_lps} ({pct}% done)"
-                )
-            if "Starting RUN phase" in line:
-                run_phase_started = True
-                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                    print(f"Resetting MDS lockstat for Load Point {current_lp}...")
-                    cephfs_manager.reset_lockstat()
-                if cephfs_manager:
-                    print(
-                        f"Resetting MDS perf counters for Load Point {current_lp}..."
-                    )
-                    cephfs_manager.reset_perf_counters()
-                if cephfs_manager:
-                    cephfs_manager.start_periodic_perf_dump(
-                        current_lp, results_dir
-                    )
-                if (
-                    cephfs_manager
-                    and cephfs_manager.is_mds_logging_enabled()
-                    and not logging_triggered
-                ):
-                    print(f"Triggering MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.start_fs_logging(current_lp)
-                    logging_triggered = True
-                if cephfs_lockstat_enabled and not lockstat_started:
-                    print(f"Starting cephfs-tool lockstat for Load Point {current_lp}...")
-                    self._start_client_lockstat(self.config.clients, lockstat_path, lockstat_asok)
-                    lockstat_started = True
+        def on_line(line, mon):
+            self._on_cephfs_tool_phase(line, mon, phase_state)
 
-            if run_phase_started and not perf_triggered:
-                lp_cfg = loadpoints[current_lp - 1]
-                if perf_record_enabled:
-                    print(
-                        f"Triggering client-side perf recording for Load Point {current_lp}..."
-                    )
-                    t = threading.Thread(
-                        target=self.execute_perf_record,
-                        args=(
-                            "cephfs_tool",
-                            self.config.clients,
-                            current_lp,
-                            results_dir,
-                            payload,
-                            lp_cfg,
-                        ),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-                if mds_perf_record_enabled:
-                    print(
-                        f"Triggering MDS perf recording for Load Point {current_lp}..."
-                    )
-                    t = threading.Thread(
-                        target=self.execute_mds_perf_record,
-                        args=(current_lp, results_dir, payload, lp_cfg),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-                perf_triggered = True
-
-            if "Starting WRITE phase" in line:
-                if cephfs_lockstat_enabled:
-                    if not lockstat_started:
-                        print(
-                            f"Starting cephfs-tool lockstat for Load Point {current_lp}..."
-                        )
-                        self._start_client_lockstat(
-                            self.config.clients, lockstat_path, lockstat_asok
-                        )
-                        lockstat_started = True
-                    else:
-                        print(
-                            f"Resetting lockstat for Write Phase, Load Point {current_lp}..."
-                        )
-                        self._reset_client_lockstat(self.config.clients, lockstat_path, lockstat_asok)
-                current_phase = "write"
-            if "Starting READ phase" in line:
-                if cephfs_lockstat_enabled:
-                    if not lockstat_started:
-                        print(
-                            f"Starting cephfs-tool lockstat for Load Point {current_lp}..."
-                        )
-                        self._start_client_lockstat(
-                            self.config.clients, lockstat_path, lockstat_asok
-                        )
-                        lockstat_started = True
-                    else:
-                        print(f"Resetting lockstat for Read Phase, Load Point {current_lp}...")
-                        self._reset_client_lockstat(self.config.clients, lockstat_path, lockstat_asok)
-                current_phase = "read"
-            if cephfs_lockstat_enabled and not write_lockstat_dumped and "Write:" in line and "MiB/s" in line:
-                print(f"Dumping lockstat for Write Phase, Load Point {current_lp}...")
-                phase_data = self._dump_client_lockstat(
-                    self.config.clients, lockstat_asok, "write",
-                )
-                for client, data in phase_data.items():
-                    lockstat_data.setdefault(client, {})["write"] = data
-                write_lockstat_dumped = True
-            if cephfs_lockstat_enabled and not read_lockstat_dumped and "Read:" in line and "MiB/s" in line:
-                print(f"Dumping lockstat for Read Phase, Load Point {current_lp}...")
-                phase_data = self._dump_client_lockstat(
-                    self.config.clients, lockstat_asok, "read",
-                )
-                for client, data in phase_data.items():
-                    lockstat_data.setdefault(client, {})["read"] = data
-                read_lockstat_dumped = True
-            if "Finished CephFS-Tool Load Point:" in line:
-                if cephfs_manager:
-                    cephfs_manager.stop_periodic_perf_dump()
-                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                    print(f"Dumping MDS lockstat for Load Point {current_lp}...")
-                    cephfs_manager.dump_lockstat(
-                        current_lp,
-                        results_dir,
-                        settings=payload,
-                        lp_cfg=loadpoints[current_lp - 1],
-                    )
-                if cephfs_manager and results_dir:
-                    print(
-                        f"Dumping MDS perf counters for Load Point {current_lp}..."
-                    )
-                    cephfs_manager.dump_perf_counters(
-                        current_lp,
-                        results_dir,
-                        settings=payload,
-                        lp_cfg=loadpoints[current_lp - 1],
-                    )
-                if cephfs_lockstat_enabled and lockstat_data:
-                    self._inject_lockstat_into_results(
-                        results_dir, lockstat_data, current_lp,
-                        payload, loadpoints[current_lp - 1],
-                    )
-                if logging_triggered and cephfs_manager:
-                    print(f"Stopping MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.stop_fs_logging(current_lp, results_dir)
-                run_phase_started = False
-                lockstat_started = False
-
-        process.wait()
-        if cephfs_manager:
-            cephfs_manager.stop_periodic_perf_dump()
-        for t in perf_threads:
-            t.join()
-
-        if process.returncode != 0:
-            raise RuntimeError(f"CephFS-Tool failed on {self.admin} with return code {process.returncode}")
-
-        return "".join(output)
-
-    def _lockstat_env(self):
-        env = self.config.get_merged_env_vars(
-            self.config.get("cephfs_tool", {}).get("env_vars")
-        )
-        # CEPH_ARGS (e.g. --log-to-stderr=false) is intended for cephfs-tool
-        # itself; lockstat forwards CEPH_ARGS into the admin-socket command and
-        # treats those flags as invalid arguments.
-        env.pop("CEPH_ARGS", None)
-        return env
-
-    def _start_client_lockstat(self, clients, lockstat_path, asok_path):
-        env_vars = self._lockstat_env()
-        for client in clients:
-            print(f"[{client}] Starting cephfs-tool lockstat via {asok_path}...")
-            self.executor.run_remote(
-                client,
-                CommonUtils.with_env_exports(
-                    f"{lockstat_path} {asok_path} start", env_vars
-                ),
+        output, returncode = self.consume_remote_stdout(process, monitor, on_line)
+        if returncode != 0:
+            raise RuntimeError(
+                f"CephFS-Tool failed on {self.admin} with return code {returncode}"
             )
+        return output
 
-    def _reset_client_lockstat(self, clients, lockstat_path, asok_path):
-        env_vars = self._lockstat_env()
-        for client in clients:
-            print(f"[{client}] Resetting cephfs-tool lockstat via {asok_path}...")
-            self.executor.run_remote(
-                client,
-                CommonUtils.with_env_exports(
-                    f"{lockstat_path} {asok_path} reset", env_vars
-                ),
+    def _on_cephfs_tool_phase(self, line, monitor, state):
+        """Phase lockstat dumps that are specific to cephfs-tool write/read."""
+        if "Starting tests..." in line:
+            state["write_dumped"] = False
+            state["read_dumped"] = False
+            state["data"] = {}
+            return
+        if not monitor.client_lockstat.get("enabled"):
+            return
+        lp = monitor.current_lp
+        if "Starting WRITE phase" in line or "Starting READ phase" in line:
+            label = "Write" if "WRITE" in line else "Read"
+            if not monitor.client_lockstat_started:
+                log.info(f"Starting cephfs-tool lockstat for Load Point {lp}...")
+                monitor.start_client_lockstat()
+            else:
+                log.info(f"Resetting lockstat for {label} Phase, Load Point {lp}...")
+                monitor.reset_client_lockstat()
+        if (
+            not state["write_dumped"]
+            and "Write:" in line
+            and "MiB/s" in line
+        ):
+            log.info(f"Dumping lockstat for Write Phase, Load Point {lp}...")
+            for client, data in monitor.dump_client_lockstat("write").items():
+                state["data"].setdefault(client, {})["write"] = data
+            state["write_dumped"] = True
+        if (
+            not state["read_dumped"]
+            and "Read:" in line
+            and "MiB/s" in line
+        ):
+            log.info(f"Dumping lockstat for Read Phase, Load Point {lp}...")
+            for client, data in monitor.dump_client_lockstat("read").items():
+                state["data"].setdefault(client, {})["read"] = data
+            state["read_dumped"] = True
+        if "Finished CephFS-Tool Load Point:" in line and state["data"]:
+            self._inject_lockstat_into_results(
+                monitor.results_dir,
+                state["data"],
+                lp,
+                monitor.payload,
+                monitor.current_lp_cfg(),
             )
-
-    def _dump_client_lockstat(self, clients, asok_path, phase):
-        results = {}
-        env_vars = self._lockstat_env()
-        for client in clients:
-            print(f"[{client}] Dumping cephfs-tool lockstat ({phase} phase) via {asok_path}...")
-            dump_cmd = CommonUtils.with_env_exports(
-                f"ceph --admin-daemon {asok_path} lockstat dump 2>&1",
-                env_vars,
-            )
-            output = self.executor.run_remote(client, dump_cmd)
-            try:
-                results[client] = json.loads(output)
-            except json.JSONDecodeError as e:
-                print(f"[{client}] Failed to parse lockstat JSON: {e}")
-                print(f"[{client}] lockstat dump output: {repr(output)}")
-                results[client] = {"raw": output, "parse_error": str(e)}
-        return results
 
     def _inject_lockstat_into_results(self, results_dir, lockstat_data, current_lp, payload, lp_cfg):
-        import base64
         for client, phase_data in lockstat_data.items():
             json_filename = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, current_lp, payload, lp_cfg)}.json"
             results_path = f"{results_dir}/{json_filename}"
@@ -382,7 +219,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                 f"data['lockstat_results']=json.loads(base64.b64decode('{lockstat_b64}')); "
                 f"f=open('{results_path}','w'); json.dump(data,f,indent=4); f.close()\""
             )
-            print(f"[{client}] Injecting lockstat results into {results_path}...")
+            log.info(f"[{client}] Injecting lockstat results into {results_path}...")
             self.executor.run_remote(self.admin, inject_cmd)
 
     def get_results_dir(self, settings, shared_ts=None):
@@ -422,6 +259,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             + self.config.ganeshas
             + self.config.mons
             + self.config.mdss
+            + self.config.osds
         )
 
         for target in targets:
@@ -451,7 +289,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             )
             for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
-                    print(f"Copying local {local_file} to {remote_path} on {target}...")
+                    log.info(f"Copying local {local_file} to {remote_path} on {target}...")
                     subprocess.run(
                         [
                             "scp",

@@ -3,10 +3,13 @@ import datetime
 import json
 import os
 import subprocess
-import threading
 
 from cephfs_perf_lib import CommonUtils
 from lib.workload.workload_runner import WorkloadRunner
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class ElbenchoWorkloadRunner(WorkloadRunner):
@@ -30,7 +33,6 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
         run_cmd = cfg.get(
             "run_command", "/cephfs_perf/elbencho/run_elbencho_workload.py"
         )
-        perf_record_enabled = cfg.get("perf_record", False)
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )
@@ -89,7 +91,7 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
         loadpoints_json = json.dumps(loadpoints)
         clients_json = json.dumps(clients)
 
-        print(f"Running Elbencho S3 Workload on {self.admin}...")
+        log.info(f"Running Elbencho S3 Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
 
         tmp_settings = f"/tmp/elbencho_settings_{os.getpid()}.json"
@@ -116,7 +118,7 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
             f"rm -f {tmp_settings} {tmp_loadpoints} {tmp_clients}"
         )
 
-        print(f"[{self.admin}] Executing workload with temp files...")
+        log.info(f"[{self.admin}] Executing workload with temp files...")
         ssh_cmd = [
             "ssh",
             "-o",
@@ -127,9 +129,17 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
             "bash -s",
         ]
 
-        current_lp, run_phase_started = 0, False
-        perf_triggered = False
-        perf_threads = []
+        monitor = self.make_loadpoint_monitor(
+            workload_name="elbencho",
+            config_section="elbencho",
+            cephfs_manager=cephfs_manager,
+            ganesha_manager=ganesha_manager,
+            results_dir=results_dir,
+            settings=settings,
+            payload=payload,
+            loadpoints=loadpoints,
+            finish_markers=("Finished Elbencho Load Point:",),
+        )
 
         process = subprocess.Popen(
             ssh_cmd,
@@ -142,51 +152,12 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
         process.stdin.write(full_cmd + "\n")
         process.stdin.close()
 
-        output = []
-        for line in process.stdout:
-            print(f"[{self.admin}] {line}", end="")
-            output.append(line)
-            if "Starting tests..." in line:
-                current_lp += 1
-                run_phase_started, perf_triggered = False, False
-                total_lps = len(loadpoints)
-                pct = int(100 * current_lp / total_lps) if total_lps else 0
-                print(
-                    f"Detected Starting tests... Load Point: "
-                    f"{current_lp}/{total_lps} ({pct}% done)"
-                )
-            if "Starting RUN phase" in line:
-                run_phase_started = True
-
-            if run_phase_started and not perf_triggered:
-                if perf_record_enabled:
-                    print(f"Triggering perf recording for Load Point {current_lp}...")
-                    lp_cfg = loadpoints[current_lp - 1]
-                    t = threading.Thread(
-                        target=self.execute_perf_record,
-                        args=(
-                            "elbencho",
-                            self.config.rgws or self.config.mons,
-                            current_lp,
-                            results_dir,
-                            payload,
-                            lp_cfg,
-                        ),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-                perf_triggered = True
-
-        process.wait()
-        for t in perf_threads:
-            t.join()
-
-        if process.returncode != 0:
+        output, returncode = self.consume_remote_stdout(process, monitor)
+        if returncode != 0:
             raise RuntimeError(
-                f"Elbencho failed on {self.admin} with return code {process.returncode}"
+                f"Elbencho failed on {self.admin} with return code {returncode}"
             )
-
-        return "".join(output)
+        return output
 
     def _open_client_load_driver_firewall(self, cfg):
         """Open elbencho --service port on inventory clients (and admin)."""
@@ -198,7 +169,7 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
         port = int(cfg.get("load_driver_port", 1611))
         # Inventory host names (not just IPs) so executor can SSH
         hosts = list(dict.fromkeys(self.config.clients + [self.admin]))
-        print(
+        log.info(
             f"Opening firewall TCP port {port} on elbencho clients "
             f"({', '.join(hosts)})..."
         )
@@ -309,7 +280,7 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
             f"printf '%s\\n' '{escaped}' | sudo tee {remote_path} > /dev/null",
         )
         self.executor.run_remote(self.admin, f"sudo chmod 0644 {remote_path}")
-        print(f"Wrote elbencho conf to {self.admin}:{remote_path}")
+        log.info(f"Wrote elbencho conf to {self.admin}:{remote_path}")
 
     def get_results_dir(self, settings, shared_ts=None):
         cfg = self.config.elbencho or {}
@@ -356,6 +327,7 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
             + self.config.clients
             + self.config.rgws
             + self.config.mons
+            + self.config.osds
         )
 
         for target in targets:
@@ -374,7 +346,7 @@ class ElbenchoWorkloadRunner(WorkloadRunner):
 
             for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
-                    print(f"Copying local {local_file} to {remote_path} on {target}...")
+                    log.info(f"Copying local {local_file} to {remote_path} on {target}...")
                     subprocess.run(
                         [
                             "scp",

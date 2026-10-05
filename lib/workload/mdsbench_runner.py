@@ -3,9 +3,12 @@ import datetime
 import json
 import os
 import subprocess
-import threading
 from lib.workload.workload_runner import WorkloadRunner
 from cephfs_perf_lib import CommonUtils
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class MdsBenchWorkloadRunner(WorkloadRunner):
@@ -30,10 +33,6 @@ class MdsBenchWorkloadRunner(WorkloadRunner):
         loadpoints = self._normalize_loadpoints(cfg.get("loadpoints", []))
         run_cmd = cfg.get(
             "run_command", "/cephfs_perf/mdsbench/run_mdsbench_workload.py"
-        )
-        perf_record_enabled = cfg.get("perf_record", False)
-        mds_perf_record_enabled = bool(
-            cephfs_manager and cephfs_manager.is_mds_perf_record_enabled()
         )
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
@@ -86,7 +85,7 @@ class MdsBenchWorkloadRunner(WorkloadRunner):
         loadpoints_json = json.dumps(loadpoints)
         clients_json = json.dumps(self.config.clients)
 
-        print(f"Running MDS-Bench Workload on {self.admin}...")
+        log.info(f"Running MDS-Bench Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
 
         tmp_settings = f"/tmp/mdsbench_settings_{os.getpid()}.json"
@@ -113,7 +112,7 @@ class MdsBenchWorkloadRunner(WorkloadRunner):
             f"rm -f {tmp_settings} {tmp_loadpoints} {tmp_clients}"
         )
 
-        print(f"[{self.admin}] Executing workload with temp files...")
+        log.info(f"[{self.admin}] Executing workload with temp files...")
         ssh_cmd = [
             "ssh",
             "-o",
@@ -124,9 +123,17 @@ class MdsBenchWorkloadRunner(WorkloadRunner):
             "bash -s",
         ]
 
-        current_lp, run_phase_started = 0, False
-        perf_triggered, logging_triggered = False, False
-        perf_threads = []
+        monitor = self.make_loadpoint_monitor(
+            workload_name="mdsbench",
+            config_section="mdsbench",
+            cephfs_manager=cephfs_manager,
+            ganesha_manager=ganesha_manager,
+            results_dir=results_dir,
+            settings=settings,
+            payload=payload,
+            loadpoints=loadpoints,
+            finish_markers=("Finished MDS-Bench Load Point:",),
+        )
 
         process = subprocess.Popen(
             ssh_cmd,
@@ -139,115 +146,12 @@ class MdsBenchWorkloadRunner(WorkloadRunner):
         process.stdin.write(full_cmd + "\n")
         process.stdin.close()
 
-        output = []
-        for line in process.stdout:
-            print(f"[{self.admin}] {line}", end="")
-            output.append(line)
-            if "Starting tests..." in line:
-                current_lp += 1
-                run_phase_started, perf_triggered, logging_triggered = (
-                    False,
-                    False,
-                    False,
-                )
-                total_lps = len(loadpoints)
-                pct = int(100 * current_lp / total_lps) if total_lps else 0
-                print(
-                    f"Detected Starting tests... Load Point: "
-                    f"{current_lp}/{total_lps} ({pct}% done)"
-                )
-            if "Starting RUN phase" in line:
-                run_phase_started = True
-                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                    print(f"Resetting MDS lockstat for Load Point {current_lp}...")
-                    cephfs_manager.reset_lockstat()
-                if cephfs_manager:
-                    print(
-                        f"Resetting MDS perf counters for Load Point {current_lp}..."
-                    )
-                    cephfs_manager.reset_perf_counters()
-                if cephfs_manager:
-                    cephfs_manager.start_periodic_perf_dump(
-                        current_lp, results_dir
-                    )
-                if (
-                    cephfs_manager
-                    and cephfs_manager.is_mds_logging_enabled()
-                    and not logging_triggered
-                ):
-                    print(f"Triggering MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.start_fs_logging(current_lp)
-                    logging_triggered = True
-
-            if run_phase_started and not perf_triggered:
-                lp_cfg = loadpoints[current_lp - 1]
-                if perf_record_enabled:
-                    print(
-                        f"Triggering client-side perf recording for Load Point {current_lp}..."
-                    )
-                    t = threading.Thread(
-                        target=self.execute_perf_record,
-                        args=(
-                            "mdsbench",
-                            self.config.clients,
-                            current_lp,
-                            results_dir,
-                            payload,
-                            lp_cfg,
-                        ),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-                if mds_perf_record_enabled:
-                    print(
-                        f"Triggering MDS perf recording for Load Point {current_lp}..."
-                    )
-                    t = threading.Thread(
-                        target=self.execute_mds_perf_record,
-                        args=(current_lp, results_dir, payload, lp_cfg),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-                perf_triggered = True
-
-            if "Finished MDS-Bench Load Point:" in line:
-                if cephfs_manager:
-                    cephfs_manager.stop_periodic_perf_dump()
-                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                    print(f"Dumping MDS lockstat for Load Point {current_lp}...")
-                    cephfs_manager.dump_lockstat(
-                        current_lp,
-                        results_dir,
-                        settings=payload,
-                        lp_cfg=loadpoints[current_lp - 1],
-                    )
-                if cephfs_manager and results_dir:
-                    print(
-                        f"Dumping MDS perf counters for Load Point {current_lp}..."
-                    )
-                    cephfs_manager.dump_perf_counters(
-                        current_lp,
-                        results_dir,
-                        settings=payload,
-                        lp_cfg=loadpoints[current_lp - 1],
-                    )
-                if logging_triggered and cephfs_manager:
-                    print(f"Stopping MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.stop_fs_logging(current_lp, results_dir)
-                run_phase_started = False
-
-        process.wait()
-        if cephfs_manager:
-            cephfs_manager.stop_periodic_perf_dump()
-        for t in perf_threads:
-            t.join()
-
-        if process.returncode != 0:
+        output, returncode = self.consume_remote_stdout(process, monitor)
+        if returncode != 0:
             raise RuntimeError(
-                f"MDS-Bench failed on {self.admin} with return code {process.returncode}"
+                f"MDS-Bench failed on {self.admin} with return code {returncode}"
             )
-
-        return "".join(output)
+        return output
 
     @staticmethod
     def _normalize_loadpoints(loadpoints):
@@ -306,6 +210,7 @@ class MdsBenchWorkloadRunner(WorkloadRunner):
             + self.config.ganeshas
             + self.config.mons
             + self.config.mdss
+            + self.config.osds
         )
 
         for target in targets:
@@ -333,7 +238,7 @@ class MdsBenchWorkloadRunner(WorkloadRunner):
             )
             for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
-                    print(f"Copying local {local_file} to {remote_path} on {target}...")
+                    log.info(f"Copying local {local_file} to {remote_path} on {target}...")
                     subprocess.run(
                         [
                             "scp",

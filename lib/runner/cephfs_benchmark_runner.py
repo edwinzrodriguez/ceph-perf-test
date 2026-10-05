@@ -1,17 +1,16 @@
 import argparse
 import datetime
 import itertools
-import os
 import sys
-import threading
-import yaml
+import os
+
 from cephfs_perf_lib import (
-    AnsibleInventoryProvider,
     DirectInventoryProvider,
     PerformanceTestConfig,
     SSHExecutor,
     CommonUtils,
     StubFSManager,
+    inventory_provider_from_file,
 )
 from lib.mount.mount_manager import StubMountManager
 from lib.fs.cephfs_cephadm_manager import CephFSCephadmManager
@@ -29,6 +28,36 @@ from lib.mount.mount_fuse_manager import MountFuseManager
 from lib.mount.mount_kernel_manager import MountKernelManager
 from lib.mount.mount_nfs_manager import MountNfsManager
 from lib.mount.mount_smb_manager import MountSmbManager
+from lib.config_loader import load_yaml_config
+from lib.fs.osd_observer import OsdObserver
+from lib.run_logging import get_logger, publish_run_log, setup_run_logging
+
+log = get_logger(__name__)
+
+
+def _default_inventory_path(config_path):
+    """Return configs/inventory.yml next to the repo, when that file exists."""
+    start = os.path.dirname(os.path.abspath(config_path))
+    directory = start
+    for _ in range(6):
+        if os.path.isfile(os.path.join(directory, "cephfs_perf_lib.py")) or os.path.isfile(
+            os.path.join(directory, "configs", "base.yml")
+        ):
+            candidate = os.path.join(directory, "configs", "inventory.yml")
+            if os.path.isfile(candidate):
+                return candidate
+            break
+        parent = os.path.dirname(directory)
+        if parent == directory:
+            break
+        directory = parent
+    beside_config = os.path.join(start, "inventory.yml")
+    if os.path.isfile(beside_config):
+        return beside_config
+    parent_inventory = os.path.join(os.path.dirname(start), "inventory.yml")
+    if os.path.isfile(parent_inventory):
+        return parent_inventory
+    return None
 
 
 class BenchRunner:
@@ -40,7 +69,14 @@ class BenchRunner:
     def add_arguments(self):
         self.parser.add_argument("config", help="Path to the configuration YAML file")
         self.parser.add_argument(
-            "inventory", nargs="?", help="Path to the Ansible inventory file (optional)"
+            "inventory",
+            nargs="?",
+            help=(
+                "Inventory file (optional). Ansible INI, or the YAML/JSON from "
+                "ansible_inventory_to_json --yaml. When omitted, "
+                "configs/inventory.yml is used if it exists; otherwise an "
+                "inventory: block in the config file."
+            ),
         )
         self.parser.add_argument(
             "--ganesha",
@@ -73,8 +109,7 @@ class BenchRunner:
         )
 
     def load_config(self, args):
-        with open(args.config, "r") as f:
-            config_dict = yaml.safe_load(f)
+        config_dict = load_yaml_config(args.config)
 
         if "ganesha" not in config_dict:
             config_dict["ganesha"] = {}
@@ -108,15 +143,24 @@ class BenchRunner:
         if args.mount_manager:
             config_dict["mount_manager_type"] = args.mount_manager
 
+        # Configure the run transcript before inventory load so those records
+        # land in the same console + file handlers as the rest of the matrix.
+        setup_run_logging(config_dict)
+
         if args.inventory:
-            inventory_provider = AnsibleInventoryProvider(args.inventory)
-        elif "inventory" in config_dict:
+            inventory_provider = inventory_provider_from_file(args.inventory)
+        elif isinstance(config_dict.get("inventory"), dict):
             inventory_provider = DirectInventoryProvider(config_dict["inventory"])
         else:
-            print(
-                "Error: No inventory provided (neither via command line nor in config file)"
-            )
-            sys.exit(1)
+            inventory_path = _default_inventory_path(args.config)
+            if not inventory_path:
+                log.error(
+                    "No inventory provided. Copy configs/inventory.example.yml to "
+                    "configs/inventory.yml, or pass an Ansible INI file or the YAML "
+                    "from ansible_inventory_to_json --yaml."
+                )
+                sys.exit(1)
+            inventory_provider = inventory_provider_from_file(inventory_path)
 
         return PerformanceTestConfig(config_dict, inventory_provider)
 
@@ -163,8 +207,8 @@ class BenchRunner:
                 )
             else:
                 raise ValueError(f"Invalid RGW type: {config.rgw_type}")
-            print(
-                f"Using StubMountManager (rgw.enabled=true, type={config.rgw_type})"
+            log.info(
+                "Using StubMountManager (rgw.enabled=true, type=%s)", config.rgw_type
             )
             return StubMountManager(executor, config, cephfs_manager), export_manager
         if config.samba_enabled:
@@ -178,8 +222,8 @@ class BenchRunner:
                 )
             else:
                 raise ValueError(f"Invalid Samba type: {config.samba_type}")
-            print(
-                f"Using MountSmbManager (samba.enabled=true, type={config.samba_type})"
+            log.info(
+                "Using MountSmbManager (samba.enabled=true, type=%s)", config.samba_type
             )
             return MountSmbManager(executor, config, cephfs_manager), export_manager
         if config.ganesha_enabled:
@@ -193,19 +237,20 @@ class BenchRunner:
                 )
             else:
                 raise ValueError(f"Invalid Ganesha type: {config.ganesha_type}")
-            print(
-                f"Using MountNfsManager (ganesha.enabled=true, type={config.ganesha_type})"
+            log.info(
+                "Using MountNfsManager (ganesha.enabled=true, type=%s)",
+                config.ganesha_type,
             )
             return MountNfsManager(executor, config, cephfs_manager), ganesha_manager
         mount_type = config.mount_manager_type
         if mount_type == "StubMountManager":
-            print("Using StubMountManager (no client mounts)")
+            log.info("Using StubMountManager (no client mounts)")
             return StubMountManager(executor, config, cephfs_manager), None
         if mount_type == "MountFuseManager":
-            print("Using MountFuseManager (ganesha.enabled=false → ceph-fuse)")
+            log.info("Using MountFuseManager (ganesha.enabled=false → ceph-fuse)")
             return MountFuseManager(executor, config, cephfs_manager), None
         if mount_type == "MountKernelManager":
-            print(
+            log.info(
                 "Using MountKernelManager (ganesha.enabled=false → mount -t ceph)"
             )
             return MountKernelManager(executor, config, cephfs_manager), None
@@ -237,12 +282,12 @@ class BenchRunner:
             executor, config, cephfs_manager
         )
         if monitoring_manager is not None:
-            print(
-                f"Provisioning monitoring stack (type={config.grafana_type})..."
-            )
+            log.info("Provisioning monitoring stack (type=%s)", config.grafana_type)
             monitoring_manager.provision_monitoring()
 
         workload_runner = self.get_workload_runner(executor, config, fs_names)
+        osd_observer = OsdObserver(executor, config)
+        workload_runner.osd_observer = osd_observer
 
         # Execute test matrix
         mount_manager.unmount_clients()
@@ -337,7 +382,7 @@ class BenchRunner:
             if current_rgw_settings:
                 config["rgw"].update(current_rgw_settings)
 
-            print(f"\n--- Starting Test Iteration: {all_settings} ---")
+            log.info("Starting Test Iteration: %s", all_settings)
 
             results_dir = workload_runner.get_results_dir(
                 current_settings, shared_timestamp
@@ -395,6 +440,9 @@ class BenchRunner:
             if mds_lockstat_active:
                 for fs in fs_names:
                     cephfs_manager.start_lockstat(fs)
+            osd_lockstat_active = osd_observer.is_lockstat_enabled()
+            if osd_lockstat_active:
+                osd_observer.start_lockstat()
 
             try:
                 workload_runner.run_workload(
@@ -407,10 +455,13 @@ class BenchRunner:
                     rgw_manager=rgw_manager,
                 )
             except Exception as e:
-                print(f"Workload execution failed: {e}")
+                log.exception("Workload execution failed: %s", e)
                 if mds_lockstat_active:
                     for fs in fs_names:
                         cephfs_manager.stop_lockstat(fs)
+                if osd_lockstat_active:
+                    osd_observer.stop_lockstat()
+                publish_run_log(executor, config.admin_host, results_dir)
                 mount_manager.unmount_clients()
                 self._cleanup_export_manager(export_manager)
                 self._cleanup_monitoring_manager(monitoring_manager)
@@ -419,7 +470,10 @@ class BenchRunner:
             if mds_lockstat_active:
                 for fs in fs_names:
                     cephfs_manager.stop_lockstat(fs)
+            if osd_lockstat_active:
+                osd_observer.stop_lockstat()
 
+            publish_run_log(executor, config.admin_host, results_dir)
             mount_manager.unmount_clients()
 
         # Final cleanup/collection (if applicable)
@@ -439,19 +493,19 @@ class BenchRunner:
         from lib.rgw.rgw_manager import RgwManager
 
         if isinstance(export_manager, GaneshaManager):
-            print("Cleaning up NFS exports and stopping Ganesha...")
+            log.info("Cleaning up NFS exports and stopping Ganesha...")
             export_manager.cleanup_ganesha()
         elif isinstance(export_manager, SambaManager):
-            print("Cleaning up SMB shares and stopping Samba...")
+            log.info("Cleaning up SMB shares and stopping Samba...")
             export_manager.cleanup_samba()
         elif isinstance(export_manager, RgwManager):
-            print("Cleaning up RGW service...")
+            log.info("Cleaning up RGW service...")
             export_manager.cleanup_rgw()
 
     def _cleanup_monitoring_manager(self, monitoring_manager):
         if monitoring_manager is None:
             return
-        print("Cleaning up monitoring stack...")
+        log.info("Cleaning up monitoring stack...")
         monitoring_manager.cleanup_monitoring()
 
     def post_run_cleanup(

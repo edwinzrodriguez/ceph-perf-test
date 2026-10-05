@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""CLI entrypoint for the elbencho RGW benchmark.
+
+Matrix orchestrator: BenchRunner. Control-plane workload: ElbenchoWorkloadRunner.
+Remote driver: lib/workload/run_elbencho_workload.py.
+"""
 import os
 import sys
 
@@ -11,7 +16,10 @@ from lib.mount.mount_manager import StubMountManager
 from lib.rgw.rgw_cephadm_manager import RgwCephadmManager
 from lib.rgw.rgw_systemd_manager import RgwSystemdManager
 from lib.runner.cephfs_benchmark_runner import BenchRunner
+from lib.run_logging import get_logger
 from lib.workload.elbencho_runner import ElbenchoWorkloadRunner
+
+log = get_logger(__name__)
 
 
 class ElbenchoBenchRunner(BenchRunner):
@@ -37,9 +45,9 @@ class ElbenchoBenchRunner(BenchRunner):
             export_manager = RgwCephadmManager(executor, config, cephfs_manager)
         else:
             raise ValueError(f"Invalid RGW type: {config.rgw_type}")
-        print(
-            f"Using StubMountManager + RGW "
-            f"(elbencho runner, type={config.rgw_type})"
+        log.info(
+            "Using StubMountManager + RGW (elbencho runner, type=%s)",
+            config.rgw_type,
         )
         return StubMountManager(executor, config, cephfs_manager), export_manager
 

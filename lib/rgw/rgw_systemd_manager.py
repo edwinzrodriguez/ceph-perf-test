@@ -1,5 +1,9 @@
 from cephfs_perf_lib import CommonUtils
 from lib.rgw.rgw_manager import RgwManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class RgwSystemdManager(RgwManager):
@@ -11,7 +15,7 @@ class RgwSystemdManager(RgwManager):
 
     def provision_rgw(self, results_dir=None):
         if self._provisioned:
-            print("RGW already provisioned. Skipping.")
+            log.info("RGW already provisioned. Skipping.")
             return
         if not self.rgws:
             raise RuntimeError(
@@ -27,7 +31,7 @@ class RgwSystemdManager(RgwManager):
         self._provisioned = True
 
     def cleanup_rgw(self):
-        print("Stopping local RGW (radosgw) processes...")
+        log.info("Stopping local RGW (radosgw) processes...")
         self._provisioned = False
         for host_name in self.rgws:
             self._stop_host_rgw(host_name)
@@ -117,7 +121,7 @@ class RgwSystemdManager(RgwManager):
                 f"> {log_path} 2>&1 &'"
             )
             self.executor.run_remote(host_name, cmd, check=True)
-            print(
+            log.info(
                 f"[{host_name}] Started radosgw {name} on port {port} "
                 f"(pid file {pid_path})"
             )

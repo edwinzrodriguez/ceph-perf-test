@@ -3,6 +3,10 @@ import shlex
 
 from cephfs_perf_lib import CommonUtils
 from lib.mount.mount_manager import MountManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class MountFuseManager(MountManager):
@@ -81,7 +85,7 @@ class MountFuseManager(MountManager):
                     self.executor.run_remote(
                         c, f"sudo chown {u}:{u} {p}", check=True
                     )
-                    print(f"[{c}] ceph-fuse mounted {fs} at {p} via {maddrs}")
+                    log.info(f"[{c}] ceph-fuse mounted {fs} at {p} via {maddrs}")
 
     def display_name(self):
         return "fuse"

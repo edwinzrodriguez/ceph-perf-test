@@ -5,12 +5,16 @@ import time
 import yaml
 
 from lib.rgw.rgw_manager import RgwManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class RgwCephadmManager(RgwManager):
     def provision_rgw(self, results_dir=None):
         if self._provisioned:
-            print("RGW already provisioned. Skipping.")
+            log.info("RGW already provisioned. Skipping.")
             return
         if not self.rgws:
             raise RuntimeError(
@@ -32,14 +36,14 @@ class RgwCephadmManager(RgwManager):
         self._provisioned = True
 
     def cleanup_rgw(self):
-        print("Cleaning up RGW service...")
+        log.info("Cleaning up RGW service...")
         self._provisioned = False
         sid = self.config.rgw_service_id
-        print(f"Removing RGW service rgw.{sid}...")
+        log.info(f"Removing RGW service rgw.{sid}...")
         self._run_ceph(f"orch rm rgw.{sid} || true", check=False)
 
     def _label_hosts(self, label):
-        print(f"Ensuring orch host label '{label}' on RGW hosts...")
+        log.info(f"Ensuring orch host label '{label}' on RGW hosts...")
         for host_name in self.rgws:
             self._run_ceph(
                 f"orch host label add {host_name} {label} || true",
@@ -47,7 +51,7 @@ class RgwCephadmManager(RgwManager):
             )
 
     def _generate_and_apply_spec(self, sid, label, count, port):
-        print(
+        log.info(
             f"Generating RGW cephadm spec "
             f"(service_id={sid}, label={label}, "
             f"count_per_host={count}, port={port})..."
@@ -88,5 +92,5 @@ class RgwCephadmManager(RgwManager):
         )
         os.remove(local_path)
 
-        print(f"Applying RGW service from {self.admin}:{remote_path}...")
+        log.info(f"Applying RGW service from {self.admin}:{remote_path}...")
         self._run_ceph(f"orch apply -i {remote_path}", check=True)

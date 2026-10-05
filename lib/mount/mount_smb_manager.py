@@ -1,4 +1,8 @@
 from lib.mount.mount_manager import MountManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class MountSmbManager(MountManager):
@@ -52,7 +56,7 @@ class MountSmbManager(MountManager):
                         f"sudo rm -f {mount_path}/.mount_smb_test",
                         check=True,
                     )
-                    print(
+                    log.info(
                         f"[{client}] CIFS-mounted //{server_ip}/{share_name} at {mount_path}"
                     )
 

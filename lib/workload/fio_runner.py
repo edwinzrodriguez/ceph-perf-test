@@ -3,9 +3,12 @@ import datetime
 import json
 import os
 import subprocess
-import threading
 from lib.workload.workload_runner import WorkloadRunner
 from cephfs_perf_lib import CommonUtils
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class FioWorkloadRunner(WorkloadRunner):
@@ -29,11 +32,6 @@ class FioWorkloadRunner(WorkloadRunner):
             raise RuntimeError(
                 "fio.remount_per_loadpoint is enabled but no mount manager was provided"
             )
-        # MDS-side perf record gate lives on the FS manager (reads mds.perf_record).
-        # fio.perf_record is no longer consulted for the MDS-target call.
-        mds_perf_record_enabled = bool(
-            cephfs_manager and cephfs_manager.is_mds_perf_record_enabled()
-        )
         ts = shared_ts or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y%m%d-%H%M%S-%f"
         )
@@ -116,7 +114,7 @@ class FioWorkloadRunner(WorkloadRunner):
         all_output = []
         for first_loadpoint, batch_loadpoints in batches:
             if remount_per_lp:
-                print(
+                log.info(
                     f"Remounting clients before Fio Load Point {first_loadpoint} "
                     "(clearing client caches)..."
                 )
@@ -129,7 +127,6 @@ class FioWorkloadRunner(WorkloadRunner):
                 batch_loadpoints=batch_loadpoints,
                 first_loadpoint=first_loadpoint,
                 expanded_loadpoints=expanded_loadpoints,
-                mds_perf_record_enabled=mds_perf_record_enabled,
                 cephfs_manager=cephfs_manager,
                 ganesha_manager=ganesha_manager,
                 results_dir=results_dir,
@@ -138,7 +135,7 @@ class FioWorkloadRunner(WorkloadRunner):
             all_output.append(batch_output)
 
             if remount_per_lp:
-                print(
+                log.info(
                     f"Unmounting clients after Fio Load Point {first_loadpoint}..."
                 )
                 mount_manager.unmount_clients()
@@ -153,7 +150,6 @@ class FioWorkloadRunner(WorkloadRunner):
         batch_loadpoints,
         first_loadpoint,
         expanded_loadpoints,
-        mds_perf_record_enabled,
         cephfs_manager,
         ganesha_manager,
         results_dir,
@@ -164,7 +160,7 @@ class FioWorkloadRunner(WorkloadRunner):
         clients_json = json.dumps(self.config.clients)
         loadpoints_json = json.dumps(batch_loadpoints)
 
-        print(f"Running Fio Workload on {self.admin}...")
+        log.info(f"Running Fio Workload on {self.admin}...")
         user, host, port = self.executor.get_ssh_details(self.admin)
 
         # To avoid "Argument list too long" errors when loadpoints JSON is very large,
@@ -204,7 +200,7 @@ class FioWorkloadRunner(WorkloadRunner):
             f"rm -f {tmp_settings} {tmp_mount_points} {tmp_clients} {tmp_loadpoints}"
         )
 
-        print(f"[{self.admin}] Executing workload with temp files...")
+        log.info(f"[{self.admin}] Executing workload with temp files...")
         ssh_cmd = [
             "ssh",
             "-o",
@@ -215,10 +211,20 @@ class FioWorkloadRunner(WorkloadRunner):
             "bash -s",
         ]
 
-        current_lp, run_phase_started = first_loadpoint - 1, False
-        perf_triggered, logging_triggered = False, False
-        ganesha_perf_enabled = self.config.ganesha_enabled and ganesha_manager
-        perf_threads = []
+        monitor = self.make_loadpoint_monitor(
+            workload_name="fio",
+            config_section="fio",
+            cephfs_manager=cephfs_manager,
+            ganesha_manager=ganesha_manager,
+            results_dir=results_dir,
+            settings=settings,
+            payload=payload,
+            loadpoints=expanded_loadpoints,
+            total_loadpoints=len(expanded_loadpoints),
+            initial_lp=first_loadpoint - 1,
+            finish_markers=("Finished Fio Load Point:",),
+            after_loadpoint_end=self._publish_fio_ganesha,
+        )
 
         process = subprocess.Popen(
             ssh_cmd,
@@ -231,176 +237,63 @@ class FioWorkloadRunner(WorkloadRunner):
         process.stdin.write(full_cmd + "\n")
         process.stdin.close()
 
-        output = []
-        for line in process.stdout:
-            print(f"[{self.admin}] {line}", end="")
-            output.append(line)
-            if "Starting tests..." in line:
-                current_lp += 1
-                run_phase_started, perf_triggered, logging_triggered = (
-                    False,
-                    False,
-                    False,
-                )
-                total_lps = len(expanded_loadpoints)
-                pct = int(100 * current_lp / total_lps) if total_lps else 0
-                print(
-                    f"Detected Starting tests... Load Point: "
-                    f"{current_lp}/{total_lps} ({pct}% done)"
-                )
-            if "Starting RUN phase" in line:
-                run_phase_started = True
-                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                    print(f"Resetting MDS lockstat for Load Point {current_lp}...")
-                    cephfs_manager.reset_lockstat()
-                if cephfs_manager:
-                    print(
-                        f"Resetting MDS perf counters for Load Point {current_lp}..."
-                    )
-                    cephfs_manager.reset_perf_counters()
-                if cephfs_manager:
-                    cephfs_manager.start_periodic_perf_dump(
-                        current_lp, results_dir
-                    )
-                if (
-                    cephfs_manager
-                    and cephfs_manager.is_mds_logging_enabled()
-                    and not logging_triggered
-                ):
-                    print(f"Triggering MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.start_fs_logging(current_lp)
-                    logging_triggered = True
-                if ganesha_perf_enabled:
-                    print(
-                        f"Resetting Ganesha perf counters for Load Point {current_lp}..."
-                    )
-                    for g_host in ganesha_manager.ganeshas:
-                        ganesha_manager.reset_ganesha_perf(g_host)
-                        if self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False):
-                            ganesha_manager.reset_lockstat(g_host)
-            if run_phase_started and not perf_triggered:
-                if mds_perf_record_enabled:
-                    print(
-                        f"Triggering MDS perf recording for Load Point {current_lp}..."
-                    )
-                    lp_cfg = expanded_loadpoints[current_lp - 1]
-                    t = threading.Thread(
-                        target=self.execute_mds_perf_record,
-                        args=(current_lp, results_dir, settings, lp_cfg),
-                    )
-                    t.start()
-                    perf_threads.append(t)
+        output, returncode = self.consume_remote_stdout(process, monitor)
 
-                if self.config.ganesha_enabled and self.config.ganesha_perf_record:
-                    print(
-                        f"Triggering Ganesha perf recording for Load Point {current_lp}..."
-                    )
-                    lp_cfg = expanded_loadpoints[current_lp - 1]
-                    t = threading.Thread(
-                        target=self.execute_perf_record,
-                        args=(
-                            "ganesha",
-                            self.config.ganeshas,
-                            current_lp,
-                            results_dir,
-                            settings,
-                            lp_cfg,
-                        ),
-                    )
-                    t.start()
-                    perf_threads.append(t)
-                perf_triggered = True
-            if "Finished Fio Load Point:" in line:
-                if cephfs_manager:
-                    cephfs_manager.stop_periodic_perf_dump()
-                if cephfs_manager and cephfs_manager.is_mds_lockstat_enabled():
-                    print(f"Dumping MDS lockstat for Load Point {current_lp}...")
-                    cephfs_manager.dump_lockstat(
-                        current_lp,
-                        results_dir,
-                        settings=payload,
-                        lp_cfg=expanded_loadpoints[current_lp - 1],
-                    )
-                if logging_triggered and cephfs_manager:
-                    print(f"Stopping MDS logging for Load Point {current_lp}...")
-                    cephfs_manager.stop_fs_logging(current_lp, results_dir)
-                if cephfs_manager and results_dir:
-                    print(
-                        f"Dumping MDS perf counters for Load Point {current_lp}..."
-                    )
-                    cephfs_manager.dump_perf_counters(
-                        current_lp,
-                        results_dir,
-                        settings=payload,
-                        lp_cfg=expanded_loadpoints[current_lp - 1],
-                    )
-                if ganesha_perf_enabled:
-                    print(
-                        f"Dumping Ganesha perf counters for Load Point {current_lp}..."
-                    )
-                    ganesha_lockstat_enabled = self.config.get("ganesha", {}).get("lockstat", {}).get("enabled", False)
-                    lockstat_results = {}
-                    for g_host in ganesha_manager.ganeshas:
-                        perf_dump = ganesha_manager.collect_ganesha_perf_dump(g_host)
-                        if perf_dump:
-                            filename = (
-                                f"ganesha_perf_dump_{g_host}_lp{current_lp:02d}.json"
-                            )
-                            local_temp = f"/tmp/{filename}"
-                            with open(local_temp, "w") as f:
-                                json.dump(perf_dump, f)
-                            u, h, p = self.executor.get_ssh_details(self.admin)
-                            p = str(p)
-                            remote_path = f"{results_dir}/{filename}"
-                            subprocess.run(
-                                [
-                                    "scp",
-                                    "-o",
-                                    "StrictHostKeyChecking=no",
-                                    "-P",
-                                    p,
-                                    local_temp,
-                                    f"{u}@{h}:{remote_path}",
-                                ]
-                            )
-                            os.remove(local_temp)
-                        if ganesha_lockstat_enabled:
-                            lockstat_json = ganesha_manager.dump_lockstat(g_host)
-                            if lockstat_json:
-                                lockstat_results[g_host] = lockstat_json
-                    if lockstat_results:
-                        lp_cfg = expanded_loadpoints[current_lp - 1]
-                        lockstat_b64 = base64.b64encode(json.dumps(lockstat_results).encode()).decode()
-                        for client in self.config.clients:
-                            json_filename = f"{CommonUtils.get_workload_base_name('fio', 'result', client, current_lp, payload, lp_cfg)}.json"
-                            results_path = f"{results_dir}/{json_filename}"
-                            inject_cmd = (
-                                f"python3 -c \""
-                                f"import json, base64; "
-                                f"f=open('{results_path}'); data=json.load(f); f.close(); "
-                                f"data['lockstat_results']=json.loads(base64.b64decode('{lockstat_b64}')); "
-                                f"f=open('{results_path}','w'); json.dump(data,f,indent=4); f.close()\""
-                            )
-                            print(f"[{client}] Injecting lockstat results into {results_path}...")
-                            self.executor.run_remote(self.admin, inject_cmd)
-                if ganesha_manager and ganesha_manager.should_collect_client_logs():
-                    print(
-                        f"Collecting Ganesha Ceph client logs for Load Point {current_lp}..."
-                    )
-                    ganesha_manager.collect_ganesha_client_logs(
-                        current_lp, results_dir
-                    )
+        if returncode != 0:
+            raise RuntimeError(
+                f"Fio failed on {self.admin} with return code {returncode}"
+            )
 
-        process.wait()
-        if cephfs_manager:
-            cephfs_manager.stop_periodic_perf_dump()
-        for t in perf_threads:
-            t.join()
+        return output
 
-        if process.returncode != 0:
-            raise RuntimeError(f"Fio failed on {self.admin} with return code {process.returncode}")
-
-        return "".join(output)
+    def _publish_fio_ganesha(self, monitor):
+        """Write Ganesha perf dumps and inject lockstat into fio result JSON."""
+        if not monitor.ganesha_perf_dumps and not monitor.ganesha_lockstat:
+            return
+        current_lp = monitor.current_lp
+        results_dir = monitor.results_dir
+        payload = monitor.payload
+        lp_cfg = monitor.current_lp_cfg()
+        for host, perf_dump in monitor.ganesha_perf_dumps.items():
+            filename = f"ganesha_perf_dump_{host}_lp{current_lp:02d}.json"
+            local_temp = f"/tmp/{filename}"
+            with open(local_temp, "w", encoding="utf-8") as handle:
+                json.dump(perf_dump, handle)
+            user, remote_host, port = self.executor.get_ssh_details(self.admin)
+            subprocess.run(
+                [
+                    "scp",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-P",
+                    str(port),
+                    local_temp,
+                    f"{user}@{remote_host}:{results_dir}/{filename}",
+                ],
+                check=False,
+            )
+            os.remove(local_temp)
+        if not monitor.ganesha_lockstat:
+            return
+        lockstat_b64 = base64.b64encode(
+            json.dumps(monitor.ganesha_lockstat).encode()
+        ).decode()
+        for client in self.config.clients:
+            json_filename = (
+                f"{CommonUtils.get_workload_base_name('fio', 'result', client, current_lp, payload, lp_cfg)}.json"
+            )
+            results_path = f"{results_dir}/{json_filename}"
+            inject_cmd = (
+                f"python3 -c \""
+                f"import json, base64; "
+                f"f=open('{results_path}'); data=json.load(f); f.close(); "
+                f"data['lockstat_results']=json.loads(base64.b64decode('{lockstat_b64}')); "
+                f"f=open('{results_path}','w'); json.dump(data,f,indent=4); f.close()\""
+            )
+            log.info(
+                f"[{client}] Injecting lockstat results into {results_path}..."
+            )
+            self.executor.run_remote(self.admin, inject_cmd)
 
     def get_results_dir(self, settings, shared_ts=None):
         fio_cfg = self.config.fio
@@ -450,6 +343,7 @@ class FioWorkloadRunner(WorkloadRunner):
             + self.config.ganeshas
             + self.config.mons
             + self.config.mdss
+            + self.config.osds
         )
 
         for target in targets:
@@ -491,7 +385,7 @@ class FioWorkloadRunner(WorkloadRunner):
             )
             for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
-                    print(f"Copying local {local_file} to {remote_path} on {target}...")
+                    log.info(f"Copying local {local_file} to {remote_path} on {target}...")
                     subprocess.run(
                         [
                             "scp",

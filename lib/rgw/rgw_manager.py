@@ -3,6 +3,10 @@ import json
 import time
 
 from cephfs_perf_lib import CommonUtils, FSManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class RgwManager(abc.ABC):
@@ -125,7 +129,7 @@ class RgwManager(abc.ABC):
         ports = self.frontend_ports()
         if not ports:
             return
-        print(
+        log.info(
             f"Opening firewall TCP ports {ports[0]}-{ports[-1]} on RGW hosts..."
             if len(ports) > 1
             else f"Opening firewall TCP port {ports[0]} on RGW hosts..."
@@ -139,7 +143,7 @@ class RgwManager(abc.ABC):
         access_key = self.config.rgw_access_key
         secret_key = self.config.rgw_secret_key
 
-        print(f"Ensuring RGW S3 user '{uid}' exists...")
+        log.info(f"Ensuring RGW S3 user '{uid}' exists...")
         info = self.safe_json_load(
             self._run_radosgw_admin(f"user info --uid={uid} --format json"),
             default=None,
@@ -158,9 +162,9 @@ class RgwManager(abc.ABC):
                 self._run_radosgw_admin(create_args, check=True),
                 default={},
             )
-            print(f"Created RGW S3 user '{uid}'")
+            log.info(f"Created RGW S3 user '{uid}'")
         else:
-            print(f"RGW S3 user '{uid}' already exists")
+            log.info(f"RGW S3 user '{uid}' already exists")
             if access_key and secret_key:
                 # Ensure configured keys are present
                 self._run_radosgw_admin(
@@ -221,11 +225,11 @@ class RgwManager(abc.ABC):
             f"printf '%s\\n' '{escaped}' | sudo tee {path} > /dev/null",
         )
         self.executor.run_remote(self.admin, f"sudo chmod 0644 {path}")
-        print(f"Wrote S3 credentials to {self.admin}:{path}")
+        log.info(f"Wrote S3 credentials to {self.admin}:{path}")
 
     def wait_for_rgw_running(self, timeout_iters=30, sleep_secs=10):
         sid = self.config.rgw_service_id
-        print(f"Waiting for RGW service rgw.{sid} to be running...")
+        log.info(f"Waiting for RGW service rgw.{sid} to be running...")
         for _ in range(timeout_iters):
             svcs = self.safe_json_load(
                 self._run_ceph("orch ls --service_type rgw --format json"),
@@ -241,7 +245,7 @@ class RgwManager(abc.ABC):
             ):
                 return
             time.sleep(sleep_secs)
-        print(
+        log.info(
             f"Warning: RGW service rgw.{sid} may not be fully running after "
             f"{timeout_iters * sleep_secs}s"
         )

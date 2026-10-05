@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""CLI entrypoint for the SFS2020 / SPEC Storage benchmark.
+
+Matrix orchestrator: BenchRunner. Control-plane workload: SpecStorageWorkloadRunner.
+Remote driver: lib/workload/run_sfs2020_workload.py.
+"""
 import os
 import sys
 

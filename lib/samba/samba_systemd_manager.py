@@ -2,6 +2,10 @@ import re
 
 from cephfs_perf_lib import CommonUtils
 from lib.samba.samba_manager import SambaManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class SambaSystemdManager(SambaManager):
@@ -10,7 +14,7 @@ class SambaSystemdManager(SambaManager):
 
     def provision_samba(self, results_dir=None):
         if self._provisioned:
-            print("Samba already provisioned. Skipping.")
+            log.info("Samba already provisioned. Skipping.")
             return
         if not self.sambas:
             raise RuntimeError("No Samba hosts configured in inventory group 'sambas'")
@@ -29,7 +33,7 @@ class SambaSystemdManager(SambaManager):
         self._provisioned = True
 
     def cleanup_samba(self):
-        print("Cleaning up SMB shares and stopping Samba service...")
+        log.info("Cleaning up SMB shares and stopping Samba service...")
         for host_name in self.sambas:
             self._write_empty_smb_conf(host_name)
             self.executor.run_remote(
@@ -103,7 +107,7 @@ class SambaSystemdManager(SambaManager):
             f"printf '{escaped_client_section}' | sudo tee -a {samba_ceph_conf} > /dev/null",
         )
         self.executor.run_remote(host_name, f"sudo chmod 0644 {samba_ceph_conf}")
-        print(f"[{host_name}] Created Samba vfs_ceph config {samba_ceph_conf}")
+        log.info(f"[{host_name}] Created Samba vfs_ceph config {samba_ceph_conf}")
 
     def _write_empty_smb_conf(self, host_name):
         """Remove share definitions by writing a global-only smb.conf."""
@@ -159,7 +163,7 @@ class SambaSystemdManager(SambaManager):
                 f"mountpoint -q '{mount_path}'",
                 check=True,
             )
-            print(
+            log.info(
                 f"[{host_name}] Kernel-mounted cephfs {fs} at {mount_path} "
                 f"(share backend {backend_path})"
             )

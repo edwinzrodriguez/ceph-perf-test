@@ -1,0 +1,53 @@
+# cephfs-tool control plane.
+extends: ../base.yml
+
+
+# CephFS-Tool configuration
+cephfs_tool:
+  client:
+    perf_record:
+      enabled: true
+      script: "/cephfs_perf/perf_record.py"
+      executable: cephfs-tool
+      duration: 30
+    lockstat:
+      enabled: true
+      path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
+      asok: "/var/run/ceph/cephfs-tool.asok"
+      threshold: 0
+  results_base_dir: "/cephfs_perf/results"
+  run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"
+  executable_path: "${CEPH_INSTALL_PREFIX}/bin/cephfs-tool"
+  env_vars:
+    CEPH_ARGS: "--log-to-stderr=false --log-to-file=false --log-file=/tmp/bench.log"
+  config_path: "/etc/ceph/ceph.conf"
+  keyring: "/etc/ceph/ceph.client.admin.keyring"
+  client_id: "admin"
+  root_path: "/"
+  duration: 60
+  progress: true
+  progress_interval: 10
+  loadpoints:
+    - files: 1024
+      size: "5GiB"
+      iterations: 3
+      extra_args: ""
+      threads: [32, 16, 8, 1]
+      msgr_workers: [3, 8, 12]
+      async: false
+      client-oc: [1, 0]
+      client-oc-size: ["16GiB", "1GiB", "200MiB"]
+      block-size: ["4MiB", "1MiB", "256KiB"]
+      fsync-every: [false, true]
+    - files: 1024
+      size: "5GiB"
+      iterations: 3
+      extra_args: ""
+      threads: [32, 16, 8, 1]
+      msgr_workers: [3, 8, 12]
+      async: true
+      queue-depth: [1, 2, 4]
+      client-oc: [1, 0]
+      client-oc-size: ["16GiB", "1GiB", "200MiB"]
+      block-size: ["4MiB", "1MiB", "256KiB"]
+      fsync-every: [false, true]

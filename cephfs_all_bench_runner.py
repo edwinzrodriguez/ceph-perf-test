@@ -54,7 +54,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "inventory",
         nargs="?",
-        help="Path to the Ansible inventory file (optional; may also be in config)",
+        help=(
+            "Inventory file (optional). Ansible INI, or YAML/JSON from "
+            "ansible_inventory_to_json --yaml. When omitted, child runners "
+            "use configs/inventory.yml or an inventory: block in the config"
+        ),
     )
     parser.add_argument(
         "--ganesha",

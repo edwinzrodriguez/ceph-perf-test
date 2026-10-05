@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""CLI entrypoint for the CephFS fio benchmark.
+
+Matrix orchestrator: BenchRunner. Control-plane workload: FioWorkloadRunner.
+Remote driver: lib/workload/run_fio_workload.py.
+"""
 import os
 import sys
 

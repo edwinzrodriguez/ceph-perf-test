@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""CLI entrypoint for the cephfs-mdsbench benchmark.
+
+Matrix orchestrator: BenchRunner. Control-plane workload: MdsbenchWorkloadRunner.
+Remote driver: lib/workload/run_mdsbench_workload.py.
+"""
 import os
 import sys
 

@@ -1,6 +1,10 @@
 import re
 
 from lib.mount.mount_manager import MountManager
+from lib.run_logging import get_logger
+
+log = get_logger(__name__)
+
 
 
 class MountKernelManager(MountManager):
@@ -59,7 +63,7 @@ class MountKernelManager(MountManager):
                     self.executor.run_remote(
                         c, f"sudo chown {u}:{u} {p}", check=True
                     )
-                    print(f"[{c}] Kernel-mounted cephfs {fs} at {p} via {maddrs}")
+                    log.info(f"[{c}] Kernel-mounted cephfs {fs} at {p} via {maddrs}")
 
     def display_name(self):
         return "kernel_cephfs"

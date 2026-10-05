@@ -120,6 +120,16 @@ def main() -> int:
         metavar="KEY=VALUE",
         help="Extra environment variable for ceph CLI (repeatable)",
     )
+    parser.add_argument(
+        "--histogram-cmd",
+        default="perf histogram dump mds",
+        help="Second admin-daemon command (default: MDS histogram dump)",
+    )
+    parser.add_argument(
+        "--no-histogram",
+        action="store_true",
+        help="Skip the histogram dump (OSD collectors use this)",
+    )
     args = parser.parse_args()
 
     signal.signal(signal.SIGTERM, _on_signal)
@@ -167,15 +177,21 @@ def main() -> int:
                         os.path.join(args.output_dir, f"{base}_perf_dump.json"),
                         env,
                     )
-                    _run_dump(
-                        args.ceph_bin,
-                        args.asok,
-                        "perf histogram dump mds",
-                        os.path.join(
-                            args.output_dir, f"{base}_perf_histogram_dump_mds.json"
-                        ),
-                        env,
-                    )
+                    if not args.no_histogram and args.histogram_cmd:
+                        hist_name = (
+                            "perf_histogram_dump_mds"
+                            if "mds" in args.histogram_cmd
+                            else "perf_histogram_dump"
+                        )
+                        _run_dump(
+                            args.ceph_bin,
+                            args.asok,
+                            args.histogram_cmd,
+                            os.path.join(
+                                args.output_dir, f"{base}_{hist_name}.json"
+                            ),
+                            env,
+                        )
             except Exception as exc:
                 print(f"Warning: dump cycle failed: {exc}", flush=True)
 
