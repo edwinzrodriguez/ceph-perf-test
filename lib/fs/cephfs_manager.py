@@ -126,10 +126,15 @@ class CephFSManager(FSManager):
         """Debug levels used outside an active loadpoint window.
 
         Memory logging keeps the configured ``log/memory`` levels (e.g. ``1/20``)
-        so the gather buffer stays armed. Classic file logging drops back to
-        ``1`` between loadpoints to avoid writing verbose logs continuously.
+        so the gather buffer stays armed. Continuous logging keeps the
+        configured levels for the whole run. Classic per-loadpoint file
+        logging drops back to ``1`` between loadpoints to avoid writing
+        verbose logs continuously.
         """
-        if self.is_mds_memory_logging_enabled():
+        if (
+            self.is_mds_memory_logging_enabled()
+            or self.is_mds_continuous_logging_enabled()
+        ):
             return self._mds_logging_debug_levels()
         return 1, 1
 
@@ -137,7 +142,17 @@ class CephFSManager(FSManager):
         """Apply baseline MDS logging from ``mds.logging`` after daemons are up."""
         if self.is_mds_logging_enabled():
             debug_mds, debug_ms = self._mds_logging_idle_levels()
-            log.info(f"Setting MDS debug_mds={debug_mds} debug_ms={debug_ms}")
+            mode = (
+                "continuous"
+                if self.is_mds_continuous_logging_enabled()
+                else "per-loadpoint"
+            )
+            log.info(
+                "Setting MDS debug_mds=%s debug_ms=%s (%s logging)",
+                debug_mds,
+                debug_ms,
+                mode,
+            )
             self._run_ceph(self.admin, f"config set mds debug_mds {debug_mds}")
             self._run_ceph(self.admin, f"config set mds debug_ms {debug_ms}")
             self._run_ceph(self.admin, "config set mds log_to_file true")
@@ -199,8 +214,111 @@ class CephFSManager(FSManager):
                 f"(Load Point {loadpoint})"
             )
 
+    def _mds_log_path(self, host, mds_id):
+        """Active MDS log file for the daemon (systemd layout by default)."""
+        log_dir = (self.config.get("mds", {}) or {}).get("log_dir", "/var/log/ceph")
+        return f"{log_dir}/ceph-mds.{mds_id}.log"
+
+    def _rotated_mds_log_path(self, src_log, loadpoint):
+        lp_tag = f"{int(loadpoint):02d}"
+        if src_log.endswith(".log"):
+            return f"{src_log[:-4]}_lp{lp_tag}.log"
+        return f"{src_log}_lp{lp_tag}"
+
+    def _rotate_mds_logs(self, loadpoint):
+        """Rename each MDS log for the loadpoint, reopen, and gzip in the background.
+
+        Used by continuous logging so debug settings stay on and the live log
+        is never truncated. ``log reopen`` makes the daemon create a fresh
+        file at the original path after the rename.
+        """
+        for host, mds_id, asok in self._iter_mds_admin_sockets():
+            src_log = self._mds_log_path(host, mds_id)
+            rotated_log = self._rotated_mds_log_path(src_log, loadpoint)
+            src_q = shlex.quote(src_log)
+            rotated_q = shlex.quote(rotated_log)
+            exists = self.executor.run_remote(
+                host, f"test -f {src_q} && echo EXISTS || echo MISSING"
+            ).strip()
+            if "EXISTS" not in exists:
+                log.info(
+                    "[%s] Warning: MDS log %s not found for mds.%s; "
+                    "skip rotate (Load Point %s)",
+                    host,
+                    src_log,
+                    mds_id,
+                    loadpoint,
+                )
+                continue
+            if not self._asok_exists(host, asok):
+                log.info(
+                    "[%s] Warning: MDS admin socket not found for "
+                    "mds.%s (%s); skip log rotate",
+                    host,
+                    mds_id,
+                    asok,
+                )
+                continue
+            log.info(
+                "[%s] Rotating MDS log for mds.%s (Load Point %s): %s -> %s",
+                host,
+                mds_id,
+                loadpoint,
+                src_log,
+                rotated_log,
+            )
+            try:
+                self.executor.run_remote(
+                    host, f"sudo mv -f {src_q} {rotated_q}", check=True
+                )
+            except Exception as e:
+                log.info(
+                    "[%s] Warning: MDS log rename failed for mds.%s: %s",
+                    host,
+                    mds_id,
+                    e,
+                )
+                continue
+            try:
+                log.info(
+                    "[%s] Reopening MDS log for mds.%s via %s...",
+                    host,
+                    mds_id,
+                    asok,
+                )
+                self.executor.run_remote(
+                    host,
+                    self._admin_daemon_cmd(asok, "log reopen"),
+                    check=True,
+                )
+            except Exception as e:
+                log.info(
+                    "[%s] Warning: MDS log reopen failed for mds.%s: %s; "
+                    "restoring %s",
+                    host,
+                    mds_id,
+                    e,
+                    src_log,
+                )
+                self.executor.run_remote(
+                    host, f"sudo mv -f {rotated_q} {src_q} || true"
+                )
+                continue
+            gzip_cmd = (
+                f"nohup sudo gzip -f {rotated_q} "
+                f">/dev/null 2>&1 </dev/null &"
+            )
+            log.info(
+                "[%s] Compressing rotated MDS log in background: %s.gz",
+                host,
+                rotated_log,
+            )
+            self.executor.run_remote(host, gzip_cmd)
+
     def start_fs_logging(self, loadpoint):
         if not self.is_mds_logging_enabled():
+            return
+        if self.is_mds_continuous_logging_enabled():
             return
         # Prefer log/memory form (e.g. 1/20) to gather verbosely in memory
         # while keeping on-disk log traffic low during the loadpoint.
@@ -215,6 +333,11 @@ class CephFSManager(FSManager):
 
     def stop_fs_logging(self, loadpoint, results_dir=None):
         if not self.is_mds_logging_enabled():
+            return
+        if self.is_mds_continuous_logging_enabled():
+            if self.is_mds_memory_logging_enabled():
+                self._dump_mds_recent_logs(loadpoint)
+            self._rotate_mds_logs(loadpoint)
             return
         if self.is_mds_memory_logging_enabled():
             self._dump_mds_recent_logs(loadpoint)
@@ -1557,6 +1680,18 @@ class CephFSManager(FSManager):
 
     def is_mds_logging_enabled(self):
         return bool(self._mds_logging_cfg().get("enabled"))
+
+    def is_mds_continuous_logging_enabled(self):
+        """True when MDS logging stays on for the whole run.
+
+        ``mds.logging.continuous`` keeps the configured debug levels and
+        ``log_to_file`` settings. After each loadpoint the live log is
+        renamed, reopened via admin socket, and gzipped in the background
+        instead of being copied and truncated.
+        """
+        return self.is_mds_logging_enabled() and bool(
+            self._mds_logging_cfg().get("continuous")
+        )
 
     def is_mds_memory_logging_enabled(self):
         """True when MDS logging should use the in-memory recent buffer.

@@ -75,6 +75,9 @@ class CephFSSystemdManager(CephFSManager):
     def _log_path(self, mds_id):
         return f"{self._log_dir()}/ceph-mds.{mds_id}.log"
 
+    def _mds_log_path(self, host, mds_id):
+        return self._log_path(mds_id)
+
     def _asok_path(self, mds_id):
         return f"{self._run_dir()}/ceph-mds.{mds_id}.asok"
 

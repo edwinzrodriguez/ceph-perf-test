@@ -67,6 +67,11 @@ observability:
       script: "/cephfs_perf/mds_perf_dump_collector.py"
     logging:
       enabled: false
+      # Keep configured debug levels for the whole run. After each loadpoint,
+      # rename the MDS log with an _lpNN suffix, reopen via asok, and gzip
+      # the rotated file in the background (no copy/truncate of the live log).
+      continuous: false
+      # log-level/memory-level: keep verbose gather in the in-memory ring buffer
       debug_mds: 1
       debug_ms: 1
       # memory: true

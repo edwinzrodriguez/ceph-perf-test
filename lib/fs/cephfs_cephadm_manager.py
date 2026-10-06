@@ -89,6 +89,10 @@ class CephFSCephadmManager(CephFSManager):
                 ]
             )
 
+    def _mds_log_path(self, host, mds_id):
+        fsid = self._run_ceph(host, "fsid").strip()
+        return f"/var/log/ceph/{fsid}/ceph-mds.{mds_id}.log"
+
     def _collect_mds_logs(self, loadpoint, results_dir):
         if not self.is_mds_logging_enabled():
             return

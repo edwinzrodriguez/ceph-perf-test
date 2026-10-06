@@ -826,7 +826,7 @@ observability:
     lockstat: { enabled: true, path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat", threshold: 0 }
     perf_record: { enabled: true, script: "/cephfs_perf/perf_record.py", executable: ceph-mds, duration: 5 }
     perf_dump: { enabled: false, interval: 5, script: "/cephfs_perf/mds_perf_dump_collector.py" }
-    logging: { enabled: false, debug_mds: 1, debug_ms: 1 }
+    logging: { enabled: false, continuous: false, debug_mds: 1, debug_ms: 1 }
   osd:
     lockstat: { enabled: false, path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat", threshold: 0 }
     perf_record: { enabled: false, script: "/cephfs_perf/perf_record.py", executable: ceph-osd, duration: 30 }
@@ -861,6 +861,7 @@ MDS debug logging during tests. Prefer ``observability.mds.logging``.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `enabled` | bool | `false` | Enable MDS debug logging |
+| `continuous` | bool | `false` | Keep the configured log settings for the whole run. After each loadpoint, rename the MDS log with an ``_lpNN`` suffix, send ``log reopen`` to the MDS admin socket, and ``gzip`` the rotated file in the background. Does not copy or truncate the live log |
 | `debug_mds` | int or string | `5` | MDS subsystem debug level. Use ``<log>/<memory>`` (e.g. ``1/20``) to keep a verbose gather level in memory while writing only the lower log level to disk |
 | `debug_ms` | int or string | `1` | Messenger subsystem debug level (same ``log/memory`` form supported) |
 | `memory` | bool | auto | Flush the in-memory recent log buffer via admin-socket ``log dump`` before collecting logs. Defaults to on when ``debug_mds`` uses ``log/memory`` form or ``log_max_recent`` is set |
@@ -870,6 +871,7 @@ MDS debug logging during tests. Prefer ``observability.mds.logging``.
 mds:
   logging:
     enabled: true
+    continuous: true
     debug_mds: 1/20
     debug_ms: 1
     memory: true
