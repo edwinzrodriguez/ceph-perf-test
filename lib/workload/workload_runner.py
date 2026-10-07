@@ -272,6 +272,14 @@ class WorkloadRunner(abc.ABC):
             return mount_manager
         return None
 
+    @staticmethod
+    def as_kernel_manager(mount_manager):
+        from lib.mount.mount_kernel_manager import MountKernelManager
+
+        if isinstance(mount_manager, MountKernelManager):
+            return mount_manager
+        return None
+
     def reset_fuse_perf_counters(self, mount_manager):
         fuse_manager = self.as_fuse_manager(mount_manager)
         if not fuse_manager:
@@ -288,17 +296,30 @@ class WorkloadRunner(abc.ABC):
         lp_cfg=None,
     ):
         fuse_manager = self.as_fuse_manager(mount_manager)
-        if not fuse_manager:
-            return
-        if results_dir:
+        if fuse_manager:
+            if results_dir:
+                log.info(
+                    "Dumping ceph-fuse perf counters for Load Point %s...",
+                    loadpoint,
+                )
+                fuse_manager.dump_perf_counters(
+                    loadpoint, results_dir, settings=settings, lp_cfg=lp_cfg
+                )
+            if fuse_manager.is_logging_enabled() and results_dir:
+                log.info(
+                    "Collecting ceph-fuse client logs for Load Point %s...",
+                    loadpoint,
+                )
+                fuse_manager.collect_client_logs(loadpoint, results_dir)
+
+        kernel_manager = self.as_kernel_manager(mount_manager)
+        if (
+            kernel_manager
+            and kernel_manager.is_logging_enabled()
+            and results_dir
+        ):
             log.info(
-                "Dumping ceph-fuse perf counters for Load Point %s...", loadpoint
+                "Collecting kernel ceph client dmesg for Load Point %s...",
+                loadpoint,
             )
-            fuse_manager.dump_perf_counters(
-                loadpoint, results_dir, settings=settings, lp_cfg=lp_cfg
-            )
-        if fuse_manager.is_logging_enabled() and results_dir:
-            log.info(
-                "Collecting ceph-fuse client logs for Load Point %s...", loadpoint
-            )
-            fuse_manager.collect_client_logs(loadpoint, results_dir)
+            kernel_manager.collect_client_logs(loadpoint, results_dir)

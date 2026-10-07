@@ -920,10 +920,29 @@ Selected via `mount_manager_type`.
 
 ### `MountKernelManager`
 
-Mounts CephFS directly via the kernel client.
+Mounts CephFS directly via the kernel client (`mount -t ceph`).
 
-- No additional configuration keys.
 - Uses `fs_name`, the cluster's monitor addresses, and the Ceph keyring.
+- Built-in `-o` options: `name=0,secret=…,mds_namespace=<fs>`.
+
+Configured via the `mount_ceph` section:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `mount_options` | string | *(empty)* | Extra options appended to `mount -t ceph -o` after the built-in name/secret/mds_namespace |
+| `logging.enabled` | bool | `false` | Enable kernel dynamic debug on clients (like `src/script/kcon_all.sh`) and collect `dmesg` at each loadpoint end |
+| `logging.modules` | list | `[ceph, libceph, rbd]` | Kernel modules passed to `/sys/kernel/debug/dynamic_debug/control` as `module <name> +p` / `-p` |
+
+When `logging.enabled` is true, each client runs the equivalent of `kcon_all.sh` before mount (`console_loglevel=9` via sysrq, then `module ceph/libceph/rbd +p`). Debug lines go to the kernel ring buffer; at each loadpoint end they are saved as `kernel_ceph_<host>_lpNN.dmesg` and `dmesg` is cleared. Dynamic debug is turned off (`-p`) on unmount.
+
+```yaml
+mount_manager_type: "MountKernelManager"
+mount_ceph:
+  mount_options: "recover_session=clean"
+  logging:
+    enabled: true
+    # modules: [ceph, libceph, rbd]  # default
+```
 
 ### `MountFuseManager`
 

@@ -9,6 +9,16 @@ fs_name: "perf_test_fs"
 fs_manager_type: "CephFSCephadmManager"
 mount_manager_type: "MountKernelManager"
 
+# Kernel CephFS client settings (used when mount_manager_type is MountKernelManager)
+mount_ceph:
+  # Extra options appended to mount -t ceph -o (after name/secret/mds_namespace)
+  mount_options: ""
+  # Kernel dynamic debug for ceph/libceph/rbd (see CephFS troubleshooting
+  # "Dynamic Debugging" / src/script/kcon_all.sh). Logs go to dmesg.
+  logging:
+    enabled: false
+#    modules: [ceph, libceph, rbd]  # default when omitted
+
 # Ceph-fuse client settings (used when mount_manager_type is MountFuseManager)
 mount_fuse:
   binary_path: "${CEPH_INSTALL_PREFIX}/bin/ceph-fuse"

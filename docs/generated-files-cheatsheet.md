@@ -200,6 +200,18 @@ ceph_fuse_<mount_label>_lpNN.log
 
 ---
 
+### 8b. Kernel CephFS client dmesg
+
+When `mount_ceph.logging.enabled` is true (kernel mount / `MountKernelManager`):
+
+```text
+kernel_ceph_<host>_lpNN.dmesg
+```
+
+Captured from client `dmesg` after kernel dynamic debug (`module ceph/libceph/rbd +p`).
+
+---
+
 ### 9. MDS daemon logs
 
 **Copied into results** (non-continuous logging):
