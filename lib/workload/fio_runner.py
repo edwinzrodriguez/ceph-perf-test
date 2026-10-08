@@ -353,19 +353,20 @@ class FioWorkloadRunner(WorkloadRunner):
             # Ensure the directory exists on each target
             remote_dir = os.path.dirname(run_cmd)
             self.executor.run_remote(
-                target, f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}"
+                target,
+                f"sudo mkdir -p {remote_dir}/lib && sudo chown {u}:{u} {remote_dir}",
             )
 
             # Copy local files to each target
             files_to_copy = [
                 ("lib/workload/run_fio_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
-                ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
                 (
                     "mds_perf_dump_collector.py",
                     "/cephfs_perf/mds_perf_dump_collector.py",
                 ),
             ]
+            files_to_copy.extend(self.cephfs_perf_lib_remote_deps(remote_dir))
 
             # Also copy ganesha perf record script if different
             g_cfg = self.config.get("ganesha", {})

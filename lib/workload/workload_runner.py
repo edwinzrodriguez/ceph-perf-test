@@ -39,6 +39,21 @@ class WorkloadRunner(abc.ABC):
     def get_name(self):
         pass
 
+    @staticmethod
+    def cephfs_perf_lib_remote_deps(remote_dir):
+        """Return (local, remote) pairs for ``cephfs_perf_lib`` and its imports.
+
+        Remote drivers copy ``cephfs_perf_lib.py`` next to the workload script.
+        That module imports ``lib.run_logging``, so the package stub and module
+        must land under ``{remote_dir}/lib/`` (script dir is on ``sys.path``).
+        """
+        lib_remote = os.path.join(remote_dir, "lib")
+        return [
+            ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
+            ("lib/__init__.py", os.path.join(lib_remote, "__init__.py")),
+            ("lib/run_logging.py", os.path.join(lib_remote, "run_logging.py")),
+        ]
+
     def execute_mds_perf_record(
         self,
         loadpoint,

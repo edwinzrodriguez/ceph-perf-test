@@ -317,7 +317,7 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         # Ensure the remote directory exists
         self.executor.run_remote(
             target,
-            f"sudo mkdir -p {remote_dir} /cephfs_perf && "
+            f"sudo mkdir -p {remote_dir}/lib /cephfs_perf && "
             f"sudo chown {u}:{u} {remote_dir} /cephfs_perf",
         )
 
@@ -398,12 +398,12 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         base_files_to_copy = [
             ("lib/workload/run_sfs2020_workload.py", run_cmd),
             ("perf_record.py", perf_script),
-            ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
             (
                 "mds_perf_dump_collector.py",
                 "/cephfs_perf/mds_perf_dump_collector.py",
             ),
         ]
+        base_files_to_copy.extend(self.cephfs_perf_lib_remote_deps(remote_dir))
 
         # Also copy ganesha perf record script if different
         g_cfg = self.config.get("ganesha", {})

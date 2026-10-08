@@ -180,14 +180,14 @@ class RadosBenchWorkloadRunner(WorkloadRunner):
             remote_dir = os.path.dirname(run_cmd)
             self.executor.run_remote(
                 target,
-                f"sudo mkdir -p {remote_dir} && sudo chown {u}:{u} {remote_dir}",
+                f"sudo mkdir -p {remote_dir}/lib && sudo chown {u}:{u} {remote_dir}",
             )
 
             files_to_copy = [
                 ("lib/workload/run_rados_workload.py", run_cmd),
                 ("perf_record.py", perf_script),
-                ("cephfs_perf_lib.py", os.path.join(remote_dir, "cephfs_perf_lib.py")),
             ]
+            files_to_copy.extend(self.cephfs_perf_lib_remote_deps(remote_dir))
 
             for local_file, remote_path in files_to_copy:
                 if os.path.exists(local_file):
