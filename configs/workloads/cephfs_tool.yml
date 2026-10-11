@@ -23,30 +23,30 @@ cephfs_tool:
   keyring: "/etc/ceph/ceph.client.admin.keyring"
   client_id: "admin"
   root_path: "/"
-  duration: 60
+  duration: 180
   progress: true
   progress_interval: 10
   loadpoints:
     - files: 1024
       size: "5GiB"
-      iterations: 3
+      iterations: 1
       extra_args: ""
-      threads: [32, 16, 8, 1]
-      msgr_workers: [3, 8, 12]
+      threads: [32, 8, 1]
+      msgr_workers: [8]
       async: false
       client-oc: [1, 0]
-      client-oc-size: ["16GiB", "1GiB", "200MiB"]
-      block-size: ["4MiB", "1MiB", "256KiB"]
+      client-oc-size: ["1GiB"]
+      block-size: ["256KiB", "4KiB"]
       fsync-every: [false, true]
     - files: 1024
       size: "5GiB"
-      iterations: 3
+      iterations: 1
       extra_args: ""
-      threads: [32, 16, 8, 1]
-      msgr_workers: [3, 8, 12]
+      threads: [32, 8, 1]
+      msgr_workers: [8]
       async: true
-      queue-depth: [1, 2, 4]
+      queue-depth: [1, 8]
       client-oc: [1, 0]
-      client-oc-size: ["16GiB", "1GiB", "200MiB"]
-      block-size: ["4MiB", "1MiB", "256KiB"]
+      client-oc-size: ["1GiB"]
+      block-size: ["256KiB", "4KiB"]
       fsync-every: [false, true]

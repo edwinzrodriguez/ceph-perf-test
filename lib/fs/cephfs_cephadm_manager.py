@@ -39,25 +39,27 @@ class CephFSCephadmManager(CephFSManager):
             )
             for h in selected_hosts
         )
+        extra_container_args = [
+            "--privileged",
+            "--cap-add",
+            "SYS_MODULE",
+            "-v",
+            "/sys/kernel/debug:/sys/kernel/debug:rw",
+            "-v",
+            "/usr/src/kernels:/usr/src/kernels:ro",
+            "-v",
+            "/usr/lib/modules:/usr/lib/modules:ro",
+            "-v",
+            "/usr/lib/debug:/usr/lib/debug:ro",
+        ]
+        # Instrumentation must be on at process start when MDS lockstat is enabled.
+        if self.is_mds_lockstat_enabled():
+            extra_container_args.extend(["-e", "ENABLE_LOCKSTAT=true"])
         spec = {
             "service_type": "mds",
             "service_id": fs,
             "placement": {"hosts": selected_hosts},
-            "extra_container_args": [
-                "--privileged",
-                "--cap-add",
-                "SYS_MODULE",
-                "-e",
-                "ENABLE_LOCKSTAT=true",
-                "-v",
-                "/sys/kernel/debug:/sys/kernel/debug:rw",
-                "-v",
-                "/usr/src/kernels:/usr/src/kernels:ro",
-                "-v",
-                "/usr/lib/modules:/usr/lib/modules:ro",
-                "-v",
-                "/usr/lib/debug:/usr/lib/debug:ro",
-            ],
+            "extra_container_args": extra_container_args,
         }
         if settings and "cpus" in settings:
             spec["extra_container_args"].extend(["--cpus", str(settings["cpus"])])

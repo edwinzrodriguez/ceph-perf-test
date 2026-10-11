@@ -55,8 +55,8 @@ mds:
   log_dir: "/var/log/ceph"
   run_dir: "/var/run/ceph"
   conf_path: "/etc/ceph/mds-settings.conf"
-  env_vars:
-    ENABLE_LOCKSTAT: "true"
+  # ENABLE_LOCKSTAT is set automatically when observability.mds.lockstat.enabled
+  env_vars: {}
 
 # Role-based daemon observability. Workload-local client capture lives
 # under <workload>.client (fio, rbd, cephfs-tool, mdsbench, rados bench).

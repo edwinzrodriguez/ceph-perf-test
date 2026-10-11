@@ -104,8 +104,9 @@ class GaneshaCephadmManager(GaneshaManager):
         )
 
         # Enable lockstat on all Ganesha hosts after applying orchestrator spec
-        for host_name in self.ganeshas:
-            self.start_lockstat(host_name)
+        if self.config.ganesha_lockstat_enabled:
+            for host_name in self.ganeshas:
+                self.start_lockstat(host_name)
 
         # Wait for the NFS service to be running BEFORE applying exports
         log.info(f"Waiting for NFS service {sid} to be running...")
@@ -412,37 +413,39 @@ class GaneshaCephadmManager(GaneshaManager):
         }
 
         if custom:
+            extra_container_args = [
+                "--privileged",
+                "--cap-add",
+                "SYS_MODULE",
+                "-v",
+                "/sys/kernel/debug:/sys/kernel/debug:rw",
+                "-v",
+                "/usr/src/kernels:/usr/src/kernels:ro",
+                "-v",
+                "/usr/lib/modules:/usr/lib/modules:ro",
+                "-v",
+                "/usr/lib/debug:/usr/lib/debug:ro",
+                "-v",
+                "/etc/ceph:/etc/ceph:z",
+                "-v",
+                "/etc/ceph/ganesha-custom.conf:/etc/ganesha/custom.conf:z",
+                "-v",
+                "/etc/ceph/ganesha-ceph.conf:/etc/ceph/ganesha-ceph.conf:z",
+                "-v",
+                "/var/run/ceph:/var/run/ceph:z",
+                "--env",
+                "GSS_USE_HOSTNAME=0",
+                "--env",
+                f"CEPH_CONF={self.config.ceph_conf_path}",
+                "--entrypoint",
+                "/usr/bin/ganesha.nfsd",
+            ]
+            # Instrumentation must be on at process start when Ganesha lockstat is enabled.
+            if self.config.ganesha_lockstat_enabled:
+                extra_container_args.extend(["-e", "ENABLE_LOCKSTAT=true"])
             ganesha_spec.update(
                 {
-                    "extra_container_args": [
-                        "--privileged",
-                        "--cap-add",
-                        "SYS_MODULE",
-                        "-e",
-                        "ENABLE_LOCKSTAT=true",
-                        "-v",
-                        "/sys/kernel/debug:/sys/kernel/debug:rw",
-                        "-v",
-                        "/usr/src/kernels:/usr/src/kernels:ro",
-                        "-v",
-                        "/usr/lib/modules:/usr/lib/modules:ro",
-                        "-v",
-                        "/usr/lib/debug:/usr/lib/debug:ro",
-                        "-v",
-                        "/etc/ceph:/etc/ceph:z",
-                        "-v",
-                        "/etc/ceph/ganesha-custom.conf:/etc/ganesha/custom.conf:z",
-                        "-v",
-                        "/etc/ceph/ganesha-ceph.conf:/etc/ceph/ganesha-ceph.conf:z",
-                        "-v",
-                        "/var/run/ceph:/var/run/ceph:z",
-                        "--env",
-                        "GSS_USE_HOSTNAME=0",
-                        "--env",
-                        f"CEPH_CONF={self.config.ceph_conf_path}",
-                        "--entrypoint",
-                        "/usr/bin/ganesha.nfsd",
-                    ],
+                    "extra_container_args": extra_container_args,
                     "extra_entrypoint_args": [
                         "-F",
                         "-L",

@@ -457,7 +457,11 @@ class LoadpointMonitor:
     def _client_lockstat_paths(self):
         cfg = self.client_lockstat or {}
         path = self.config.expand_env(cfg.get("path") or "ceph-lockstat")
-        asok = cfg.get("asok") or "/var/run/ceph/cephfs-tool.asok"
+        asok = cfg.get("asok")
+        if not asok:
+            raise ValueError(
+                "client.lockstat.asok is required for asok-driven lockstat"
+            )
         return path, asok
 
     def start_client_lockstat(self):

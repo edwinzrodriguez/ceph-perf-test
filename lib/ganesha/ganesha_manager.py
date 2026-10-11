@@ -83,10 +83,12 @@ class GaneshaManager(abc.ABC):
     def _get_ganesha_env(self):
         """Merged env used for Ganesha and related ceph_bin invocations."""
         default_env = {
-            "ENABLE_LOCKSTAT": "true",
             "GSS_USE_HOSTNAME": "0",
             "CEPH_CONF": self.config.ceph_conf_path,
         }
+        # Instrumentation must be on at process start when Ganesha lockstat is enabled.
+        if self.config.ganesha_lockstat_enabled:
+            default_env["ENABLE_LOCKSTAT"] = "true"
         return self.config.get_merged_env_vars(default_env, self.config.ganesha_env_vars)
 
     def _get_ganesha_env_exports(self):

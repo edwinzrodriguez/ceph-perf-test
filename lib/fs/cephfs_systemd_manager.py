@@ -27,7 +27,6 @@ class CephFSSystemdManager(CephFSManager):
           run_dir: /var/run/ceph
           env_vars:
             LD_LIBRARY_PATH: "/usr/local/lib:${LD_LIBRARY_PATH}"
-            ENABLE_LOCKSTAT: "true"
     """
 
     def _mds_cfg(self):
@@ -53,9 +52,11 @@ class CephFSSystemdManager(CephFSManager):
 
     def _env_vars(self, settings=None):
         default_env = {
-            "ENABLE_LOCKSTAT": "true",
             "CEPH_CONF": self._mds_daemon_conf_path(settings),
         }
+        # Instrumentation must be on at process start when MDS lockstat is enabled.
+        if self.is_mds_lockstat_enabled():
+            default_env["ENABLE_LOCKSTAT"] = "true"
         user_env = self._mds_cfg().get("env_vars", {}) or {}
         # Top-level env_vars (CEPH_INSTALL_PREFIX, LD_LIBRARY_PATH, PATH) first,
         # then defaults / mds.env_vars so local overrides win.
