@@ -460,10 +460,8 @@ Configuration for the `cephfs-tool bench` workload runner.
 | `client.perf_record.executable` | string | `cephfs-tool` | Process to attach to |
 | `client.perf_record.duration` | int | `30` | Profiling duration in seconds |
 | `client.perf_record.script` | string | `/cephfs_perf/perf_record.py` | Remote perf script |
-| `client.lockstat.enabled` | bool | `false` | Collect client lock contention |
-| `client.lockstat.path` | string | | Path to `ceph-lockstat` |
-| `client.lockstat.asok` | string | `/var/run/ceph/cephfs-tool.asok` | Admin socket path |
-| `client.lockstat.threshold` | int | `0` | Reporting threshold |
+| `client.lockstat.enabled` | bool | `false` | Collect client lock contention via cephfs-tool `--lockstat-dump` |
+| `client.lockstat.threshold` | int | `0` | `--lockstat-threshold` in nanoseconds (`0` = collect all) |
 
 #### Loadpoint Options
 

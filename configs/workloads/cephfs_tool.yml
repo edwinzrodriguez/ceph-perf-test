@@ -10,10 +10,9 @@ cephfs_tool:
       script: "/cephfs_perf/perf_record.py"
       executable: cephfs-tool
       duration: 30
+    # Uses cephfs-tool --lockstat-dump / --lockstat-threshold (native, per phase).
     lockstat:
       enabled: true
-      path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat"
-      asok: "/var/run/ceph/cephfs-tool.asok"
       threshold: 0
   results_base_dir: "/cephfs_perf/results"
   run_command: "/cephfs_perf/cephfs_tool/run_cephfs_workload.py"

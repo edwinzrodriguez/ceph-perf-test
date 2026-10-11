@@ -2033,6 +2033,7 @@ class CommonUtils:
             "lockstat",
             "threads_fio",
             "cephfs_tool_lockstat_enabled",
+            "cephfs_tool_lockstat_threshold",
             "cephfs_tool_lockstat_asok",
             "cephfs_tool_lockstat_path",
             "timestamp_progress",

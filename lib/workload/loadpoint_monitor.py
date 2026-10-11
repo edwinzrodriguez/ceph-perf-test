@@ -192,7 +192,13 @@ class LoadpointMonitor:
                 if self._ganesha_lockstat_enabled():
                     self.ganesha_manager.reset_lockstat(host)
 
-        if self.client_lockstat.get("enabled") and not self.client_lockstat_started:
+        # Asok-driven client lockstat only (explicit ``asok``). cephfs-tool uses
+        # built-in --lockstat-dump and does not set asok.
+        if (
+            self.client_lockstat.get("enabled")
+            and self.client_lockstat.get("asok")
+            and not self.client_lockstat_started
+        ):
             log.info(
                 "Starting client lockstat for Load Point %s", self.current_lp
             )

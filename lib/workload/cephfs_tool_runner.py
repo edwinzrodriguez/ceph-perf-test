@@ -63,14 +63,12 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
                 payload[key] = cfg[key]
         payload["env_vars"] = self.config.get_merged_env_vars(cfg.get("env_vars"))
 
+        # Built-in cephfs-tool --lockstat-dump / --lockstat-threshold (no asok).
         lockstat_cfg = self.config.client_lockstat("cephfs_tool")
         if lockstat_cfg.get("enabled", False):
             payload["cephfs_tool_lockstat_enabled"] = True
-            payload["cephfs_tool_lockstat_asok"] = lockstat_cfg.get(
-                "asok", "/var/run/ceph/cephfs-tool.asok"
-            )
-            payload["cephfs_tool_lockstat_path"] = lockstat_cfg.get(
-                "path", "/usr/local/bin/ceph-lockstat"
+            payload["cephfs_tool_lockstat_threshold"] = lockstat_cfg.get(
+                "threshold", 0
             )
 
         settings_json = json.dumps(payload)
@@ -123,11 +121,6 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             "bash -s",
         ]
 
-        phase_state = {
-            "write_dumped": False,
-            "read_dumped": False,
-            "data": {},
-        }
         monitor = self.make_loadpoint_monitor(
             workload_name="cephfs_tool",
             config_section="cephfs_tool",
@@ -153,75 +146,12 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
         process.stdin.write(full_cmd + "\n")
         process.stdin.close()
 
-        def on_line(line, mon):
-            self._on_cephfs_tool_phase(line, mon, phase_state)
-
-        output, returncode = self.consume_remote_stdout(process, monitor, on_line)
+        output, returncode = self.consume_remote_stdout(process, monitor)
         if returncode != 0:
             raise RuntimeError(
                 f"CephFS-Tool failed on {self.admin} with return code {returncode}"
             )
         return output
-
-    def _on_cephfs_tool_phase(self, line, monitor, state):
-        """Phase lockstat dumps that are specific to cephfs-tool write/read."""
-        if "Starting tests..." in line:
-            state["write_dumped"] = False
-            state["read_dumped"] = False
-            state["data"] = {}
-            return
-        if not monitor.client_lockstat.get("enabled"):
-            return
-        lp = monitor.current_lp
-        if "Starting WRITE phase" in line or "Starting READ phase" in line:
-            label = "Write" if "WRITE" in line else "Read"
-            if not monitor.client_lockstat_started:
-                log.info(f"Starting cephfs-tool lockstat for Load Point {lp}...")
-                monitor.start_client_lockstat()
-            else:
-                log.info(f"Resetting lockstat for {label} Phase, Load Point {lp}...")
-                monitor.reset_client_lockstat()
-        if (
-            not state["write_dumped"]
-            and "Write:" in line
-            and "MiB/s" in line
-        ):
-            log.info(f"Dumping lockstat for Write Phase, Load Point {lp}...")
-            for client, data in monitor.dump_client_lockstat("write").items():
-                state["data"].setdefault(client, {})["write"] = data
-            state["write_dumped"] = True
-        if (
-            not state["read_dumped"]
-            and "Read:" in line
-            and "MiB/s" in line
-        ):
-            log.info(f"Dumping lockstat for Read Phase, Load Point {lp}...")
-            for client, data in monitor.dump_client_lockstat("read").items():
-                state["data"].setdefault(client, {})["read"] = data
-            state["read_dumped"] = True
-        if "Finished CephFS-Tool Load Point:" in line and state["data"]:
-            self._inject_lockstat_into_results(
-                monitor.results_dir,
-                state["data"],
-                lp,
-                monitor.payload,
-                monitor.current_lp_cfg(),
-            )
-
-    def _inject_lockstat_into_results(self, results_dir, lockstat_data, current_lp, payload, lp_cfg):
-        for client, phase_data in lockstat_data.items():
-            json_filename = f"{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, current_lp, payload, lp_cfg)}.json"
-            results_path = f"{results_dir}/{json_filename}"
-            lockstat_b64 = base64.b64encode(json.dumps(phase_data).encode()).decode()
-            inject_cmd = (
-                f"python3 -c \""
-                f"import json, base64; "
-                f"f=open('{results_path}'); data=json.load(f); f.close(); "
-                f"data['lockstat_results']=json.loads(base64.b64decode('{lockstat_b64}')); "
-                f"f=open('{results_path}','w'); json.dump(data,f,indent=4); f.close()\""
-            )
-            log.info(f"[{client}] Injecting lockstat results into {results_path}...")
-            self.executor.run_remote(self.admin, inject_cmd)
 
     def get_results_dir(self, settings, shared_ts=None):
         cfg = self.config.cephfs_tool

@@ -130,6 +130,7 @@ class FioWorkloadRunner(WorkloadRunner):
                 expanded_loadpoints=expanded_loadpoints,
                 cephfs_manager=cephfs_manager,
                 ganesha_manager=ganesha_manager,
+                mount_manager=mount_manager,
                 results_dir=results_dir,
                 settings=settings,
             )
@@ -153,6 +154,7 @@ class FioWorkloadRunner(WorkloadRunner):
         expanded_loadpoints,
         cephfs_manager,
         ganesha_manager,
+        mount_manager,
         results_dir,
         settings,
     ):

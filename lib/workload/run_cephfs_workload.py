@@ -15,6 +15,71 @@ if project_root not in sys.path:
 from cephfs_perf_lib import CommonUtils
 
 
+def lockstat_phase_path(base_path, iteration, phase):
+    """Mirror cephfs-tool.cc dump_lockstat_data filename construction.
+
+    ``base.json`` + iter 1 + write → ``base_iter1_write.json``.
+    """
+    output_path = base_path
+    extension = ""
+    dot_pos = output_path.rfind(".")
+    if dot_pos != -1:
+        extension = output_path[dot_pos:]
+        output_path = output_path[:dot_pos]
+    return f"{output_path}_iter{iteration}_{phase}{extension}"
+
+
+def collect_lockstat_files(client, base_path, iterations, results_dir):
+    """Copy per-iteration write/read lockstat JSON from client; return nested dict."""
+    collected = {}
+    for iter_n in range(1, int(iterations) + 1):
+        for phase in ("write", "read"):
+            remote_path = lockstat_phase_path(base_path, iter_n, phase)
+            local_name = os.path.basename(remote_path)
+            local_path = os.path.join(results_dir, local_name)
+            scp = subprocess.run(
+                [
+                    "scp",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    f"{client}:{remote_path}",
+                    local_path,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if scp.returncode != 0:
+                print(
+                    f"[{client}] Warning: lockstat file missing or copy failed: "
+                    f"{remote_path}",
+                    flush=True,
+                )
+                continue
+            try:
+                with open(local_path, "r", encoding="utf-8") as handle:
+                    collected.setdefault(str(iter_n), {})[phase] = json.load(handle)
+                print(
+                    f"[{client}] Collected lockstat {local_name}",
+                    flush=True,
+                )
+            except Exception as exc:
+                print(
+                    f"[{client}] Warning: invalid lockstat JSON {local_path}: {exc}",
+                    flush=True,
+                )
+            subprocess.run(
+                [
+                    "ssh",
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    client,
+                    f"rm -f {remote_path}",
+                ],
+                stderr=subprocess.DEVNULL,
+            )
+    return collected
+
+
 def main():
     parser = argparse.ArgumentParser(description="CephFS-Tool Workload Driver")
     parser.add_argument("--settings", type=str, required=True, help="JSON settings or path to JSON file (prefix with @)")
@@ -48,11 +113,6 @@ def main():
 
     executable = settings.get("executable_path", "/usr/local/bin/cephfs-tool")
     base_env_vars = dict(settings.get("env_vars", {}))
-    lockstat_asok = settings.get("cephfs_tool_lockstat_asok")
-    if lockstat_asok:
-        asok_arg = f"--admin-socket={lockstat_asok}"
-        existing_ceph_args = base_env_vars.get("CEPH_ARGS", "")
-        base_env_vars["CEPH_ARGS"] = f"{existing_ceph_args} {asok_arg}".strip() if existing_ceph_args else asok_arg
     config_path = settings.get("config_path")
     keyring = settings.get("keyring")
     client_id = settings.get("client_id")
@@ -61,6 +121,8 @@ def main():
     msgr_workers = settings.get("msgr_workers")
     progress = settings.get("progress", True)
     progress_interval = settings.get("progress_interval", 10)
+    lockstat_enabled = bool(settings.get("cephfs_tool_lockstat_enabled"))
+    lockstat_threshold = settings.get("cephfs_tool_lockstat_threshold", 0)
 
     for i, lp_cfg in enumerate(loadpoints):
         lp = i + 1
@@ -68,13 +130,14 @@ def main():
         time.sleep(2)  # Give time for runner to detect and reset perf
 
         processes = []
+        lockstat_bases = {}
         for client in clients:
             # Construct the cephfs-tool command
             # env CEPH_ARGS="..." /path/to/cephfs-tool bench -c ... -k ... -i ... --filesystem ... --root-path ... --files ... --size ... --threads ... --iterations ... [extra_args]
 
             cmd_parts = []
             env_vars = dict(base_env_vars)
-            if settings.get("cephfs_tool_lockstat_enabled"):
+            if lockstat_enabled:
                 env_vars["ENABLE_LOCKSTAT"] = "true"
             if env_vars:
                 cmd_parts.append(
@@ -111,6 +174,14 @@ def main():
             perf_dump_output = f"/tmp/{CommonUtils.get_workload_base_name('cephfs_tool', 'perf_dump', client, lp, settings, lp_cfg)}.json"
             cmd_parts.extend(["--json", json_output])
             cmd_parts.extend(["--perf-dump", perf_dump_output])
+
+            if lockstat_enabled:
+                lockstat_base = (
+                    f"/tmp/{CommonUtils.get_workload_base_name('cephfs_tool', 'lockstat', client, lp, settings, lp_cfg)}.json"
+                )
+                lockstat_bases[client] = lockstat_base
+                cmd_parts.extend(["--lockstat-dump", lockstat_base])
+                cmd_parts.extend(["--lockstat-threshold", str(lockstat_threshold)])
 
             cmd_parts.extend(["--files", str(lp_cfg.get("files", 1024))])
 
@@ -280,6 +351,21 @@ def main():
                 stderr=subprocess.DEVNULL,
             )
 
+            lockstat_results = None
+            if lockstat_enabled and client in lockstat_bases:
+                by_iter = collect_lockstat_files(
+                    client,
+                    lockstat_bases[client],
+                    lp_cfg.get("iterations", 1),
+                    results_dir,
+                )
+                if by_iter:
+                    # Single-iteration stays flat {write, read} for compatibility.
+                    if len(by_iter) == 1 and "1" in by_iter:
+                        lockstat_results = by_iter["1"]
+                    else:
+                        lockstat_results = by_iter
+
             # Clean up temp files on client
             subprocess.run(
                 ["ssh", "-o", "StrictHostKeyChecking=no", client,
@@ -299,6 +385,8 @@ def main():
                     data["test_parameters"]["Workload Runner"] = args.runner_name
 
                 data["test_results_summary"] = CommonUtils.get_summary(data)
+                if lockstat_results is not None:
+                    data["lockstat_results"] = lockstat_results
 
                 with open(local_json, "w") as f:
                     json.dump(data, f, indent=4)
