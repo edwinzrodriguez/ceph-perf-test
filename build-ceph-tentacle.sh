@@ -56,6 +56,7 @@ for i in "$@"; do
     cmake ../nfs-ganesha/src/ -GNinja \
       -DUSE_TRACEFLOW=OFF \
       -DUSE_FSAL_CEPH=true \
+      -DUSE_DBUS=ON \
       -DCEPHFS_INCLUDE_DIR=/usr/local/$i/include \
       -DCEPHFS_LIBRARY_DIR=/usr/local/$i/lib64 \
       -DCMAKE_BUILD_TYPE=RelWithDebInfo \

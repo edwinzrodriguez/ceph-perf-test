@@ -12,6 +12,15 @@
           - libnsl2-devel
           - procps-ng
           - procps-ng-devel
+          - dbus-devel
+          - pkgconf-pkg-config
+          - python3-devel
+          - python3-build
+          - python3-wheel
+          - python3-installer
+          - python3-dbus
+          - python3-gobject
+          - python3-pyparsing
         state: present
 
     - name: Check if Ganesha source directory exists
@@ -53,7 +62,7 @@
 
     - name: Run cmake for NFS-Ganesha
       ansible.builtin.command:
-        cmd: "cmake -GNinja -DUSE_TRACEFLOW=OFF -DUSE_FSAL_CEPH=true -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
+        cmd: "cmake -GNinja -DUSE_TRACEFLOW=OFF -DUSE_FSAL_CEPH=true -DUSE_DBUS=ON -DCEPHFS_INCLUDE_DIR={{ ceph_install_prefix }}/include -DCEPHFS_LIBRARY_DIR={{ ceph_install_prefix }}/lib64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX={{ ganesha_install_prefix }} ../{{ ganesha_dest_name }}/src"
         chdir: "{{ git_base_dir }}/{{ ganesha_build_dir }}"
       become: false
       when: not ganesha_build_stat.stat.exists
@@ -103,6 +112,13 @@
           }
         mode: '0644'
         force: false
+
+    - name: Install Ganesha D-Bus policy
+      ansible.builtin.copy:
+        src: "{{ git_base_dir }}/{{ ganesha_dest_name }}/src/scripts/ganeshactl/org.ganesha.nfsd.conf"
+        dest: /etc/dbus-1/system.d/org.ganesha.nfsd.conf
+        remote_src: true
+        mode: '0644'
 
     - name: Create nfs-ganesha systemd service file
       ansible.builtin.copy:
