@@ -113,6 +113,50 @@ class GaneshaManager(abc.ABC):
             return None
         return asok_path
 
+    def _nfs_core_metrics_params(self):
+        """NFS_Core_Param lines that expose Ganesha Prometheus metrics.
+
+        Enabled whenever the Grafana monitoring stack is on so Prometheus can
+        scrape ``Monitoring_Port`` (default 9587).
+        """
+        if not self.config.grafana_enabled:
+            return ""
+        port = self.config.ganesha_monitoring_port
+        return (
+            "    Enable_Metrics = true;\n"
+            f"    Monitoring_Port = {port};\n"
+        )
+
+    def _nfs_core_stats_params(self):
+        """NFS_Core_Param lines for detailed Ganesha stats collection.
+
+        Controlled by ``observability.ganesha.stats``. When enabled, emits
+        ``Enable_NFS_Stats``, ``Enable_Fast_Stats``, ``Enable_FSAL_Stats``,
+        ``Enable_FULLV4_Stats``, and ``Enable_FULLV3_Stats``.
+        """
+        stats = self.config.ganesha_stats
+        if not stats:
+            return ""
+        bool_str = lambda v: "true" if v else "false"
+        return (
+            f"    Enable_NFS_Stats = {bool_str(stats['nfs'])};\n"
+            f"    Enable_Fast_Stats = {bool_str(stats['fast'])};\n"
+            f"    Enable_FSAL_Stats = {bool_str(stats['fsal'])};\n"
+            f"    Enable_FULLV4_Stats = {bool_str(stats['fullv4'])};\n"
+            f"    Enable_FULLV3_Stats = {bool_str(stats['fullv3'])};\n"
+        )
+
+    def _open_ganesha_metrics_firewall(self):
+        """Allow Prometheus to scrape Ganesha metrics on ganesha hosts."""
+        if not self.config.grafana_enabled or not self.ganeshas:
+            return
+        port = self.config.ganesha_monitoring_port
+        log.info(
+            "Opening firewall TCP port %s on ganesha hosts for Prometheus metrics...",
+            port,
+        )
+        CommonUtils.open_firewall_tcp_ports(self.executor, self.ganeshas, [port])
+
     def reset_ganesha_perf(self, host_name):
         asok_path = self._get_asok_path(host_name)
         if not asok_path:

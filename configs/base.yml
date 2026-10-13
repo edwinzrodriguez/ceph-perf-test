@@ -134,7 +134,17 @@ observability:
       enabled: true
       script: "/cephfs_perf/perf_record.py"
       executable: ganesha.nfsd
-      duration: 5
+      duration: 30
+    # NFS_Core_Param Enable_*_Stats. fullv4 is required for Grafana latency panels
+    # (nfs_latency_ms). Leave fast false — Enable_Fast_Stats skips FULLV4 recording.
+    stats:
+      enabled: true
+      # optional overrides (defaults: nfs/fsal/fullv4/fullv3 true, fast false):
+      nfs: true
+      fast: false
+      fsal: true
+      fullv4: true
+      # fullv3: true
 
 # Framework transcript (console + file). Not Ceph daemon debug levels.
 run_logging:
@@ -187,6 +197,8 @@ ganesha:
   service_id: "ganesha"
   # type = systemd|cephadm
   type: "systemd"
+  # Prometheus metrics port when grafana.enabled (NFS_Core_Param.Monitoring_Port)
+  monitoring_port: 9587
   binary_path: "${CEPH_INSTALL_PREFIX}/bin/ganesha.nfsd"
   # Optional: extra env_vars merged on top of top-level env_vars
   # env_vars: {}

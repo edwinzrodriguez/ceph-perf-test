@@ -34,6 +34,7 @@ class GaneshaSystemdManager(GaneshaManager):
         log.info("Setting up Ganesha configuration on ganesha nodes...")
         # setup_ganesha_config is called per host in the loop below
         # to support per-host Ceph_Conf paths
+        self._open_ganesha_metrics_firewall()
 
         binary = self.config.ganesha_binary_path
         pid_path = self.config.ganesha_pid_path
@@ -243,6 +244,8 @@ class GaneshaSystemdManager(GaneshaManager):
             "    Enable_RQUOTA = false;\n"
             "    NFS_Port = 2049;\n"
             "    allow_set_io_flusher_fail = true;\n"
+            f"{self._nfs_core_metrics_params()}"
+            f"{self._nfs_core_stats_params()}"
         )
 
         if self.config.ganesha_rpc_ioq_thrdmin is not None:

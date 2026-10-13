@@ -5,7 +5,7 @@
 #   grafanas  - hosts running Grafana and Prometheus (optional; falls back to mons)
 #   mons, mgrs, mdss, osds - hosts that may run ceph-exporter or expose mgr metrics
 
-- hosts: grafanas:mons:mdss:osds:mgrs
+- hosts: grafanas:mons:mdss:osds:mgrs:ganeshas
   become: true
   vars:
     monitoring_ports:
@@ -14,6 +14,7 @@
       - "9283/tcp"    # mgr/prometheus module
       - "9926/tcp"    # ceph-exporter
       - "9100/tcp"    # node-exporter
+      - "9587/tcp"    # NFS-Ganesha Prometheus metrics (Enable_Metrics)
   tasks:
     - name: Gather service facts
       ansible.builtin.service_facts:

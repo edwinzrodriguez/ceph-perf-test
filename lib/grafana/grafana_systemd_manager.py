@@ -27,6 +27,13 @@ class GrafanaSystemdManager(GrafanaManager):
     GRAFANA_DASHBOARDS_HOST_DIR = "/etc/ceph/monitoring/grafana/dashboards"
     CEPH_DASHBOARDS_PATH = "/etc/grafana/dashboards/ceph-dashboard"
     DASHBOARDS_SOURCE_DIR = Path(__file__).resolve().parent / "dashboards"
+    PROMETHEUS_RULES_FILENAME = "prometheus.rules.yml"
+    PROMETHEUS_RULES_HOST_PATH = (
+        f"/etc/ceph/monitoring/{PROMETHEUS_RULES_FILENAME}"
+    )
+    PROMETHEUS_RULES_CONTAINER_PATH = (
+        f"/etc/prometheus/{PROMETHEUS_RULES_FILENAME}"
+    )
 
     def provision_monitoring(self):
         if self._provisioned:
@@ -49,6 +56,9 @@ class GrafanaSystemdManager(GrafanaManager):
         self._deploy_prometheus(primary_host)
         self._deploy_grafana(primary_host)
         self._provisioned = True
+
+    def _ganesha_metrics_enabled(self):
+        return bool(self.config.ganesha_enabled and self.config.ganeshas)
 
     def cleanup_monitoring(self):
         log.info("Stopping systemd monitoring stack...")
@@ -146,7 +156,59 @@ class GrafanaSystemdManager(GrafanaManager):
                 },
             ],
         }
+        if self._ganesha_metrics_enabled():
+            ganesha_port = self.config.ganesha_monitoring_port
+            ganesha_targets = [
+                f"{self._host_addr(h)}:{ganesha_port}"
+                for h in self.config.ganeshas
+            ]
+            config["scrape_configs"].append(
+                {
+                    "job_name": "ganesha",
+                    "metrics_path": "/metrics",
+                    "static_configs": [
+                        {
+                            "targets": ganesha_targets,
+                            "labels": {"cluster": cluster},
+                        }
+                    ],
+                }
+            )
+            config["rule_files"] = [self.PROMETHEUS_RULES_CONTAINER_PATH]
         return yaml.dump(config, default_flow_style=False, sort_keys=False)
+
+    def _deploy_prometheus_rules(self, host_name):
+        """Copy Ganesha recording rules onto the Prometheus host."""
+        rules_src = self.DASHBOARDS_SOURCE_DIR / self.PROMETHEUS_RULES_FILENAME
+        if not rules_src.is_file():
+            raise RuntimeError(
+                f"Ganesha Prometheus rules not found at {rules_src}. "
+                "Expected prometheus.rules.yml from nfs-ganesha config_samples."
+            )
+        remote_path = self.PROMETHEUS_RULES_HOST_PATH
+        self.executor.run_remote(
+            host_name, f"sudo mkdir -p {os.path.dirname(remote_path)}"
+        )
+        u, h, p = self.executor.get_ssh_details(host_name)
+        log.info(f"[{host_name}] Copying Ganesha Prometheus rules to {remote_path}...")
+        # scp as the SSH user, then install into the root-owned monitoring dir.
+        tmp_path = f"/tmp/{self.PROMETHEUS_RULES_FILENAME}"
+        subprocess.run(
+            [
+                "scp",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-P",
+                str(p),
+                str(rules_src),
+                f"{u}@{h}:{tmp_path}",
+            ],
+            check=True,
+        )
+        self.executor.run_remote(
+            host_name,
+            f"sudo mv {tmp_path} {remote_path} && sudo chmod 0644 {remote_path}",
+        )
 
     def _deploy_prometheus(self, host_name):
         config_dir = "/etc/ceph/monitoring"
@@ -164,6 +226,16 @@ class GrafanaSystemdManager(GrafanaManager):
             f"echo {b64} | base64 -d | sudo tee {config_path} > /dev/null",
         )
         self.executor.run_remote(host_name, f"sudo chmod 0644 {config_path}")
+        volume_args = (
+            f"-v {config_path}:/etc/prometheus/prometheus.yml:ro,Z "
+            f"-v {data_dir}:/prometheus:Z "
+        )
+        if self._ganesha_metrics_enabled():
+            self._deploy_prometheus_rules(host_name)
+            volume_args += (
+                f"-v {self.PROMETHEUS_RULES_HOST_PATH}:"
+                f"{self.PROMETHEUS_RULES_CONTAINER_PATH}:ro,Z "
+            )
         # Prometheus runs as UID 65534 (nobody) in the upstream image.
         self.executor.run_remote(
             host_name,
@@ -174,14 +246,18 @@ class GrafanaSystemdManager(GrafanaManager):
 
         run_cmd = (
             f"sudo podman run -d --name {container} --network host "
-            f"-v {config_path}:/etc/prometheus/prometheus.yml:ro,Z "
-            f"-v {data_dir}:/prometheus:Z "
+            f"{volume_args}"
             f"{image} "
             f"--config.file=/etc/prometheus/prometheus.yml "
             f"--storage.tsdb.path=/prometheus "
             f"--web.listen-address=0.0.0.0:{port}"
         )
         log.info(f"[{host_name}] Starting Prometheus container on port {port}...")
+        if self._ganesha_metrics_enabled():
+            log.info(
+                f"[{host_name}] Prometheus will scrape Ganesha metrics on port "
+                f"{self.config.ganesha_monitoring_port}"
+            )
         self.executor.run_remote(host_name, run_cmd, check=True)
         self._verify_container_running(host_name, container)
 
@@ -190,7 +266,9 @@ class GrafanaSystemdManager(GrafanaManager):
             "apiVersion": 1,
             "datasources": [
                 {
-                    "name": "Dashboard1",
+                    # Named "Prometheus" so the Ganesha dashboard (and Ceph
+                    # $datasource queries) resolve without import-time remapping.
+                    "name": "Prometheus",
                     "type": "prometheus",
                     "access": "proxy",
                     "orgId": 1,
@@ -239,29 +317,41 @@ class GrafanaSystemdManager(GrafanaManager):
 
     def _deploy_grafana_dashboards(self, host_name):
         source_dir = self.DASHBOARDS_SOURCE_DIR
-        if not any(source_dir.glob("*.json")):
+        dashboard_files = sorted(source_dir.glob("*.json"))
+        if not dashboard_files:
             raise RuntimeError(
                 f"No Ceph Grafana dashboards found in {source_dir}. "
                 "Expected JSON files from ceph monitoring/ceph-mixin/dashboards_out."
             )
+        if not self._ganesha_metrics_enabled():
+            # Keep the Ganesha sample dashboard out of non-NFS runs.
+            dashboard_files = [
+                p for p in dashboard_files if p.name != "grafana.dashboard.json"
+            ]
+            if not dashboard_files:
+                raise RuntimeError(
+                    f"No Ceph Grafana dashboards found in {source_dir} after "
+                    "excluding Ganesha-only dashboards."
+                )
 
         remote_dir = self.GRAFANA_DASHBOARDS_HOST_DIR
         self.executor.run_remote(host_name, f"sudo mkdir -p {remote_dir}")
-        u, h, p = self.executor.get_ssh_details(host_name)
-        log.info(f"[{host_name}] Copying Ceph Grafana dashboards to {remote_dir}...")
-        subprocess.run(
-            [
-                "scp",
-                "-o",
-                "StrictHostKeyChecking=no",
-                "-P",
-                str(p),
-                "-r",
-                f"{source_dir}/.",
-                f"{u}@{h}:{remote_dir}/",
-            ],
-            check=True,
+        # Clear prior dashboards so removed JSON (e.g. Ganesha-only) does not linger.
+        self.executor.run_remote(
+            host_name, f"sudo find {remote_dir} -type f -name '*.json' -delete"
         )
+        u, h, p = self.executor.get_ssh_details(host_name)
+        log.info(f"[{host_name}] Copying Grafana dashboards to {remote_dir}...")
+        scp_cmd = [
+            "scp",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-P",
+            str(p),
+        ]
+        scp_cmd.extend(str(p_) for p_ in dashboard_files)
+        scp_cmd.append(f"{u}@{h}:{remote_dir}/")
+        subprocess.run(scp_cmd, check=True)
         self.executor.run_remote(
             host_name,
             f"sudo find {remote_dir} -type f -name '*.json' -exec chmod 0644 {{}} +",

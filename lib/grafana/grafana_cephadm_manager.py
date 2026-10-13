@@ -28,6 +28,13 @@ class GrafanaCephadmManager(GrafanaManager):
         self._apply_exporter_prio_limit()
         self._apply_monitoring_specs()
         self._wait_for_monitoring_services()
+        if self.config.ganesha_enabled:
+            log.info(
+                "Note: grafana.type=cephadm does not auto-scrape Ganesha metrics. "
+                "Use grafana.type=systemd (or scrape ganesha hosts:%s manually). "
+                "Ganesha still enables Enable_Metrics when provisioned.",
+                self.config.ganesha_monitoring_port,
+            )
         self._provisioned = True
 
     def cleanup_monitoring(self):

@@ -20,6 +20,7 @@ class GaneshaCephadmManager(GaneshaManager):
             log.info("Ganesha already provisioned. Skipping.")
             return
         sid = self.config.ganesha_service_id
+        self._open_ganesha_metrics_firewall()
         # Ceph CLI might restrict manual creation of pools starting with '.',
         # but the NFS orchestrator often expects it. We'll try to create it,
         # but we'll mainly rely on the orchestrator to handle its own pool if possible.
@@ -344,8 +345,10 @@ class GaneshaCephadmManager(GaneshaManager):
             "    Enable_RQUOTA = false;\n"
             "    NFS_Port = 2049;\n"
             "    allow_set_io_flusher_fail = true;\n"
+            f"{self._nfs_core_metrics_params()}"
+            f"{self._nfs_core_stats_params()}"
         )
-        
+
         if self.config.ganesha_rpc_ioq_thrdmin is not None:
             nfs_core_params += f"    rpc_ioq_thrdmin = {self.config.ganesha_rpc_ioq_thrdmin};\n"
         if self.config.ganesha_rpc_ioq_thrdmax is not None:

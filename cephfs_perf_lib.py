@@ -805,6 +805,11 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("rpc_ioq_thrdmax")
 
     @property
+    def ganesha_monitoring_port(self):
+        """Prometheus metrics HTTP port exposed by ganesha.nfsd (Enable_Metrics)."""
+        return self._config.get("ganesha", {}).get("monitoring_port", 9587)
+
+    @property
     def ganesha_user_id(self):
         user_id = self._config.get("ganesha", {}).get("user_id")
         if user_id:
@@ -910,6 +915,28 @@ class PerformanceTestConfig:
     def ganesha_lockstat_enabled(self):
         lockstat = self.role_observability("ganesha").get("lockstat") or {}
         return bool(lockstat.get("enabled"))
+
+    @property
+    def ganesha_stats(self):
+        """``observability.ganesha.stats`` knobs for NFS_Core_Param Enable_*_Stats.
+
+        When ``enabled`` is true, returns a dict of bools for the five Ganesha
+        stats switches. Defaults favor the Grafana Ganesha dashboard:
+        ``nfs``/``fsal``/``fullv4``/``fullv3`` true, ``fast`` false (Fast_Stats
+        early-returns before FULLV4 latency histograms are recorded).
+        When disabled/absent, returns None so the Ganesha config omits the keys
+        and keeps upstream defaults.
+        """
+        block = self.role_observability("ganesha").get("stats") or {}
+        if not isinstance(block, dict) or not block.get("enabled"):
+            return None
+        return {
+            "nfs": bool(block.get("nfs", True)),
+            "fast": bool(block.get("fast", False)),
+            "fsal": bool(block.get("fsal", True)),
+            "fullv4": bool(block.get("fullv4", True)),
+            "fullv3": bool(block.get("fullv3", True)),
+        }
 
     @property
     def samba_enabled(self):

@@ -169,6 +169,13 @@ Default container images match the upstream Ceph cephadm monitoring stack:
 - Enables the mgr `prometheus` module
 - Starts `ceph-exporter` as a local process on mon/mgr/mds/osd hosts
 - Runs Prometheus and Grafana as podman containers on `grafanas` hosts
+- When `ganesha.enabled` is also true, Prometheus scrapes Ganesha metrics
+  (`Monitoring_Port`, default `9587`), loads `lib/grafana/dashboards/prometheus.rules.yml`
+  recording rules, and provisions the Ganesha Grafana dashboard
+
+**`type: cephadm`** does not add a custom Ganesha scrape job (cephadm owns the
+Prometheus config). Ganesha still sets `Enable_Metrics` when Grafana is enabled;
+use `grafana.type: systemd` for automatic collection.
 
 #### Inventory
 
@@ -209,7 +216,7 @@ grafana:
 ansible-playbook -i <inventory> cephfs-sfs-config.yml
 ```
 
-This runs `ceph-monitoring-host-prep.yml`, which opens firewall ports (3000, 9095, 9283, 9926, 9100), installs podman on monitoring hosts, and creates `/etc/ceph/monitoring`.
+This runs `ceph-monitoring-host-prep.yml`, which opens firewall ports (3000, 9095, 9283, 9926, 9100, 9587), installs podman on monitoring hosts, and creates `/etc/ceph/monitoring`.
 
 2. **Run benchmarks with monitoring**:
 
@@ -227,6 +234,7 @@ This runs `ceph-monitoring-host-prep.yml`, which opens firewall ports (3000, 909
 | Prometheus | `http://<grafana-host>:9095` |
 | mgr/prometheus | `http://<mgr-host>:9283/metrics` |
 | ceph-exporter | `http://<daemon-host>:9926/metrics` |
+| Ganesha metrics | `http://<ganesha-host>:9587/metrics` (when `ganesha.enabled` + Grafana) |
 
 Workload runners print load-point markers (e.g. `Detected Starting tests... Load Point: N/T (P% done)`) that can be correlated with Grafana time series during a run.
 
@@ -248,6 +256,7 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 | `pid_path` | string | `/var/run/ganesha.pid` | PID file location (systemd only) |
 | `config_path` | string | `/etc/ganesha/ganesha.conf` | Ganesha config path (systemd only) |
 | `ganesha_yaml_path` | string | `/cephfs_perf/ganesha.yaml` | Cephadm spec YAML path (cephadm only) |
+| `monitoring_port` | int | `9587` | Ganesha Prometheus metrics port (`NFS_Core_Param.Monitoring_Port`). When `grafana.enabled` is true, Ganesha sets `Enable_Metrics = true` and systemd Prometheus scrapes this port. |
 
 #### Authentication
 
@@ -832,7 +841,19 @@ observability:
   ganesha:
     lockstat: { enabled: true, path: "${CEPH_INSTALL_PREFIX}/bin/ceph-lockstat", threshold: 0 }
     perf_record: { enabled: true, script: "/cephfs_perf/perf_record.py", executable: ganesha.nfsd, duration: 5 }
+    # FULLV4 stats feed nfs_latency_ms (Grafana latency). Keep fast: false.
+    stats: { enabled: true }
+    # stats: { enabled: true, nfs: true, fast: false, fsal: true, fullv4: true, fullv3: true }
 ```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `ganesha.stats.enabled` | bool | `false` | When true, write `Enable_NFS_Stats`, `Enable_Fast_Stats`, `Enable_FSAL_Stats`, `Enable_FULLV4_Stats`, and `Enable_FULLV3_Stats` into Ganesha `NFS_Core_Param` |
+| `ganesha.stats.nfs` | bool | `true` | `Enable_NFS_Stats` (required for any per-op stats path) |
+| `ganesha.stats.fast` | bool | `false` | `Enable_Fast_Stats`. Keep false for Grafana latency: Fast_Stats returns before FULLV4 recording |
+| `ganesha.stats.fsal` | bool | `true` | `Enable_FSAL_Stats` |
+| `ganesha.stats.fullv4` | bool | `true` | `Enable_FULLV4_Stats`. Required for `nfs_latency_ms` / dashboard latency panels (NFSv4) |
+| `ganesha.stats.fullv3` | bool | `true` | `Enable_FULLV3_Stats` (NFSv3 path) |
 
 Older files are still read: `mds.lockstat` / `mds.perf_record` / `mds.logging`, then `specstorage.lockstat` for the MDS lockstat path. Flat `fio.perf_record*` and `specstorage.perf_record*` are not MDS gates. A flat `fio.perf_record_executable` of `ganesha.nfsd` does not attach to the fio process; use `fio.client.perf_record` with `executable: fio`.
 
