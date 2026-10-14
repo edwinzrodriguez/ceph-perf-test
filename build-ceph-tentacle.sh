@@ -60,7 +60,9 @@ for i in "$@"; do
       -DCEPHFS_INCLUDE_DIR=/usr/local/$i/include \
       -DCEPHFS_LIBRARY_DIR=/usr/local/$i/lib64 \
       -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-      -DCMAKE_INSTALL_PREFIX=/usr/local/$i
+      -DCMAKE_INSTALL_PREFIX=/usr/local/$i \
+      -DUSE_ADMIN_TOOLS=ON \
+      -DUSE_GUI_ADMIN_TOOLS=OFF
     ninja install
     popd
     mkdir -pv /usr/local/$i/var/lib/nfs/ganesha
