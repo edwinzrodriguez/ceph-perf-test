@@ -918,12 +918,15 @@ class PerformanceTestConfig:
 
     @property
     def ganesha_stats(self):
-        """``observability.ganesha.stats`` knobs for NFS_Core_Param Enable_*_Stats.
+        """``observability.ganesha.stats`` knobs for NFS_Core_Param and capture.
 
         When ``enabled`` is true, returns a dict of bools for the five Ganesha
         stats switches. Defaults favor the Grafana Ganesha dashboard:
         ``nfs``/``fsal``/``fullv4``/``fullv3`` true, ``fast`` false (Fast_Stats
         early-returns before FULLV4 latency histograms are recorded).
+        The same flags drive loadpoint ``ganesha_stats`` reset/capture when the
+        binary is present on the host (``fullv4`` -> ``json v4_full``,
+        ``fsal`` -> ``json fsal CEPH``).
         When disabled/absent, returns None so the Ganesha config omits the keys
         and keeps upstream defaults.
         """
@@ -937,6 +940,11 @@ class PerformanceTestConfig:
             "fullv4": bool(block.get("fullv4", True)),
             "fullv3": bool(block.get("fullv3", True)),
         }
+
+    @property
+    def ganesha_stats_path(self):
+        """Path to the ``ganesha_stats`` CLI used for loadpoint capture."""
+        return self.expand_env("${CEPH_INSTALL_PREFIX}/bin/ganesha_stats")
 
     @property
     def samba_enabled(self):

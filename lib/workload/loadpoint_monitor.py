@@ -88,6 +88,7 @@ class LoadpointMonitor:
         self.perf_threads = []
         self.ganesha_perf_dumps = {}
         self.ganesha_lockstat = {}
+        self.ganesha_stats = {}
         self.client_lockstat = client_lockstat(self.config._config, self.config_section)
         self._client_perf = self._resolve_client_perf()
 
@@ -191,6 +192,7 @@ class LoadpointMonitor:
                 self.ganesha_manager.reset_ganesha_perf(host)
                 if self._ganesha_lockstat_enabled():
                     self.ganesha_manager.reset_lockstat(host)
+                self.ganesha_manager.reset_ganesha_stats(host)
 
         # Asok-driven client lockstat only (explicit ``asok``). cephfs-tool uses
         # built-in --lockstat-dump and does not set asok.
@@ -278,6 +280,8 @@ class LoadpointMonitor:
                 settings=self.perf_settings,
                 lp_cfg=lp_cfg,
             )
+        if self.ganesha_stats:
+            self.write_ganesha_stats()
         if self.after_loadpoint_end:
             self.after_loadpoint_end(self)
         elif self.ganesha_perf_dumps or self.ganesha_lockstat:
@@ -403,6 +407,7 @@ class LoadpointMonitor:
     def _collect_ganesha(self):
         self.ganesha_perf_dumps = {}
         self.ganesha_lockstat = {}
+        self.ganesha_stats = {}
         if not self._ganesha_active() or not self.results_dir:
             return
         log.info("Dumping Ganesha perf counters for Load Point %s", self.current_lp)
@@ -414,6 +419,22 @@ class LoadpointMonitor:
                 lockstat_json = self.ganesha_manager.dump_lockstat(host)
                 if lockstat_json:
                     self.ganesha_lockstat[host] = lockstat_json
+            stats = self.ganesha_manager.collect_ganesha_stats(host)
+            if stats:
+                self.ganesha_stats[host] = stats
+
+    def write_ganesha_stats(self):
+        """Write combined ``ganesha_stats`` JSON per host for the current loadpoint."""
+        lp_cfg = self.current_lp_cfg()
+        settings = self.perf_settings
+        for host, stats in self.ganesha_stats.items():
+            if settings is not None:
+                filename = (
+                    f"{CommonUtils.get_workload_base_name('ganesha', 'stats', host, self.current_lp, settings, lp_cfg, self.config)}.json"
+                )
+            else:
+                filename = f"ganesha_stats_{host}_lp{int(self.current_lp):02d}.json"
+            self._save_json(filename, stats)
 
     def write_ganesha_sidecars(self):
         lp_tag = f"{int(self.current_lp):02d}"

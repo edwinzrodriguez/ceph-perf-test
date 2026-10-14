@@ -15,6 +15,7 @@ class GaneshaManager(abc.ABC):
         self.ganeshas = config.ganeshas
         self.admin = config.admin_host
         self._provisioned = False
+        self._ganesha_stats_exists = {}
 
     @abc.abstractmethod
     def provision_ganesha(self, use_custom=True, results_dir=None):
@@ -132,7 +133,9 @@ class GaneshaManager(abc.ABC):
 
         Controlled by ``observability.ganesha.stats``. When enabled, emits
         ``Enable_NFS_Stats``, ``Enable_Fast_Stats``, ``Enable_FSAL_Stats``,
-        ``Enable_FULLV4_Stats``, and ``Enable_FULLV3_Stats``.
+        ``Enable_FULLV4_Stats``, and ``Enable_FULLV3_Stats``. The same block
+        also gates per-loadpoint ``ganesha_stats`` reset/capture when the
+        binary exists on the host.
         """
         stats = self.config.ganesha_stats
         if not stats:
@@ -145,6 +148,88 @@ class GaneshaManager(abc.ABC):
             f"    Enable_FULLV4_Stats = {bool_str(stats['fullv4'])};\n"
             f"    Enable_FULLV3_Stats = {bool_str(stats['fullv3'])};\n"
         )
+
+    def _ganesha_stats_enabled(self):
+        return bool(self.config.ganesha_stats)
+
+    def _check_ganesha_stats_exists(self, host_name):
+        """Populate ``_ganesha_stats_exists`` for host_name if not yet checked."""
+        if host_name in self._ganesha_stats_exists:
+            return self._ganesha_stats_exists[host_name]
+        path = self.config.ganesha_stats_path
+        check = self.executor.run_remote(
+            host_name,
+            f"test -f {path} && echo EXISTS || echo MISSING",
+        ).strip()
+        exists = "EXISTS" in check
+        self._ganesha_stats_exists[host_name] = exists
+        if not exists:
+            log.info(
+                "[%s] ganesha_stats binary %s not found; skipping stats capture",
+                host_name,
+                path,
+            )
+        return exists
+
+    def _run_ganesha_stats(self, host_name, *args):
+        path = self.config.ganesha_stats_path
+        cmd = " ".join((path,) + args)
+        return self.executor.run_remote(
+            host_name,
+            self._sudo_with_ganesha_env(cmd),
+        )
+
+    def _parse_ganesha_stats_json(self, host_name, raw, label):
+        try:
+            return json.loads(raw)
+        except (TypeError, json.JSONDecodeError) as exc:
+            log.info("[%s] Failed to parse ganesha_stats %s JSON: %s", host_name, label, exc)
+            log.info("[%s] ganesha_stats %s output: %r", host_name, label, raw)
+            return {"raw": raw, "parse_error": str(exc)}
+
+    def reset_ganesha_stats(self, host_name):
+        """Reset Ganesha stats at loadpoint start via ``ganesha_stats reset``."""
+        if not self._ganesha_stats_enabled():
+            return
+        if not self._check_ganesha_stats_exists(host_name):
+            return
+        log.info("[%s] Resetting Ganesha stats via %s...", host_name, self.config.ganesha_stats_path)
+        self._run_ganesha_stats(host_name, "reset")
+
+    def collect_ganesha_stats(self, host_name):
+        """Capture ``ganesha_stats`` JSON for one host into a combined dict.
+
+        Always runs ``ganesha_stats json``. When ``fullv4`` / ``fsal`` are set
+        under ``observability.ganesha.stats``, also runs ``json v4_full`` and
+        ``json fsal CEPH``. Returns None when stats are disabled or the binary
+        is missing.
+        """
+        stats = self.config.ganesha_stats
+        if not stats:
+            return None
+        if not self._check_ganesha_stats_exists(host_name):
+            return None
+        log.info("[%s] Collecting Ganesha stats via %s...", host_name, self.config.ganesha_stats_path)
+        combined = {
+            "json": self._parse_ganesha_stats_json(
+                host_name,
+                self._run_ganesha_stats(host_name, "json"),
+                "json",
+            )
+        }
+        if stats.get("fullv4"):
+            combined["v4_full"] = self._parse_ganesha_stats_json(
+                host_name,
+                self._run_ganesha_stats(host_name, "json", "v4_full"),
+                "v4_full",
+            )
+        if stats.get("fsal"):
+            combined["fsal"] = self._parse_ganesha_stats_json(
+                host_name,
+                self._run_ganesha_stats(host_name, "json", "fsal", "CEPH"),
+                "fsal",
+            )
+        return combined
 
     def _open_ganesha_metrics_firewall(self):
         """Allow Prometheus to scrape Ganesha metrics on ganesha hosts."""
