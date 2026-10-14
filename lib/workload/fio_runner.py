@@ -250,33 +250,55 @@ class FioWorkloadRunner(WorkloadRunner):
 
         return output
 
+    def _scp_json_to_results(self, filename, data, results_dir):
+        local_temp = f"/tmp/{filename}"
+        with open(local_temp, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=4)
+        user, remote_host, port = self.executor.get_ssh_details(self.admin)
+        subprocess.run(
+            [
+                "scp",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-P",
+                str(port),
+                local_temp,
+                f"{user}@{remote_host}:{results_dir}/{filename}",
+            ],
+            check=False,
+        )
+        os.remove(local_temp)
+
     def _publish_fio_ganesha(self, monitor):
-        """Write Ganesha perf dumps and inject lockstat into fio result JSON."""
+        """Write Ganesha perf/lockstat sidecars and inject lockstat into fio JSON.
+
+        Fio sets ``after_loadpoint_end``, which skips
+        ``LoadPointMonitor.write_ganesha_sidecars``. Publish dedicated files here
+        (and embed lockstat in the perf dump) so results match MDS/spec_storage.
+        """
         if not monitor.ganesha_perf_dumps and not monitor.ganesha_lockstat:
             return
         current_lp = monitor.current_lp
         results_dir = monitor.results_dir
         payload = monitor.payload
         lp_cfg = monitor.current_lp_cfg()
+        lp_tag = f"{int(current_lp):02d}"
         for host, perf_dump in monitor.ganesha_perf_dumps.items():
-            filename = f"ganesha_perf_dump_{host}_lp{current_lp:02d}.json"
-            local_temp = f"/tmp/{filename}"
-            with open(local_temp, "w", encoding="utf-8") as handle:
-                json.dump(perf_dump, handle)
-            user, remote_host, port = self.executor.get_ssh_details(self.admin)
-            subprocess.run(
-                [
-                    "scp",
-                    "-o",
-                    "StrictHostKeyChecking=no",
-                    "-P",
-                    str(port),
-                    local_temp,
-                    f"{user}@{remote_host}:{results_dir}/{filename}",
-                ],
-                check=False,
+            body = dict(perf_dump)
+            if host in monitor.ganesha_lockstat:
+                body["lockstat_results"] = monitor.ganesha_lockstat[host]
+            self._scp_json_to_results(
+                f"ganesha_perf_dump_{host}_lp{lp_tag}.json", body, results_dir
             )
-            os.remove(local_temp)
+        for host, lockstat_json in monitor.ganesha_lockstat.items():
+            self._scp_json_to_results(
+                f"ganesha_lockstat_{host}_lp{lp_tag}.json",
+                lockstat_json,
+                results_dir,
+            )
+            log.info(
+                "[%s] Wrote ganesha_lockstat_%s_lp%s.json", host, host, lp_tag
+            )
         if not monitor.ganesha_lockstat:
             return
         lockstat_b64 = base64.b64encode(
