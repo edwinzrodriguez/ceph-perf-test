@@ -2,6 +2,7 @@ import datetime
 import json
 import os
 import subprocess
+import threading
 import yaml
 from lib.workload.workload_runner import WorkloadRunner
 from cephfs_perf_lib import CommonUtils
@@ -129,18 +130,24 @@ class SpecStorageWorkloadRunner(WorkloadRunner):
         """Save Ganesha perf dumps (with lockstat embedded) beside SFS results."""
         if not monitor.results_dir:
             return
-        lp_tag = f"{int(monitor.current_lp):02d}"
+        lp_cfg = monitor.current_lp_cfg()
+        settings = monitor.perf_settings
         hosts = set(monitor.ganesha_perf_dumps) | set(monitor.ganesha_lockstat)
         for host in hosts:
             dump = dict(monitor.ganesha_perf_dumps.get(host) or {})
             if host in monitor.ganesha_lockstat:
                 dump["lockstat_results"] = monitor.ganesha_lockstat[host]
-            if dump:
-                self.save_json_to_results(
-                    f"{host}_lp{lp_tag}_ganesha_perf.json",
-                    dump,
-                    monitor.results_dir,
+            if not dump:
+                continue
+            if settings is not None:
+                filename = (
+                    f"{CommonUtils.get_workload_base_name('ganesha', 'perf_dump', host, monitor.current_lp, settings, lp_cfg, self.config)}.json"
                 )
+            else:
+                filename = (
+                    f"ganesha_perf_dump_{host}_lp{int(monitor.current_lp):02d}.json"
+                )
+            self.save_json_to_results(filename, dump, monitor.results_dir)
 
     def save_json_to_results(self, filename, data, results_dir):
         local_temp = f"/tmp/{filename}"

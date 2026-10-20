@@ -183,10 +183,11 @@ JSON includes `runs[]` metrics, `test_parameters`, and `test_results_summary`. S
 
 | File | When |
 |------|------|
-| `ganesha_perf_dump_<host>_lpNN.json` | fio runner |
-| `<host>_lpNN_ganesha_perf.json` | sfs2020 runner (may include `lockstat_results`) |
+| `ganesha_perf_dump_<host>_lpNN_<encoded>.json` | End-of-LP dump (fio / sfs2020; may include `lockstat_results`) |
+| `ganesha_lockstat_<host>_lpNN_<encoded>.json` | End-of-LP lockstat when not embedded in perf dump |
+| `ganesha_stats_<host>_lpNN_<encoded>.json` | Combined Ganesha stats JSON |
 | `ganesha_ceph_client_<host>_lpNN.log` | Client log collection enabled |
-| `ganesha_config_diff_<host>.json` | Written at Ganesha provision time |
+| `ganesha_config_diff_<host>_lp00_<encoded>.json` | Written at Ganesha provision time |
 
 ---
 
@@ -264,10 +265,10 @@ Last ~5 minutes of `journalctl` from the host. Often collected on workload failu
 ### 12. Config diffs (provisioning)
 
 ```text
-ganesha_config_diff_<host>.json
+ganesha_config_diff_<host>_lp00_<encoded>.json
 ```
 
-Snapshot of Ganesha/Ceph client config vs defaults at provision time (when `results_dir` is passed into provision).
+Snapshot of Ganesha/Ceph client config vs defaults at provision time (when `results_dir` is passed into provision). Uses the same `<encoded>` options suffix as other Ganesha result files (matrix/settings + Ganesha knobs; no per-loadpoint dims).
 
 ---
 

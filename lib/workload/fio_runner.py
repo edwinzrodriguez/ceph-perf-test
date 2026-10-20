@@ -41,7 +41,9 @@ class FioWorkloadRunner(WorkloadRunner):
         self.executor.run_remote(self.admin, f"mkdir -p {results_dir}")
 
         if self.config.ganesha_enabled and ganesha_manager:
-            ganesha_manager.provision_ganesha(results_dir=results_dir)
+            ganesha_manager.provision_ganesha(
+                results_dir=results_dir, settings=settings
+            )
 
         mpfs = self.config.get("fio", {}).get("mounts_per_fs", 1)
         mount_points = []
@@ -282,23 +284,20 @@ class FioWorkloadRunner(WorkloadRunner):
         results_dir = monitor.results_dir
         payload = monitor.payload
         lp_cfg = monitor.current_lp_cfg()
-        lp_tag = f"{int(current_lp):02d}"
         for host, perf_dump in monitor.ganesha_perf_dumps.items():
             body = dict(perf_dump)
             if host in monitor.ganesha_lockstat:
                 body["lockstat_results"] = monitor.ganesha_lockstat[host]
-            self._scp_json_to_results(
-                f"ganesha_perf_dump_{host}_lp{lp_tag}.json", body, results_dir
+            filename = (
+                f"{CommonUtils.get_workload_base_name('ganesha', 'perf_dump', host, current_lp, payload, lp_cfg, self.config)}.json"
             )
+            self._scp_json_to_results(filename, body, results_dir)
         for host, lockstat_json in monitor.ganesha_lockstat.items():
-            self._scp_json_to_results(
-                f"ganesha_lockstat_{host}_lp{lp_tag}.json",
-                lockstat_json,
-                results_dir,
+            filename = (
+                f"{CommonUtils.get_workload_base_name('ganesha', 'lockstat', host, current_lp, payload, lp_cfg, self.config)}.json"
             )
-            log.info(
-                "[%s] Wrote ganesha_lockstat_%s_lp%s.json", host, host, lp_tag
-            )
+            self._scp_json_to_results(filename, lockstat_json, results_dir)
+            log.info("[%s] Wrote %s", host, filename)
         if not monitor.ganesha_lockstat:
             return
         lockstat_b64 = base64.b64encode(

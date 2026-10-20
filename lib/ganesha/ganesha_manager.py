@@ -18,8 +18,15 @@ class GaneshaManager(abc.ABC):
         self._ganesha_stats_exists = {}
 
     @abc.abstractmethod
-    def provision_ganesha(self, use_custom=True, results_dir=None):
+    def provision_ganesha(self, use_custom=True, results_dir=None, settings=None):
         pass
+
+    def _ganesha_config_diff_filename(self, host_name, settings=None):
+        """Results basename for a provision-time Ganesha config diff."""
+        naming = settings if settings is not None else {}
+        return (
+            f"{CommonUtils.get_workload_base_name('ganesha', 'config_diff', host_name, None, naming, None, self.config)}.json"
+        )
 
     @abc.abstractmethod
     def cleanup_ganesha(self):

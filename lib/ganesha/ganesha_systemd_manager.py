@@ -14,7 +14,7 @@ class GaneshaSystemdManager(GaneshaManager):
     def __init__(self, executor, config, fs_manager):
         super().__init__(executor, config, fs_manager)
 
-    def provision_ganesha(self, use_custom=True, results_dir=None):
+    def provision_ganesha(self, use_custom=True, results_dir=None, settings=None):
         if self._provisioned:
             log.info("Ganesha already provisioned. Skipping.")
             return
@@ -157,7 +157,7 @@ class GaneshaSystemdManager(GaneshaManager):
                             f"{ceph_bin} {self._get_ceph_args(include_keyring=False)} --admin-daemon {asok_path} config diff"
                         ),
                     )
-                    filename = f"ganesha_config_diff_{host_name}.json"
+                    filename = self._ganesha_config_diff_filename(host_name, settings)
                     local_temp = f"/tmp/{filename}"
                     with open(local_temp, "w") as f:
                         f.write(diff_output)

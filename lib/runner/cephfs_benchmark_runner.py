@@ -417,7 +417,9 @@ class BenchRunner:
 
             if ganesha_manager is not None:
                 ganesha_manager.provision_ganesha(
-                    use_custom=True, results_dir=results_dir
+                    use_custom=True,
+                    results_dir=results_dir,
+                    settings=current_settings,
                 )
             if samba_manager is not None:
                 samba_manager.provision_samba(results_dir=results_dir)

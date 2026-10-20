@@ -437,18 +437,29 @@ class LoadpointMonitor:
             self._save_json(filename, stats)
 
     def write_ganesha_sidecars(self):
-        lp_tag = f"{int(self.current_lp):02d}"
+        lp_cfg = self.current_lp_cfg()
+        settings = self.perf_settings
         for host, dump in self.ganesha_perf_dumps.items():
             body = dict(dump)
             if host in self.ganesha_lockstat:
                 body["lockstat_results"] = self.ganesha_lockstat[host]
-            self._save_json(f"{host}_lp{lp_tag}_ganesha_perf.json", body)
+            if settings is not None:
+                filename = (
+                    f"{CommonUtils.get_workload_base_name('ganesha', 'perf_dump', host, self.current_lp, settings, lp_cfg, self.config)}.json"
+                )
+            else:
+                filename = f"ganesha_perf_dump_{host}_lp{int(self.current_lp):02d}.json"
+            self._save_json(filename, body)
         for host, lockstat_json in self.ganesha_lockstat.items():
             if host in self.ganesha_perf_dumps:
                 continue
-            self._save_json(
-                f"{host}_lp{lp_tag}_ganesha_lockstat.json", lockstat_json
-            )
+            if settings is not None:
+                filename = (
+                    f"{CommonUtils.get_workload_base_name('ganesha', 'lockstat', host, self.current_lp, settings, lp_cfg, self.config)}.json"
+                )
+            else:
+                filename = f"ganesha_lockstat_{host}_lp{int(self.current_lp):02d}.json"
+            self._save_json(filename, lockstat_json)
 
     def _save_json(self, filename, data):
         local_temp = f"/tmp/{filename}"

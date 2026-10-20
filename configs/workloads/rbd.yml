@@ -40,7 +40,7 @@ rbd:
   images_per_client: 1
   # If true, delete existing images before creating new ones each iteration.
   recreate_images: false
-  gtod_reduce: 1
+  gtod_reduce: 0
   ramp_time: 5
   threads_fio: true
   loadpoints:
