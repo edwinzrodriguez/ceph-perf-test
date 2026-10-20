@@ -217,6 +217,7 @@ def main():
                         CommonUtils.parse_si_unit(lp_cfg.get("block-size", "4MiB"))
                     )
                 cmd_parts.extend(["--fsync-every", str(fsync_every)])
+                cmd_parts.append("--async-write-fsync")
 
             if lp_cfg.get("async"):
                 cmd_parts.append("--async-io")
