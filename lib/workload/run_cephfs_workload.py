@@ -121,6 +121,7 @@ def main():
     msgr_workers = settings.get("msgr_workers")
     progress = settings.get("progress", True)
     progress_interval = settings.get("progress_interval", 10)
+    measure_latencies = bool(settings.get("measure_latencies", False))
     lockstat_enabled = bool(settings.get("cephfs_tool_lockstat_enabled"))
     lockstat_threshold = settings.get("cephfs_tool_lockstat_threshold", 0)
 
@@ -169,6 +170,9 @@ def main():
                 cmd_parts.append("--progress")
                 if progress_interval:
                     cmd_parts.extend(["--progress-interval", str(progress_interval)])
+
+            if measure_latencies:
+                cmd_parts.append("--measure-latencies")
 
             json_output = f"/tmp/{CommonUtils.get_workload_base_name('cephfs_tool', 'result', client, lp, settings, lp_cfg)}.json"
             perf_dump_output = f"/tmp/{CommonUtils.get_workload_base_name('cephfs_tool', 'perf_dump', client, lp, settings, lp_cfg)}.json"

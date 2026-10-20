@@ -117,6 +117,7 @@ cephfs_tool:
   duration: 60
   progress: true
   progress_interval: 10
+  measure_latencies: false
   loadpoints:
     - files: 1024
       size: "5GiB"

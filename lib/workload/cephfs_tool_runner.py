@@ -58,6 +58,7 @@ class CephFSToolWorkloadRunner(WorkloadRunner):
             "root_path",
             "duration",
             "msgr_workers",
+            "measure_latencies",
         ]:
             if key in cfg:
                 payload[key] = cfg[key]

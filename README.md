@@ -458,6 +458,7 @@ Configuration for the `cephfs-tool bench` workload runner.
 | `duration` | int | `0` | Global test duration limit in seconds (0 = unlimited) |
 | `progress` | bool | `true` | Show progress output |
 | `progress_interval` | int | `10` | Progress update interval in seconds |
+| `measure_latencies` | bool | `false` | Pass `--measure-latencies` to collect per-op completion latency (fio-compatible `clat_ns` histogram/percentiles) |
 | `msgr_workers` | int | | Default messenger worker count (overridable per loadpoint) |
 | `env_vars` | dict | `{}` | Extra environment variables merged on top of top-level `env_vars` for `cephfs-tool`. Values are double-quoted, allowing `$VAR`/`${VAR}` expansion. Common use: `CEPH_ARGS`. |
 
