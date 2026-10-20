@@ -224,6 +224,8 @@ def main():
                 queue_depth = lp_cfg.get("queue-depth")
                 if queue_depth is not None:
                     cmd_parts.extend(["--queue-depth", str(queue_depth)])
+                if lp_cfg.get("fsync-every"):
+                    cmd_parts.append("--async-write-fsync")
 
             extra = lp_cfg.get("extra_args")
             if extra:
