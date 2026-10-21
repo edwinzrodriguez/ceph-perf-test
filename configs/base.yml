@@ -135,16 +135,20 @@ observability:
       script: "/cephfs_perf/perf_record.py"
       executable: ganesha.nfsd
       duration: 30
-    # NFS_Core_Param Enable_*_Stats. fullv4 is required for Grafana latency panels
-    # (nfs_latency_ms). Leave fast false — Enable_Fast_Stats skips FULLV4 recording.
+    # NFS_Core_Param Enable_*_Stats + per-loadpoint ganesha_stats capture when
+    # ${CEPH_INSTALL_PREFIX}/bin/ganesha_stats exists. fullv4 is required for
+    # Grafana latency panels (nfs_latency_ms). Leave fast false — Enable_Fast_Stats
+    # skips FULLV4 recording. fullv4/fsal/iostages also select json v4_full /
+    # json fsal CEPH / json iostages. iostages sets Enable_IOStages (default false).
     stats:
       enabled: true
-      # optional overrides (defaults: nfs/fsal/fullv4/fullv3 true, fast false):
+      # optional overrides (defaults: nfs/fsal/fullv4/fullv3 true, fast/iostages false):
       nfs: true
       fast: false
       fsal: true
       fullv4: true
       # fullv3: true
+      # iostages: true
 
 # Framework transcript (console + file). Not Ceph daemon debug levels.
 run_logging:

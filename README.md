@@ -844,17 +844,18 @@ observability:
     perf_record: { enabled: true, script: "/cephfs_perf/perf_record.py", executable: ganesha.nfsd, duration: 5 }
     # FULLV4 stats feed nfs_latency_ms (Grafana latency). Keep fast: false.
     stats: { enabled: true }
-    # stats: { enabled: true, nfs: true, fast: false, fsal: true, fullv4: true, fullv3: true }
+    # stats: { enabled: true, nfs: true, fast: false, fsal: true, fullv4: true, fullv3: true, iostages: false }
 ```
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `ganesha.stats.enabled` | bool | `false` | When true, write `Enable_NFS_Stats`, `Enable_Fast_Stats`, `Enable_FSAL_Stats`, `Enable_FULLV4_Stats`, and `Enable_FULLV3_Stats` into Ganesha `NFS_Core_Param` |
+| `ganesha.stats.enabled` | bool | `false` | When true, write `Enable_NFS_Stats`, `Enable_Fast_Stats`, `Enable_FSAL_Stats`, `Enable_FULLV4_Stats`, `Enable_FULLV3_Stats`, and `Enable_IOStages` into Ganesha `NFS_Core_Param` |
 | `ganesha.stats.nfs` | bool | `true` | `Enable_NFS_Stats` (required for any per-op stats path) |
 | `ganesha.stats.fast` | bool | `false` | `Enable_Fast_Stats`. Keep false for Grafana latency: Fast_Stats returns before FULLV4 recording |
 | `ganesha.stats.fsal` | bool | `true` | `Enable_FSAL_Stats` |
 | `ganesha.stats.fullv4` | bool | `true` | `Enable_FULLV4_Stats`. Required for `nfs_latency_ms` / dashboard latency panels (NFSv4) |
 | `ganesha.stats.fullv3` | bool | `true` | `Enable_FULLV3_Stats` (NFSv3 path) |
+| `ganesha.stats.iostages` | bool | `false` | `Enable_IOStages`. Also captures `ganesha_stats json iostages` per loadpoint |
 
 Older files are still read: `mds.lockstat` / `mds.perf_record` / `mds.logging`, then `specstorage.lockstat` for the MDS lockstat path. Flat `fio.perf_record*` and `specstorage.perf_record*` are not MDS gates. A flat `fio.perf_record_executable` of `ganesha.nfsd` does not attach to the fio process; use `fio.client.perf_record` with `executable: fio`.
 

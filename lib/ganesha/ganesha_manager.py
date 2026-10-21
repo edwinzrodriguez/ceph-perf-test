@@ -140,9 +140,9 @@ class GaneshaManager(abc.ABC):
 
         Controlled by ``observability.ganesha.stats``. When enabled, emits
         ``Enable_NFS_Stats``, ``Enable_Fast_Stats``, ``Enable_FSAL_Stats``,
-        ``Enable_FULLV4_Stats``, and ``Enable_FULLV3_Stats``. The same block
-        also gates per-loadpoint ``ganesha_stats`` reset/capture when the
-        binary exists on the host.
+        ``Enable_FULLV4_Stats``, ``Enable_FULLV3_Stats``, and
+        ``Enable_IOStages``. The same block also gates per-loadpoint
+        ``ganesha_stats`` reset/capture when the binary exists on the host.
         """
         stats = self.config.ganesha_stats
         if not stats:
@@ -154,6 +154,7 @@ class GaneshaManager(abc.ABC):
             f"    Enable_FSAL_Stats = {bool_str(stats['fsal'])};\n"
             f"    Enable_FULLV4_Stats = {bool_str(stats['fullv4'])};\n"
             f"    Enable_FULLV3_Stats = {bool_str(stats['fullv3'])};\n"
+            f"    Enable_IOStages = {bool_str(stats['iostages'])};\n"
         )
 
     def _ganesha_stats_enabled(self):
@@ -206,10 +207,10 @@ class GaneshaManager(abc.ABC):
     def collect_ganesha_stats(self, host_name):
         """Capture ``ganesha_stats`` JSON for one host into a combined dict.
 
-        Always runs ``ganesha_stats json``. When ``fullv4`` / ``fsal`` are set
-        under ``observability.ganesha.stats``, also runs ``json v4_full`` and
-        ``json fsal CEPH``. Returns None when stats are disabled or the binary
-        is missing.
+        Always runs ``ganesha_stats json``. When ``fullv4`` / ``fsal`` /
+        ``iostages`` are set under ``observability.ganesha.stats``, also runs
+        ``json v4_full``, ``json fsal CEPH``, and ``json iostages``. Returns
+        None when stats are disabled or the binary is missing.
         """
         stats = self.config.ganesha_stats
         if not stats:
@@ -235,6 +236,12 @@ class GaneshaManager(abc.ABC):
                 host_name,
                 self._run_ganesha_stats(host_name, "json", "fsal", "CEPH"),
                 "fsal",
+            )
+        if stats.get("iostages"):
+            combined["iostages"] = self._parse_ganesha_stats_json(
+                host_name,
+                self._run_ganesha_stats(host_name, "json", "iostages"),
+                "iostages",
             )
         return combined
 
