@@ -343,6 +343,9 @@ class BenchRunner:
                     "slot_table_size",
                     "rpc_ioq_thrdmin",
                     "rpc_ioq_thrdmax",
+                    "enable_socket_zerocopy",
+                    "socket_zerocopy_threshold",
+                    "socket_zerocopy_max_pending",
                 ]:
                     if k in ganesha_settings_raw:
                         val = ganesha_settings_raw[k]

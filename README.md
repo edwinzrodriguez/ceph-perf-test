@@ -287,6 +287,9 @@ Controls NFS-Ganesha deployment. Settings that are lists are expanded across the
 | `slot_table_size` | int or list | | NFSv4.1 session slot table size (`NFSv4.Slot_Table_Size`; max 1024) |
 | `rpc_ioq_thrdmin` | int | | RPC I/O queue minimum threads |
 | `rpc_ioq_thrdmax` | int or list | | RPC I/O queue maximum threads |
+| `enable_socket_zerocopy` | bool or list | | libntirpc socket MSG_ZEROCOPY (`NFS_Core_Param.Enable_Socket_Zerocopy`; Ganesha default false) |
+| `socket_zerocopy_threshold` | int or list | | Minimum send size for socket zerocopy (`NFS_Core_Param.Socket_Zerocopy_Threshold`; `0` → 16KiB) |
+| `socket_zerocopy_max_pending` | int or list | | Max pending zerocopy bytes per transport (`NFS_Core_Param.Socket_Zerocopy_Max_Pending`; `0` → 64MiB/xprt) |
 
 #### Logging
 

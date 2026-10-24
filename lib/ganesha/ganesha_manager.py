@@ -69,6 +69,21 @@ class GaneshaManager(abc.ABC):
             parts.append(f"{CommonUtils.get_short_name('Ganesha RPC IOQ Thread Min')}{settings['rpc_ioq_thrdmin']}")
         if "rpc_ioq_thrdmax" in settings:
             parts.append(f"{CommonUtils.get_short_name('Ganesha RPC IOQ Thread Max')}{settings['rpc_ioq_thrdmax']}")
+        if "enable_socket_zerocopy" in settings:
+            parts.append(
+                f"{CommonUtils.get_short_name('Ganesha Enable Socket Zerocopy')}"
+                f"{CommonUtils.format_config_value(settings['enable_socket_zerocopy'])}"
+            )
+        if "socket_zerocopy_threshold" in settings:
+            parts.append(
+                f"{CommonUtils.get_short_name('Ganesha Socket Zerocopy Threshold')}"
+                f"{settings['socket_zerocopy_threshold']}"
+            )
+        if "socket_zerocopy_max_pending" in settings:
+            parts.append(
+                f"{CommonUtils.get_short_name('Ganesha Socket Zerocopy Max Pending')}"
+                f"{settings['socket_zerocopy_max_pending']}"
+            )
         return "_".join(parts)
 
     def safe_json_load(self, raw, default=None):

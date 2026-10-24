@@ -252,6 +252,19 @@ class GaneshaSystemdManager(GaneshaManager):
             nfs_core_params += f"    rpc_ioq_thrdmin = {self.config.ganesha_rpc_ioq_thrdmin};\n"
         if self.config.ganesha_rpc_ioq_thrdmax is not None:
             nfs_core_params += f"    rpc_ioq_thrdmax = {self.config.ganesha_rpc_ioq_thrdmax};\n"
+        if self.config.ganesha_enable_socket_zerocopy is not None:
+            val = "true" if self.config.ganesha_enable_socket_zerocopy else "false"
+            nfs_core_params += f"    Enable_Socket_Zerocopy = {val};\n"
+        if self.config.ganesha_socket_zerocopy_threshold is not None:
+            nfs_core_params += (
+                f"    Socket_Zerocopy_Threshold = "
+                f"{self.config.ganesha_socket_zerocopy_threshold};\n"
+            )
+        if self.config.ganesha_socket_zerocopy_max_pending is not None:
+            nfs_core_params += (
+                f"    Socket_Zerocopy_Max_Pending = "
+                f"{self.config.ganesha_socket_zerocopy_max_pending};\n"
+            )
 
         nfsv4_params = (
             '    RecoveryBackend = "fs";\n'

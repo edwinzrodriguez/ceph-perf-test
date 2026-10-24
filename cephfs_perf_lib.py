@@ -805,6 +805,18 @@ class PerformanceTestConfig:
         return self._config.get("ganesha", {}).get("rpc_ioq_thrdmax")
 
     @property
+    def ganesha_enable_socket_zerocopy(self):
+        return self._config.get("ganesha", {}).get("enable_socket_zerocopy")
+
+    @property
+    def ganesha_socket_zerocopy_threshold(self):
+        return self._config.get("ganesha", {}).get("socket_zerocopy_threshold")
+
+    @property
+    def ganesha_socket_zerocopy_max_pending(self):
+        return self._config.get("ganesha", {}).get("socket_zerocopy_max_pending")
+
+    @property
     def ganesha_monitoring_port(self):
         """Prometheus metrics HTTP port exposed by ganesha.nfsd (Enable_Metrics)."""
         return self._config.get("ganesha", {}).get("monitoring_port", 9587)
@@ -1592,6 +1604,9 @@ class CommonUtils:
             "Ganesha Slot Table Size": "gsts",
             "Ganesha RPC IOQ Thread Min": "grpcmin",
             "Ganesha RPC IOQ Thread Max": "grpcmax",
+            "Ganesha Enable Socket Zerocopy": "geszc",
+            "Ganesha Socket Zerocopy Threshold": "gszcth",
+            "Ganesha Socket Zerocopy Max Pending": "gszcmp",
             "Ganesha User ID": "guid",
             "Ganesha Keyring Path": "gkp",
             "Ganesha Ceph Binary Path": "gcbp",
@@ -1900,6 +1915,9 @@ class CommonUtils:
             "ganesha_slot_table_size": "Ganesha Slot Table Size",
             "ganesha_rpc_ioq_thrdmin": "Ganesha RPC IOQ Thread Min",
             "ganesha_rpc_ioq_thrdmax": "Ganesha RPC IOQ Thread Max",
+            "ganesha_enable_socket_zerocopy": "Ganesha Enable Socket Zerocopy",
+            "ganesha_socket_zerocopy_threshold": "Ganesha Socket Zerocopy Threshold",
+            "ganesha_socket_zerocopy_max_pending": "Ganesha Socket Zerocopy Max Pending",
             "ganesha_user_id": "Ganesha User ID",
             "ganesha_keyring_path": "Ganesha Keyring Path",
             "ganesha_ceph_binary_path": "Ganesha Ceph Binary Path",
@@ -1958,6 +1976,9 @@ class CommonUtils:
             "ganesha_client_oc_size",
             "ganesha_rpc_ioq_thrdmin",
             "ganesha_rpc_ioq_thrdmax",
+            "ganesha_enable_socket_zerocopy",
+            "ganesha_socket_zerocopy_threshold",
+            "ganesha_socket_zerocopy_max_pending",
             "ganesha_user_id",
             "ganesha_keyring_path",
             "ganesha_ceph_binary_path",
@@ -2044,6 +2065,9 @@ class CommonUtils:
             "ganesha_slot_table_size",
             "ganesha_rpc_ioq_thrdmin",
             "ganesha_rpc_ioq_thrdmax",
+            "ganesha_enable_socket_zerocopy",
+            "ganesha_socket_zerocopy_threshold",
+            "ganesha_socket_zerocopy_max_pending",
             "ganesha_user_id",
             "ganesha_keyring_path",
             "ganesha_ceph_binary_path",
